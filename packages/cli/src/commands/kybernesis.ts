@@ -10,6 +10,9 @@
  */
 
 import { Command } from 'commander';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import chalk from 'chalk';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('kybernesis');
@@ -163,6 +166,42 @@ async function handleStatus() {
   }
 }
 
+async function handleDisconnect() {
+  const envRoot = process.env.KYBERBOT_ROOT || process.cwd();
+  const envPath = join(envRoot, '.env');
+
+  if (!existsSync(envPath)) {
+    console.log('No .env file found — Kybernesis is not configured.');
+    return;
+  }
+
+  const envContent = readFileSync(envPath, 'utf-8');
+
+  if (!envContent.includes('KYBERNESIS_API_KEY')) {
+    console.log('Kybernesis is not configured (no KYBERNESIS_API_KEY in .env).');
+    return;
+  }
+
+  // Remove the KYBERNESIS_API_KEY line
+  const updated = envContent
+    .split('\n')
+    .filter(line => !line.startsWith('KYBERNESIS_API_KEY='))
+    .join('\n');
+
+  writeFileSync(envPath, updated);
+
+  console.log(chalk.green('Kybernesis disconnected.'));
+  console.log('');
+  console.log('Your cloud memories are still in Kybernesis — nothing was deleted.');
+  console.log('The agent will use local-only memory from now on.');
+  console.log('');
+  console.log(chalk.bold('To finish:'));
+  console.log('  1. Restart the server:   kyberbot');
+  console.log('  2. Restart Claude:       /clear or start a new session');
+  console.log('');
+  console.log(chalk.dim('To reconnect later: add KYBERNESIS_API_KEY back to .env'));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMMAND DEFINITION
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -189,6 +228,11 @@ export function createKybernesisCommand(): Command {
     .command('status')
     .description('Check Kybernesis connection status')
     .action(handleStatus);
+
+  cmd
+    .command('disconnect')
+    .description('Remove Kybernesis API key and switch to local-only memory')
+    .action(handleDisconnect);
 
   return cmd;
 }
