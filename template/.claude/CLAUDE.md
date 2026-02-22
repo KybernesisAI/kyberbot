@@ -77,14 +77,13 @@ My memory has two layers:
 
 ### Kybernesis Cloud Brain (if configured)
 
-If `KYBERNESIS_API_KEY` is set in `.env`, I have a cloud brain that persists
-across devices and may contain richer context.
+If `KYBERNESIS_API_KEY` is set in `.env`, I have a cloud brain with workspace
+memory that persists across devices and sessions.
 
-**When to query the cloud brain:**
-- At the start of a new session, to restore context
-- When the user asks about something and local memory has no results
-- When the user explicitly asks to check the cloud brain
-- When I need background on people, projects, or decisions
+**IMPORTANT**: When Kybernesis is configured, ALWAYS query it when the user asks
+about something. Do not skip it just because local memory is empty — the cloud
+brain is the primary knowledge source, especially for a new agent. Run the
+command and use whatever it returns.
 
 **How to query:**
 ```bash
@@ -92,8 +91,13 @@ kyberbot kybernesis query "What do you know about X?"
 kyberbot kybernesis status   # Check if connected
 ```
 
-**Priority**: Try local memory first (`recall`, `search`, `timeline`). If empty or insufficient,
-query the cloud brain. Combine both sources when answering.
+**When to query:**
+- When the user asks about any person, project, company, or topic
+- At the start of a new session, to restore context
+- When you need background on decisions, history, or relationships
+- Whenever local memory has no results — always check cloud before saying "I don't know"
+
+Combine cloud results with local results when both have information.
 
 ## Commands
 
