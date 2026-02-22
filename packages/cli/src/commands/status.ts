@@ -2,7 +2,7 @@
  * Status Command
  *
  * Show all services health: ChromaDB, sleep agent, heartbeat,
- * git-sync, channels, server.
+ * channels, server.
  *
  * Usage:
  *   kyberbot status          # Show service health dashboard
@@ -51,7 +51,6 @@ export function createStatusCommand(): Command {
           // Still show expected services as stopped
           const expectedServices: ServiceStatus[] = [
             { name: 'ChromaDB', status: 'stopped' },
-            { name: 'Git Sync', status: 'stopped' },
             { name: 'Server', status: 'stopped' },
             { name: 'Heartbeat', status: 'stopped' },
             { name: 'Sleep Agent', status: 'stopped' },

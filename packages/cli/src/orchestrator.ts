@@ -2,7 +2,7 @@
  * KyberBot — Service Orchestrator
  *
  * Manages the lifecycle of all background services:
- * - ChromaDB, Git sync, Server, Heartbeat, Sleep agent, Channels
+ * - ChromaDB, Server, Heartbeat, Sleep agent, Channels
  */
 
 import { spawn } from 'child_process';

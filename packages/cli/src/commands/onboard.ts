@@ -247,9 +247,6 @@ export function createOnboardCommand(): Command {
       envLines.push('# ChromaDB URL (default)');
       envLines.push('CHROMA_URL=http://localhost:8001');
       envLines.push('');
-      envLines.push('# Git sync interval in minutes');
-      envLines.push('COMMIT_INTERVAL_MINUTES=5');
-      envLines.push('');
 
       // Only write .env if there's something meaningful
       const envPath = join(root, '.env');

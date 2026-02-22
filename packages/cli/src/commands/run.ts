@@ -1,19 +1,17 @@
 /**
  * Run Command
  *
- * Start all 6 KyberBot services in order:
+ * Start all 5 KyberBot services in order:
  *   1. ChromaDB check
- *   2. Git Sync
- *   3. Server (Express + brain API)
- *   4. Heartbeat
- *   5. Sleep Agent
- *   6. Channels (if configured)
+ *   2. Server (Express + brain API)
+ *   3. Heartbeat
+ *   4. Sleep Agent
+ *   5. Channels (if configured)
  *
  * Usage:
  *   kyberbot run                  # Start everything
  *   kyberbot run --no-channels    # Skip channels
  *   kyberbot run --no-sleep       # Skip sleep agent
- *   kyberbot run --no-git-sync    # Skip git auto-sync
  *   kyberbot run --no-heartbeat   # Skip heartbeat
  *   kyberbot run -v               # Verbose logging
  */
@@ -40,7 +38,6 @@ const logger = createLogger('cli');
 interface RunOptions {
   channels: boolean;
   sleep: boolean;
-  gitSync: boolean;
   heartbeat: boolean;
   verbose: boolean;
 }
@@ -50,7 +47,6 @@ export function createRunCommand(): Command {
     .description('Start all KyberBot services')
     .option('--no-channels', 'Disable messaging channels')
     .option('--no-sleep', 'Disable sleep agent')
-    .option('--no-git-sync', 'Disable git auto-sync')
     .option('--no-heartbeat', 'Disable heartbeat service')
     .option('-v, --verbose', 'Enable verbose (debug) logging', false)
     .action(async (options: RunOptions) => {
@@ -82,20 +78,7 @@ export function createRunCommand(): Command {
         });
 
         // ─────────────────────────────────────────────────────────────
-        // Service 2: Git Sync
-        // ─────────────────────────────────────────────────────────────
-
-        registerService({
-          name: 'Git Sync',
-          enabled: options.gitSync,
-          start: async () => {
-            const { startGitSync } = await import('../services/git-sync.js');
-            return startGitSync(root);
-          },
-        });
-
-        // ─────────────────────────────────────────────────────────────
-        // Service 3: Server (Express + brain API + channels)
+        // Service 2: Server (Express + brain API + channels)
         // ─────────────────────────────────────────────────────────────
 
         registerService({
@@ -108,7 +91,7 @@ export function createRunCommand(): Command {
         });
 
         // ─────────────────────────────────────────────────────────────
-        // Service 4: Heartbeat
+        // Service 3: Heartbeat
         // ─────────────────────────────────────────────────────────────
 
         registerService({
@@ -121,7 +104,7 @@ export function createRunCommand(): Command {
         });
 
         // ─────────────────────────────────────────────────────────────
-        // Service 5: Sleep Agent
+        // Service 4: Sleep Agent
         // ─────────────────────────────────────────────────────────────
 
         registerService({
@@ -134,7 +117,7 @@ export function createRunCommand(): Command {
         });
 
         // ─────────────────────────────────────────────────────────────
-        // Service 6: Channels
+        // Service 5: Channels
         // ─────────────────────────────────────────────────────────────
 
         registerService({

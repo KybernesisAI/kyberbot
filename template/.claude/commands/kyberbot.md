@@ -238,7 +238,7 @@ cd $KYBERBOT_ROOT && kyberbot status
 ```
 
 #### `/kyberbot run`
-Start all background services (ChromaDB, git sync, server, heartbeat, sleep agent, channels).
+Start all background services (ChromaDB, server, heartbeat, sleep agent, channels).
 
 **Implementation:**
 ```bash

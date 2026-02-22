@@ -22,6 +22,6 @@ brain/
 - The agent creates files here during conversation or via heartbeat tasks
 - ChromaDB indexes these files for semantic search
 - The sleep agent maintains tags, summaries, and relationships
-- Git sync auto-commits changes for version control
+- Use git to version control your brain files as needed
 
 You can also manually add markdown files here and the agent will index them.

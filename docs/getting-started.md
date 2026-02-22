@@ -16,7 +16,7 @@ Before installing KyberBot, make sure you have:
 
 ### Optional
 
-- **Git** -- For auto-sync and version history (recommended)
+- **Git** -- For version control (recommended)
 - **Telegram account** -- If you want to message your agent via Telegram
 - **WhatsApp** -- If you want to message your agent via WhatsApp
 
@@ -111,16 +111,7 @@ Set up Telegram? (y/n)
 Set up WhatsApp? (y/n)
 ```
 
-#### Step 6: Git Auto-Sync (Optional)
-
-Enable automatic git commits to track your agent's evolution.
-
-```
-Enable git auto-sync? (y/n)
-Sync interval (minutes): 5
-```
-
-#### Step 7: Kybernesis Cloud (Optional)
+#### Step 6: Kybernesis Cloud (Optional)
 
 Optionally connect to Kybernesis for cloud backup and cross-device sync.
 
@@ -151,9 +142,9 @@ kyberbot run
 This starts the KyberBot runtime:
 
 1. **ChromaDB** -- Starts the Docker container for vector search
-2. **Sleep Agent** -- Begins background memory maintenance
+2. **Server** -- Express REST API for brain endpoints
 3. **Heartbeat Scheduler** -- Watches `HEARTBEAT.md` for recurring tasks
-4. **Git Auto-Sync** -- Commits changes on the configured interval
+4. **Sleep Agent** -- Begins background memory maintenance
 5. **Channels** -- Starts any configured messaging bridges (Telegram, WhatsApp)
 
 You will see a splash screen with service status:
@@ -176,11 +167,11 @@ You will see a splash screen with service status:
   Root:  /home/user/my-agent
 
   ✓ ChromaDB         [RUNNING]
-  ✓ Sleep Agent      [RUNNING]
+  ✓ Server           [RUNNING]  port 3456
   ✓ Heartbeat        [RUNNING]
-  ✓ Git Sync         [RUNNING]  every 5m
+  ✓ Sleep Agent      [RUNNING]
   ✓ Telegram         [RUNNING]  @atlas_bot
-  ─ WhatsApp         [DISABLED]
+  ─ Channels         [DISABLED]
 
 ═════════════════════════════════════════════════════════════
 
@@ -229,7 +220,6 @@ kyberbot run
 # Start without specific services
 kyberbot run --no-sleep        # Disable sleep agent
 kyberbot run --no-channels     # Disable messaging channels
-kyberbot run --no-git-sync     # Disable git auto-sync
 kyberbot run --no-heartbeat    # Disable heartbeat scheduler
 
 # Other commands

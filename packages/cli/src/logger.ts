@@ -23,7 +23,6 @@ const SERVICE_COLORS: Record<string, (text: string) => string> = {
   'brain': chalk.hex('#4ECDC4'),
   'sleep': chalk.hex('#95E1D3'),
   'server': chalk.hex('#FFE66D'),
-  'git-sync': chalk.hex('#F38181'),
   'heartbeat': chalk.hex('#AA96DA'),
   'channel': chalk.hex('#FCBAD3'),
   'claude': chalk.hex('#A8E6CF'),
