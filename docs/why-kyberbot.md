@@ -172,14 +172,19 @@ KyberBot is built on three beliefs:
 ## Getting Started
 
 ```bash
+# Install KyberBot (one time)
 git clone https://github.com/KybernesisAI/kyberbot.git
 cd kyberbot
 npm install && npm run build
 cd packages/cli && npm link && cd ../..
 
-mkdir my-agent && cd my-agent
+# Create your agent
+mkdir ~/my-agent && cd ~/my-agent
 kyberbot onboard
-claude
+
+# Start it
+kyberbot              # Start services (leave running)
+claude                # New terminal — talk to your agent
 ```
 
 See [Getting Started](getting-started.md) for the full walkthrough.

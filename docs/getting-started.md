@@ -31,48 +31,43 @@ claude --version  # Should show Claude Code version
 
 ## Installation
 
-### 1. Clone and Build
+### 1. Install KyberBot
+
+This downloads the tool and makes the `kyberbot` command available on your machine. You only do this once.
 
 ```bash
 git clone https://github.com/KybernesisAI/kyberbot.git
 cd kyberbot
 npm install
 npm run build
+cd packages/cli && npm link && cd ../..
 ```
 
-### 2. Link the CLI
+After this, the `kyberbot` command works from anywhere on your system.
+
+### 2. Create Your Agent
+
+Your agent lives in its own folder -- separate from the KyberBot source code. This folder is your agent's home, where its personality, memory, and skills are stored.
+
+Pick a location and create it:
 
 ```bash
-cd packages/cli
-npm link
-cd ../..
-```
-
-This makes the `kyberbot` command available globally.
-
-### 3. Create Your Agent Directory
-
-```bash
-mkdir my-agent
-cd my-agent
-```
-
-### 4. Run the Onboard Wizard
-
-```bash
+mkdir ~/my-agent
+cd ~/my-agent
 kyberbot onboard
 ```
 
-The onboard wizard scaffolds your agent instance and creates:
+The onboard wizard asks you a few questions and sets up everything:
 
-- `SOUL.md` -- Agent personality
-- `USER.md` -- User profile
-- `HEARTBEAT.md` -- Recurring tasks (defaults provided)
+- `identity.yaml` -- Agent name, timezone, settings
+- `SOUL.md` -- Agent personality (how it communicates)
+- `USER.md` -- What the agent knows about you
+- `HEARTBEAT.md` -- Recurring tasks it should run on a schedule
 - `.claude/CLAUDE.md` -- Claude Code instructions (auto-generated)
-- `identity.yaml` -- Agent identity configuration
-- `.env` -- Environment variables
-- `brain/` -- Directory for markdown knowledge files
-- `skills/` -- Directory for agent skills
+- `.env` -- API keys and secrets
+- `brain/` -- Long-term knowledge files
+- `skills/` -- Agent capabilities
+- `data/` -- Memory databases (created on first use)
 
 The onboard wizard walks you through 7 steps:
 
@@ -165,46 +160,16 @@ This starts the KyberBot runtime:
 4. **Sleep Agent** -- Begins background memory maintenance
 5. **Channels** -- Starts any configured messaging bridges (Telegram, WhatsApp)
 
-You will see a splash screen with service status:
-
-```
-╔════════════════════════════════════════════════════════════╗
-║                                                            ║
-║   _  __      _               ____        _                 ║
-║  | |/ /_   _| |__   ___ _ __| __ )  ___ | |_              ║
-║  | ' /| | | | '_ \ / _ \ '__|  _ \ / _ \| __|             ║
-║  | . \| |_| | |_) |  __/ |  | |_) | (_) | |_              ║
-║  |_|\_\\__, |_.__/ \___|_|  |____/ \___/ \__|              ║
-║        |___/                                               ║
-║                                                            ║
-║          Your AI. Your rules. Powered by Claude Code.      ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
-
-  Agent: Atlas
-  Root:  /home/user/my-agent
-
-  ✓ ChromaDB         [RUNNING]
-  ✓ Server           [RUNNING]  port 3456
-  ✓ Heartbeat        [RUNNING]
-  ✓ Sleep Agent      [RUNNING]
-  ✓ Telegram         [RUNNING]  @atlas_bot
-  ─ Channels         [DISABLED]
-
-═════════════════════════════════════════════════════════════
-
-  Atlas is ready.
-
-═════════════════════════════════════════════════════════════
-```
+You will see a splash screen showing your agent's name and the status of each service.
 
 ---
 
 ## Your First Conversation
 
-With services running, open a new terminal and start Claude Code:
+With services running, open a **new terminal**, go to your agent's folder, and start Claude Code:
 
 ```bash
+cd ~/my-agent
 claude
 ```
 

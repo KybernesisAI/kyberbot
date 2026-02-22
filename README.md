@@ -19,13 +19,15 @@ No API keys to manage. No inference costs beyond your Claude Code subscription. 
 
 ## Quick Start
 
-### Prerequisites
+You need three things before you start:
 
-- **Node.js 18+** -- [Download](https://nodejs.org/)
-- **Docker** -- For ChromaDB vector database. [Install Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- **Claude Code** -- Active subscription. [Get Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- **Node.js 18+** -- [Download here](https://nodejs.org/)
+- **Docker Desktop** -- [Download here](https://www.docker.com/products/docker-desktop/) (used for the memory database)
+- **Claude Code** -- [Get it here](https://docs.anthropic.com/en/docs/claude-code) (requires an active subscription)
 
-### Install
+### Step 1: Install KyberBot
+
+This downloads the KyberBot tool and makes the `kyberbot` command available on your machine.
 
 ```bash
 git clone https://github.com/KybernesisAI/kyberbot.git
@@ -35,21 +37,40 @@ npm run build
 cd packages/cli && npm link && cd ../..
 ```
 
-### Create Your Agent
+You only do this once.
+
+### Step 2: Create Your Agent
+
+Pick a folder where your agent will live. This is separate from the KyberBot source code -- it's your agent's home, where its personality, memory, and skills are stored.
 
 ```bash
-mkdir my-agent && cd my-agent
+mkdir ~/my-agent
+cd ~/my-agent
 kyberbot onboard
 ```
 
-The onboard wizard walks you through naming your agent, setting your personality, and connecting optional services.
+The onboard wizard asks you a few questions (agent name, your name, personality style) and then sets up everything automatically -- identity files, memory databases, Claude Code configuration, and more. Takes about 2 minutes.
 
-### Start Using It
+### Step 3: Start Your Agent
+
+From your agent's folder, run:
 
 ```bash
-kyberbot          # Start services (ChromaDB, heartbeat, channels, sleep agent)
-claude            # Open a new terminal and talk to your agent
+kyberbot
 ```
+
+This starts all background services (memory database, heartbeat scheduler, messaging channels). Leave this running.
+
+### Step 4: Talk to Your Agent
+
+Open a **new terminal**, go to your agent's folder, and start Claude Code:
+
+```bash
+cd ~/my-agent
+claude
+```
+
+That's it. Claude Code loads your agent's personality and memory automatically. Just start talking.
 
 See [Getting Started](docs/getting-started.md) for the full walkthrough.
 
