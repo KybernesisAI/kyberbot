@@ -6,7 +6,8 @@
  * Your AI. Your rules. Powered by Claude Code.
  *
  * Usage:
- *   kyberbot run           # Start all services
+ *   kyberbot               # Start all services (default)
+ *   kyberbot run           # Same as above
  *   kyberbot onboard       # Interactive setup wizard
  *   kyberbot brain         # Brain operations (query, add, search, status)
  *   kyberbot search        # Semantic search across indexed content
@@ -63,7 +64,7 @@ program
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Core lifecycle
-program.addCommand(createRunCommand());
+program.addCommand(createRunCommand(), { isDefault: true });
 program.addCommand(createOnboardCommand());
 program.addCommand(createStatusCommand());
 
@@ -78,13 +79,7 @@ program.addCommand(createSleepCommand());
 program.addCommand(createSkillCommand());
 program.addCommand(createChannelCommand());
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// DEFAULT ACTION
-// ═══════════════════════════════════════════════════════════════════════════════
-
-program.action(() => {
-  program.help();
-});
+// When no subcommand is given, `run` executes as the default (isDefault: true).
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PARSE & RUN

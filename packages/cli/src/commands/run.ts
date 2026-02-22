@@ -9,7 +9,8 @@
  *   5. Channels (if configured)
  *
  * Usage:
- *   kyberbot run                  # Start everything
+ *   kyberbot                      # Start everything (default command)
+ *   kyberbot run                  # Same as above
  *   kyberbot run --no-channels    # Skip channels
  *   kyberbot run --no-sleep       # Skip sleep agent
  *   kyberbot run --no-heartbeat   # Skip heartbeat
