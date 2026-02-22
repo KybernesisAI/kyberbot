@@ -1,8 +1,8 @@
 /**
  * Status Command
  *
- * Show all services health: ChromaDB, sleep agent, heartbeat,
- * channels, server.
+ * Probes live services to show actual health status.
+ * Works from any process — doesn't need to be the running server.
  *
  * Usage:
  *   kyberbot status          # Show service health dashboard
@@ -11,10 +11,36 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { getRoot, getAgentName } from '../config.js';
-import { getServiceStatuses } from '../orchestrator.js';
+import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { getRoot, getAgentName, getServerPort } from '../config.js';
 import { displayServiceStatus } from '../splash.js';
 import { ServiceStatus } from '../types.js';
+
+async function probeHttp(url: string, timeoutMs: number = 3000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function probeDockerContainer(name: string): boolean {
+  try {
+    const result = execSync(`docker ps --filter "name=${name}" --format "{{.Names}}"`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    return result.trim() === name;
+  } catch {
+    return false;
+  }
+}
 
 export function createStatusCommand(): Command {
   return new Command('status')
@@ -23,6 +49,7 @@ export function createStatusCommand(): Command {
     .action(async (options: { json: boolean }) => {
       try {
         const root = getRoot();
+        const port = getServerPort();
 
         let agentName: string;
         try {
@@ -31,7 +58,44 @@ export function createStatusCommand(): Command {
           agentName = 'KyberBot';
         }
 
-        const statuses: ServiceStatus[] = getServiceStatuses();
+        // Probe all services in parallel
+        const chromaPort = process.env.CHROMA_URL
+          ? new URL(process.env.CHROMA_URL).port
+          : '8001';
+
+        const [serverUp, chromaUp] = await Promise.all([
+          probeHttp(`http://localhost:${port}/health`),
+          probeHttp(`http://localhost:${chromaPort}/`),
+        ]);
+
+        const chromaContainer = probeDockerContainer('kyberbot-chromadb');
+        const sleepDbExists = existsSync(join(root, 'data', 'sleep.db'));
+        const heartbeatExists = existsSync(join(root, 'HEARTBEAT.md'));
+
+        const statuses: ServiceStatus[] = [
+          {
+            name: 'ChromaDB',
+            status: chromaUp ? 'running' : chromaContainer ? 'starting' : 'stopped',
+            extra: chromaUp ? `port ${chromaPort}` : undefined,
+          },
+          {
+            name: 'Server',
+            status: serverUp ? 'running' : 'stopped',
+            extra: serverUp ? `port ${port}` : undefined,
+          },
+          {
+            name: 'Heartbeat',
+            status: serverUp && heartbeatExists ? 'running' : 'stopped',
+          },
+          {
+            name: 'Sleep Agent',
+            status: serverUp && sleepDbExists ? 'running' : 'stopped',
+          },
+          {
+            name: 'Channels',
+            status: serverUp ? 'running' : 'stopped',
+          },
+        ];
 
         if (options.json) {
           console.log(JSON.stringify({
@@ -43,36 +107,17 @@ export function createStatusCommand(): Command {
         }
 
         console.log(chalk.bold(`\n${agentName} -- Service Status\n`));
-
-        if (statuses.length === 0) {
-          console.log(chalk.dim('  No services registered.'));
-          console.log(chalk.dim('  Run `kyberbot run` to start all services.\n'));
-
-          // Still show expected services as stopped
-          const expectedServices: ServiceStatus[] = [
-            { name: 'ChromaDB', status: 'stopped' },
-            { name: 'Server', status: 'stopped' },
-            { name: 'Heartbeat', status: 'stopped' },
-            { name: 'Sleep Agent', status: 'stopped' },
-            { name: 'Channels', status: 'stopped' },
-          ];
-          displayServiceStatus(expectedServices);
-          return;
-        }
-
         displayServiceStatus(statuses);
 
         // Summary line
         const running = statuses.filter(s => s.status === 'running').length;
         const total = statuses.length;
-        const disabled = statuses.filter(s => s.status === 'disabled').length;
-        const errors = statuses.filter(s => s.status === 'error').length;
 
-        if (errors > 0) {
-          console.log(chalk.red(`  ${errors} service(s) in error state.`));
+        if (running === 0) {
+          console.log(chalk.dim('  All services offline. Run `kyberbot` to start.'));
+        } else {
+          console.log(chalk.dim(`  ${running}/${total} services running`));
         }
-
-        console.log(chalk.dim(`  ${running}/${total - disabled} services running${disabled > 0 ? ` (${disabled} disabled)` : ''}`));
         console.log('');
       } catch (error) {
         console.error(chalk.red(`Error: ${error}`));

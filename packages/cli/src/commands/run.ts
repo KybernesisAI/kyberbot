@@ -69,12 +69,22 @@ export function createRunCommand(): Command {
           name: 'ChromaDB',
           enabled: true,
           start: async () => {
-            const { initializeEmbeddings, isChromaAvailable } = await import('../brain/embeddings.js');
-            const available = await initializeEmbeddings();
-            return {
-              stop: async () => {},
-              status: () => available ? 'running' as const : 'error' as const,
-            };
+            // Start the Docker container first, then initialize embeddings
+            const { startChromaDB } = await import('../brain/chromadb.js');
+            const handle = await startChromaDB(root);
+            const chromaStatus = handle.status();
+
+            if (chromaStatus === 'running' || chromaStatus === 'disabled') {
+              // Container is up (or Docker unavailable) — now try embeddings
+              const { initializeEmbeddings } = await import('../brain/embeddings.js');
+              const embeddingsOk = await initializeEmbeddings();
+              return {
+                stop: handle.stop,
+                status: () => embeddingsOk ? 'running' as const : handle.status() as 'running' | 'disabled' | 'error',
+              };
+            }
+
+            return handle;
           },
         });
 

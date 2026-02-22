@@ -17,13 +17,16 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import yaml from 'js-yaml';
 import { input, select, confirm } from '@inquirer/prompts';
 
-const PRIMARY = chalk.hex('#6C5CE7');
-const ACCENT = chalk.hex('#00CEC9');
-const WARM = chalk.hex('#FDCB6E');
+const EMERALD = chalk.hex('#50C878');
+const PRIMARY = chalk.hex('#FF6B6B');
+const ACCENT = chalk.hex('#FFE66D');
 
 export function createOnboardCommand(): Command {
   return new Command('onboard')
@@ -36,13 +39,15 @@ export function createOnboardCommand(): Command {
       // ─────────────────────────────────────────────────────────────────
 
       console.log();
-      console.log(PRIMARY.bold(` _  __      _               ____        _`));
-      console.log(PRIMARY.bold(`| |/ /_   _| |__   ___ _ __| __ )  ___ | |_`));
-      console.log(PRIMARY.bold(`| ' /| | | | '_ \\ / _ \\ '__|  _ \\ / _ \\| __|`));
-      console.log(PRIMARY.bold(`| . \\| |_| | |_) |  __/ |  | |_) | (_) | |_`));
-      console.log(PRIMARY.bold(`|_|\\_\\\\__, |_.__/ \\___|_|  |____/ \\___/ \\__|`));
-      console.log(PRIMARY.bold(`      |___/`));
-      console.log(chalk.dim('      Your AI. Your rules. Powered by Claude Code.\n'));
+      console.log(chalk.hex('#A8F0C8').bold(`██╗  ██╗██╗   ██╗██████╗ ███████╗██████╗ ██████╗  ██████╗ ████████╗`));
+      console.log(chalk.hex('#82E8A8').bold(`██║ ██╔╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔═══██╗╚══██╔══╝`));
+      console.log(chalk.hex('#5CDC88').bold(`█████╔╝  ╚████╔╝ ██████╔╝█████╗  ██████╔╝██████╔╝██║   ██║   ██║`));
+      console.log(chalk.hex('#3CCF6E').bold(`██╔═██╗   ╚██╔╝  ██╔══██╗██╔══╝  ██╔══██╗██╔══██╗██║   ██║   ██║`));
+      console.log(chalk.hex('#24C05A').bold(`██║  ██╗   ██║   ██████╔╝███████╗██║  ██║██████╔╝╚██████╔╝   ██║`));
+      console.log(chalk.hex('#10B048').bold(`╚═╝  ╚═╝   ╚═╝   ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═════╝  ╚═════╝    ╚═╝`));
+      console.log();
+      console.log(EMERALD('  Your AI.') + chalk.dim(' Your rules. Powered by Claude Code.'));
+      console.log();
 
       // ─────────────────────────────────────────────────────────────────
       // Step 1: Agent Identity
@@ -148,10 +153,32 @@ export function createOnboardCommand(): Command {
         console.log(chalk.green(`  + ${dir}/`));
       }
 
-      // Ensure .claude directory
+      // Copy .claude/ template files into instance
+      // Resolve template dir: __dirname is dist/commands/, template is at ../../../../template/
+      const templateDir = join(__dirname, '..', '..', '..', '..', 'template');
+      const claudeTemplateDir = join(templateDir, '.claude');
+
+      mkdirSync(join(root, '.claude', 'commands'), { recursive: true });
       mkdirSync(join(root, '.claude', 'skills', 'templates'), { recursive: true });
       mkdirSync(join(root, '.claude', 'agents'), { recursive: true });
-      console.log(chalk.green('  + .claude/'));
+
+      // Copy CLAUDE.md, settings, commands, and skill generator
+      const templateFiles = [
+        ['.claude/CLAUDE.md', '.claude/CLAUDE.md'],
+        ['.claude/settings.local.json', '.claude/settings.local.json'],
+        ['.claude/commands/kyberbot.md', '.claude/commands/kyberbot.md'],
+        ['.claude/skills/skill-generator.md', '.claude/skills/skill-generator.md'],
+        ['.claude/skills/templates/skill-template.md', '.claude/skills/templates/skill-template.md'],
+      ];
+
+      for (const [src, dest] of templateFiles) {
+        const srcPath = join(templateDir, src);
+        const destPath = join(root, dest);
+        if (existsSync(srcPath)) {
+          copyFileSync(srcPath, destPath);
+        }
+      }
+      console.log(chalk.green('  + .claude/ (CLAUDE.md, settings, commands, skills)'));
 
       // Write identity.yaml
       const identity: Record<string, unknown> = {
@@ -271,24 +298,37 @@ export function createOnboardCommand(): Command {
         console.log(chalk.green('  + .gitignore'));
       }
 
-      // Initialize CLAUDE.md if template exists
-      const claudeMdTemplate = join(root, '.claude', 'CLAUDE.md');
-      if (existsSync(claudeMdTemplate)) {
-        let claudeMd = readFileSync(claudeMdTemplate, 'utf-8');
-        claudeMd = claudeMd.replace(/\{\{AGENT_NAME\}\}/g, agentName);
-        claudeMd = claudeMd.replace(/\{\{HEARTBEAT_INTERVAL\}\}/g, '30 minutes');
-        writeFileSync(claudeMdTemplate, claudeMd);
-        console.log(chalk.green('  + .claude/CLAUDE.md (populated)'));
+      // Replace placeholders in copied template files
+      const placeholderFiles = [
+        join(root, '.claude', 'CLAUDE.md'),
+        join(root, '.claude', 'commands', 'kyberbot.md'),
+      ];
+      for (const filePath of placeholderFiles) {
+        if (existsSync(filePath)) {
+          let content = readFileSync(filePath, 'utf-8');
+          content = content.replace(/\{\{AGENT_NAME\}\}/g, agentName);
+          content = content.replace(/\{\{HEARTBEAT_INTERVAL\}\}/g, '30 minutes');
+          writeFileSync(filePath, content);
+        }
+      }
+
+      // Copy docker-compose.yml for ChromaDB
+      const dockerComposeSrc = join(templateDir, 'docker-compose.yml');
+      if (existsSync(dockerComposeSrc)) {
+        copyFileSync(dockerComposeSrc, join(root, 'docker-compose.yml'));
+        console.log(chalk.green('  + docker-compose.yml'));
       }
 
       console.log(chalk.dim('\n  SQLite databases will be created on first use.'));
-      console.log(chalk.dim('  ChromaDB requires Docker: docker-compose up -d'));
+      console.log(chalk.dim('  For vector search, start ChromaDB: docker compose up -d'));
 
       // ─────────────────────────────────────────────────────────────────
       // Step 5: Kybernesis (optional cloud sync)
       // ─────────────────────────────────────────────────────────────────
 
       console.log(chalk.bold.underline('\nStep 5 of 7: Cloud Sync\n'));
+      console.log(chalk.dim('  Your agent\'s memory is stored locally by default (SQLite + ChromaDB).'));
+      console.log(chalk.dim('  Kybernesis adds optional cloud backup and cross-device sync.\n'));
 
       const useKybernesis = await confirm({
         message: 'Enable cloud memory sync via Kybernesis? (optional)',
@@ -299,7 +339,7 @@ export function createOnboardCommand(): Command {
         console.log(chalk.dim('  Kybernesis cloud sync is coming soon.'));
         console.log(chalk.dim('  You can configure it later in identity.yaml under the "kybernesis" section.\n'));
       } else {
-        console.log(chalk.dim('  Skipped. All memory stays local.\n'));
+        console.log(chalk.dim('  Keeping all memory local.\n'));
       }
 
       // ─────────────────────────────────────────────────────────────────
@@ -362,7 +402,7 @@ export function createOnboardCommand(): Command {
       console.log(chalk.green('  + logs/            -- Service logs'));
 
       console.log();
-      console.log(WARM.bold(`  ${agentName} is alive.`));
+      console.log(PRIMARY.bold(`  ${agentName} is alive.`));
       console.log();
       console.log(chalk.dim('  To start all services:'));
       console.log(`    ${ACCENT('kyberbot run')}`);
