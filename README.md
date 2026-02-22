@@ -169,38 +169,38 @@ Background operations (heartbeats, channel messages) use the Agent SDK (`@anthro
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      Claude Code                         │
-│  ┌─────────┐  ┌──────────┐  ┌────────┐  ┌───────────┐  │
-│  │  SOUL.md │  │ USER.md  │  │Skills/ │  │ CLAUDE.md │  │
-│  └─────────┘  └──────────┘  └────────┘  └───────────┘  │
+│                      Claude Code                        │
+│  ┌─────────┐  ┌──────────┐  ┌────────┐  ┌───────────┐   │
+│  │ SOUL.md │  │ USER.md  │  │Skills/ │  │ CLAUDE.md │   │
+│  └─────────┘  └──────────┘  └────────┘  └───────────┘   │
 ├─────────────────────────────────────────────────────────┤
-│                     KyberBot CLI                         │
-│  ┌───────────┐  ┌───────────┐  ┌─────────────────────┐  │
-│  │ Heartbeat │  │ Channels  │  │ Claude Runtime      │  │
-│  │ Scheduler │  │ Telegram  │  │ (Agent SDK / SDK /  │  │
-│  │           │  │ WhatsApp  │  │  Subprocess)        │  │
-│  └─────┬─────┘  └─────┬─────┘  └──────────┬──────────┘  │
-├────────┼───────────────┼───────────────────┼─────────────┤
-│        │          Brain │                  │              │
-│  ┌─────▼───────────────▼──────────────────▼─────────┐   │
-│  │  ChromaDB        SQLite          brain/           │   │
-│  │  (vectors)    (entities,      (markdown           │   │
-│  │               timeline,       knowledge)          │   │
-│  │               sleep state)                        │   │
-│  └───────────────────────────────────────────────────┘   │
-│                                                          │
+│                     KyberBot CLI                        │
+│  ┌───────────┐  ┌───────────┐  ┌────────────────────┐   │
+│  │ Heartbeat │  │ Channels  │  │ Claude Runtime     │   │
+│  │ Scheduler │  │ Telegram  │  │ (Agent SDK / SDK / │   │
+│  │           │  │ WhatsApp  │  │  Subprocess)       │   │
+│  └─────┬─────┘  └─────┬─────┘  └─────────┬──────────┘   │
+├────────┼──────────────┼──────────────────┼──────────────┤
+│        │        Brain │                  │              │
+│  ┌─────▼──────────────▼──────────────────▼──────────┐   │
+│  │  ChromaDB        SQLite          brain/          │   │
+│  │  (vectors)    (entities,      (markdown          │   │
+│  │               timeline,       knowledge)         │   │
+│  │               sleep state)                       │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                         │
 │  ┌────────────────────────────────────────────────┐     │
-│  │              Sleep Agent                        │     │
+│  │              Sleep Agent                       │     │
 │  │  decay → tag → link → tier → summarize →       │     │
-│  │  entity hygiene                                 │     │
+│  │  entity hygiene                                │     │
 │  └────────────────────────────────────────────────┘     │
-├──────────────────────────────────────────────────────────┤
-│           Optional: Kybernesis Cloud Brain                │
+├─────────────────────────────────────────────────────────┤
+│           Optional: Kybernesis Cloud Brain              │
 │  ┌────────────────────────────────────────────────┐     │
-│  │  Cloud workspace memory (query endpoint)        │     │
-│  │  API key only — complements local brain         │     │
+│  │  Cloud workspace memory (query endpoint)       │     │
+│  │  API key only — complements local brain        │     │
 │  └────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
