@@ -1,0 +1,24 @@
+{
+  "name": "kyberbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source personal AI agent powered by Claude Code",
+  "workspaces": [
+    "packages/cli",
+    "packages/create-kyberbot"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "clean": "rm -rf packages/*/dist",
+    "lint": "eslint packages/*/src --ext .ts",
+    "typecheck": "tsc --noEmit -p packages/cli/tsconfig.json"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kyberbot/kyberbot.git"
+  }
+}

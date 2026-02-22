@@ -1,0 +1,40 @@
+# KyberBot Identity Configuration
+# Machine config — paths, ports, service settings
+# The agent can update heartbeat_interval via natural language
+
+agent_name: "KyberBot"
+agent_description: "Your personal AI agent"
+
+# Your timezone (IANA format)
+timezone: "America/New_York"
+
+# Heartbeat interval — how often the agent checks HEARTBEAT.md
+# Duration string: "5m", "30m", "1h", "2h"
+heartbeat_interval: "30m"
+
+# Optional: restrict heartbeats to specific hours
+# heartbeat_active_hours:
+#   start: "07:00"
+#   end: "23:00"
+#   timezone: "America/New_York"
+
+# Server configuration
+server:
+  port: 3456
+
+# Claude mode
+claude:
+  mode: "subscription"  # "subscription" or "sdk"
+  # model: "sonnet"     # default model for brain operations
+
+# Messaging channels (optional)
+# channels:
+#   telegram:
+#     bot_token: "your-bot-token"
+#   whatsapp:
+#     enabled: true
+
+# Kybernesis cloud sync (optional)
+# kybernesis:
+#   agent_id: "your-agent-id"
+#   workspace_id: "your-workspace-id"

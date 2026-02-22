@@ -1,0 +1,9 @@
+{
+  "name": "kyberbot-instance",
+  "private": true,
+  "version": "1.0.0",
+  "description": "My KyberBot agent instance",
+  "dependencies": {
+    "@kyberbot/cli": "^0.1.0"
+  }
+}

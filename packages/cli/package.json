@@ -1,0 +1,44 @@
+{
+  "name": "@kyberbot/cli",
+  "version": "0.1.0",
+  "description": "KyberBot CLI — personal AI agent powered by Claude Code",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "kyberbot": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "better-sqlite3": "^11.0.0",
+    "chalk": "^5.3.0",
+    "chromadb": "^1.9.2",
+    "commander": "^12.1.0",
+    "express": "^4.21.0",
+    "grammy": "^1.30.0",
+    "inquirer": "^12.0.0",
+    "js-yaml": "^4.1.0",
+    "openai": "^4.73.0",
+    "simple-git": "^3.27.0",
+    "chrono-node": "^2.7.0",
+    "uuid": "^10.0.0",
+    "@whiskeysockets/baileys": "^6.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

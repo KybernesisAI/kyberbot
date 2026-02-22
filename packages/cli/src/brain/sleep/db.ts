@@ -1,0 +1,102 @@
+/**
+ * KyberBot — Sleep Agent Database
+ *
+ * Manages the sleep.db SQLite database for tracking runs,
+ * maintenance queue, memory edges, and telemetry.
+ */
+
+import Database from 'better-sqlite3';
+import { join } from 'path';
+import { mkdirSync } from 'fs';
+import { createLogger } from '../../logger.js';
+
+const logger = createLogger('sleep-db');
+
+let db: Database.Database | null = null;
+let currentRoot: string | null = null;
+
+export function getSleepDb(root: string): Database.Database {
+  if (db && currentRoot === root) return db;
+
+  const dataDir = join(root, 'data');
+  mkdirSync(dataDir, { recursive: true });
+
+  const dbPath = join(dataDir, 'sleep.db');
+  db = new Database(dbPath);
+  currentRoot = root;
+
+  db.pragma('journal_mode = WAL');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sleep_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'paused')),
+      checkpoint_step TEXT,
+      checkpoint_data TEXT,
+      metrics TEXT,
+      error_message TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sleep_runs_status ON sleep_runs(status);
+    CREATE INDEX IF NOT EXISTS idx_sleep_runs_started ON sleep_runs(started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS maintenance_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_type TEXT NOT NULL CHECK(item_type IN ('timeline', 'entity', 'file')),
+      item_id TEXT NOT NULL,
+      task TEXT NOT NULL CHECK(task IN ('retag', 'relink', 'resummarize', 'decay', 'rewrite')),
+      priority INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      processed_at TEXT,
+      error_message TEXT,
+      UNIQUE(item_type, item_id, task)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_queue_pending ON maintenance_queue(processed_at) WHERE processed_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_queue_priority ON maintenance_queue(priority DESC);
+
+    CREATE TABLE IF NOT EXISTS memory_edges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_path TEXT NOT NULL,
+      to_path TEXT NOT NULL,
+      relation TEXT NOT NULL DEFAULT 'related' CHECK(relation IN ('related', 'continuation', 'referenced', 'same_topic', 'same_person')),
+      weight REAL DEFAULT 1.0,
+      confidence REAL DEFAULT 0.5,
+      shared_tags TEXT,
+      rationale TEXT,
+      method TEXT DEFAULT 'sleep-agent' CHECK(method IN ('sleep-agent', 'manual', 'co-occurred', 'ai-suggested')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_verified TEXT,
+      UNIQUE(from_path, to_path)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_edges_from ON memory_edges(from_path);
+    CREATE INDEX IF NOT EXISTS idx_edges_to ON memory_edges(to_path);
+    CREATE INDEX IF NOT EXISTS idx_edges_confidence ON memory_edges(confidence DESC);
+    CREATE INDEX IF NOT EXISTS idx_edges_relation ON memory_edges(relation);
+
+    CREATE TABLE IF NOT EXISTS sleep_telemetry (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER REFERENCES sleep_runs(id),
+      step TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      count INTEGER DEFAULT 0,
+      duration_ms INTEGER,
+      metadata TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_telemetry_run ON sleep_telemetry(run_id);
+    CREATE INDEX IF NOT EXISTS idx_telemetry_step ON sleep_telemetry(step);
+  `);
+
+  logger.info('Sleep database initialized', { path: dbPath });
+  return db;
+}
+
+export async function initializeSleepDb(root: string): Promise<void> {
+  getSleepDb(root);
+}
