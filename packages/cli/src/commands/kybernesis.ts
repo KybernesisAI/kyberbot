@@ -131,13 +131,9 @@ function requireApiKey(): string {
   if (!apiKey) {
     console.log('Kybernesis is not configured.');
     console.log('');
-    console.log('Add KYBERNESIS_API_KEY to .env:');
-    console.log('  1. Sign up at https://kybernesis.ai');
-    console.log('  2. Go to Settings > API Keys');
-    console.log('  3. Create a key and add it to .env');
-    console.log('');
-    console.log('Or run `kyberbot onboard` to set up interactively.');
-    process.exit(1);
+    console.log('To connect, add KYBERNESIS_API_KEY to .env');
+    console.log('or run `kyberbot onboard` to set up interactively.');
+    process.exit(0);
   }
   return apiKey;
 }
