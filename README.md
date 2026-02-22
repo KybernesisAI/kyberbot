@@ -19,14 +19,39 @@ No API keys to manage. No inference costs beyond your Claude Code subscription. 
 
 ## Quick Start
 
+### Prerequisites
+
+- **Node.js 18+** -- [Download](https://nodejs.org/)
+- **Docker** -- For ChromaDB vector database. [Install Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- **Claude Code** -- Active subscription. [Get Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+
+### Install
+
 ```bash
-npx create-kyberbot my-agent
-cd my-agent
-kyberbot onboard
-claude
+git clone https://github.com/KybernesisAI/kyberbot.git
+cd kyberbot
+npm install
+npm run build
+cd packages/cli && npm link && cd ../..
 ```
 
-That's it. The onboard wizard walks you through naming your agent, setting your personality, and connecting optional services. Then you just talk to Claude.
+### Create Your Agent
+
+```bash
+mkdir my-agent && cd my-agent
+kyberbot onboard
+```
+
+The onboard wizard walks you through naming your agent, setting your personality, and connecting optional services.
+
+### Start Using It
+
+```bash
+kyberbot          # Start services (ChromaDB, heartbeat, channels, sleep agent)
+claude            # Open a new terminal and talk to your agent
+```
+
+See [Getting Started](docs/getting-started.md) for the full walkthrough.
 
 ---
 
@@ -138,7 +163,7 @@ Claude Code handles the hard parts: tool use, sub-agent orchestration, MCP serve
 | **Skill Generation** | Agent creates its own skills | Manual tool registration | Manual tool registration |
 | **Scheduling** | HEARTBEAT.md natural language | Cron-based | No built-in scheduler |
 | **Messaging** | Telegram, WhatsApp | API endpoints | API endpoints |
-| **Setup** | `npx create-kyberbot` (2 minutes) | Docker + API keys + config | Docker + API keys + config |
+| **Setup** | Clone + `kyberbot onboard` (5 minutes) | Docker + API keys + config | Docker + API keys + config |
 | **Sub-Agents** | Native Claude Code sub-agents | Single agent | Single agent |
 | **Permissions** | Claude Code permission system | Custom auth | Custom auth |
 | **Open Source** | MIT | MIT | Apache 2.0 |

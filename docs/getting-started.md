@@ -16,7 +16,6 @@ Before installing KyberBot, make sure you have:
 
 ### Optional
 
-- **Git** -- For version control (recommended)
 - **Telegram account** -- If you want to message your agent via Telegram
 - **WhatsApp** -- If you want to message your agent via WhatsApp
 
@@ -32,29 +31,48 @@ claude --version  # Should show Claude Code version
 
 ## Installation
 
-### Create a New Agent
+### 1. Clone and Build
 
 ```bash
-npx create-kyberbot my-agent
+git clone https://github.com/KybernesisAI/kyberbot.git
+cd kyberbot
+npm install
+npm run build
+```
+
+### 2. Link the CLI
+
+```bash
+cd packages/cli
+npm link
+cd ../..
+```
+
+This makes the `kyberbot` command available globally.
+
+### 3. Create Your Agent Directory
+
+```bash
+mkdir my-agent
 cd my-agent
 ```
 
-This scaffolds a new KyberBot project with:
-
-- `SOUL.md` -- Agent personality (blank, ready for onboarding)
-- `USER.md` -- User profile (blank, ready for onboarding)
-- `HEARTBEAT.md` -- Recurring tasks (defaults provided)
-- `CLAUDE.md` -- Claude Code instructions (pre-configured)
-- `identity.yaml` -- Agent identity configuration
-- `.env` -- Environment variables (empty, filled during onboard)
-- `brain/` -- Directory for markdown knowledge files
-- `skills/` -- Directory for agent skills
-
-### Run the Onboard Wizard
+### 4. Run the Onboard Wizard
 
 ```bash
 kyberbot onboard
 ```
+
+The onboard wizard scaffolds your agent instance and creates:
+
+- `SOUL.md` -- Agent personality
+- `USER.md` -- User profile
+- `HEARTBEAT.md` -- Recurring tasks (defaults provided)
+- `.claude/CLAUDE.md` -- Claude Code instructions (auto-generated)
+- `identity.yaml` -- Agent identity configuration
+- `.env` -- Environment variables
+- `brain/` -- Directory for markdown knowledge files
+- `skills/` -- Directory for agent skills
 
 The onboard wizard walks you through 7 steps:
 

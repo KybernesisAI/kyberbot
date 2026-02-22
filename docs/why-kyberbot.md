@@ -91,7 +91,7 @@ This is possible because Claude Code is a subscription product. You pay a flat m
 | **Sub-Agents** | Native Claude Code sub-agents | Single agent loop |
 | **Scheduling** | HEARTBEAT.md (natural language) | External cron or scheduler |
 | **Messaging** | Telegram, WhatsApp built-in | API endpoints (build your own client) |
-| **Setup** | `npx create-kyberbot` (2 minutes) | Docker + API keys + Python env + config |
+| **Setup** | Clone + `kyberbot onboard` (2 minutes) | Docker + API keys + Python env + config |
 | **MCP Support** | Native via Claude Code | None |
 
 **When to choose LettaBot:** You want a Python-native solution, need to self-host with full control over the inference layer, or prefer to use non-Claude models.
@@ -112,7 +112,7 @@ This is possible because Claude Code is a subscription product. You pay a flat m
 | **Memory Maintenance** | Sleep agent (decay, tag, link, tier, summarize) | None |
 | **Scheduling** | HEARTBEAT.md | No built-in scheduler |
 | **Messaging** | Telegram, WhatsApp | API-only |
-| **Setup** | `npx create-kyberbot` | Docker + API keys + config |
+| **Setup** | Clone + `kyberbot onboard` | Docker + API keys + config |
 
 **When to choose OpenClaw:** You need a highly extensible Python framework for building custom agent workflows, or you want to use models other than Claude.
 
@@ -172,8 +172,12 @@ KyberBot is built on three beliefs:
 ## Getting Started
 
 ```bash
-npx create-kyberbot my-agent
-cd my-agent
+git clone https://github.com/KybernesisAI/kyberbot.git
+cd kyberbot
+npm install && npm run build
+cd packages/cli && npm link && cd ../..
+
+mkdir my-agent && cd my-agent
 kyberbot onboard
 claude
 ```
