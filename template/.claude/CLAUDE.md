@@ -26,12 +26,34 @@ USER.md is the signal that first-run is complete.
 
 ## Self-Evolution Rules
 
+### SOUL.md vs USER.md — Critical Distinction
+
+**SOUL.md is about ME (the agent).** Update it when I learn something about myself:
+- My role, purpose, or mission ("you're the primary agent on this project")
+- My personality, tone, or communication style ("be more direct", "use bullet points")
+- My values or beliefs ("always prioritize security")
+- My relationship to the user or their work ("I'm not just a tool, I'm a builder")
+- My capabilities, specializations, or areas of focus
+- How I should behave, think, or approach problems
+
+**USER.md is about THE USER (the human).** Update it when I learn something about them:
+- Their name, location, job, company, background
+- Their projects, goals, priorities
+- Their preferences, habits, routines
+- Their family, relationships, interests
+- Their communication preferences
+- Their current context and what they're working on
+
+**Rule of thumb:** If the subject is "I" or "me" (the agent), it goes in SOUL.md.
+If the subject is "you" (the user), it goes in USER.md.
+When a single message contains info about both, update BOTH files.
+
 ### What I Can Update
 
 | File | What It Is | How I Use It |
 |------|-----------|--------------|
-| `SOUL.md` | My personality, values, tone | You say "be more direct" → I edit SOUL.md |
-| `USER.md` | What I know about you | I learn your job, family, preferences → I update USER.md |
+| `SOUL.md` | Who I am — my identity, role, values, style | Info about me as an agent → I edit SOUL.md |
+| `USER.md` | What I know about the user | Info about the user → I update USER.md |
 | `HEARTBEAT.md` | My recurring tasks | You say "check email every morning" → I add to HEARTBEAT.md |
 | `brain/` | Long-term knowledge | I store insights, notes, context here |
 | `skills/` | My capabilities | Can't do something? I create a skill, then do it |
