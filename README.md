@@ -51,7 +51,7 @@ kyberbot onboard
 
 The onboard wizard asks you a few questions (agent name, your name, personality style) and sets up everything in this folder -- personality files, memory databases, Claude Code configuration, and more.
 
-**This folder is your agent.** Everything it knows, everything it learns, its entire personality and memory -- all lives here. You can create multiple agents in different folders if you want, each with its own name and personality, all powered by the same KyberBot install.
+**This folder is your agent.** Everything it knows, everything it learns, its entire personality and memory -- all lives here.
 
 ### Step 3: Start Your Agent
 
