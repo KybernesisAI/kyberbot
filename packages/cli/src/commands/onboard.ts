@@ -290,6 +290,8 @@ export function createOnboardCommand(): Command {
         writeFileSync(gitignorePath, [
           'node_modules/',
           '.env',
+          'data/',
+          'heartbeat-state.json',
           'logs/',
           '*.log',
           '.DS_Store',

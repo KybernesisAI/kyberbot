@@ -20,61 +20,46 @@ Skills solve a simple problem: Claude Code is incredibly capable, but it does no
 
 ## SKILL.md Format
 
-Every skill is a markdown file with YAML frontmatter and natural language instructions.
+Every skill lives in its own directory under `skills/` and contains a `SKILL.md` file with YAML frontmatter and natural language instructions.
+
+```
+skills/
+├── my-skill/
+│   └── SKILL.md
+├── weekly-report/
+│   └── SKILL.md
+└── water-tracker/
+    └── SKILL.md
+```
 
 ```markdown
 ---
 name: skill-name
 description: One-line description of what this skill does
-version: 1
-triggers:
-  - "trigger phrase one"
-  - "trigger phrase two"
-  - "trigger phrase three"
-tools:
-  - bash
-  - read
-  - write
-  - web-search
-author: auto | manual
-created: 2026-02-22
+version: 1.0.0
+requires_env: []
+has_setup: false
 ---
 
 # Skill Name
 
-## Purpose
+## What This Does
 
 A brief explanation of what this skill accomplishes and when it should be used.
 
-## Instructions
+## How to Use
+
+- "trigger phrase one"
+- "trigger phrase two"
+- "trigger phrase three"
+
+## Implementation
 
 Step-by-step instructions the agent follows when executing this skill.
 
 1. First step
 2. Second step
 3. Third step
-
-## Input
-
-What information the agent needs from the user to execute this skill.
-
-- Required: description of required input
-- Optional: description of optional input
-
-## Output
-
-What the agent produces when this skill runs.
-
-- Format and structure of the output
-- Where results are stored (brain, file, response)
-
-## Examples
-
-### Example 1: [scenario]
-
-**User:** "example user message"
-
-**Agent:** example agent response or action
 ```
 
 ### Frontmatter Fields
@@ -83,53 +68,56 @@ What the agent produces when this skill runs.
 |-------|----------|-------------|
 | `name` | Yes | Unique identifier (kebab-case) |
 | `description` | Yes | One-line summary |
-| `version` | No | Version number (default: 1) |
-| `triggers` | Yes | Phrases that activate this skill |
-| `tools` | No | Tools the skill requires (for documentation) |
-| `author` | No | `auto` (agent-generated) or `manual` (human-written) |
-| `created` | No | ISO date of creation |
+| `version` | No | Semver version (default: 1.0.0) |
+| `requires_env` | No | Environment variables the skill needs |
+| `has_setup` | No | Whether the skill has a setup script |
 
 ---
 
 ## Creating Skills
 
+### Via CLI
+
+```bash
+kyberbot skill create my-skill
+```
+
+This scaffolds a new skill directory:
+
+```
+Creating skill: my-skill
+  skills/my-skill/SKILL.md created
+
+Edit the SKILL.md file to add your instructions.
+```
+
+Options:
+
+```bash
+kyberbot skill create my-skill -d "Track weekly running mileage"
+kyberbot skill create my-skill --env STRAVA_TOKEN --setup
+```
+
 ### Manually
 
-1. Create a markdown file in `skills/`:
+1. Create a directory and SKILL.md file:
 
    ```bash
-   touch skills/my-skill.md
+   mkdir -p skills/my-skill
+   touch skills/my-skill/SKILL.md
    ```
 
 2. Write the skill following the SKILL.md format above.
 
-3. The agent discovers it on next session start.
-
-### Via CLI
-
-```bash
-kyberbot skills create
-```
-
-This starts an interactive wizard:
-
-```
-Skill name: weekly-report
-Description: Generate a weekly summary of completed work
-Triggers (comma-separated): weekly report, what did I do this week, week summary
-
-Creating skills/weekly-report.md...
-
-Edit the file to add detailed instructions, then the skill is ready.
-```
+3. Run `kyberbot skill rebuild` to update CLAUDE.md with the new skill.
 
 ### Agent Auto-Generation
 
 The most powerful way to create skills is to let the agent do it. When you ask the agent to perform a task and no existing skill matches:
 
 1. The agent recognizes the gap
-2. It generates a skill file based on the conversation
-3. It writes the skill to `skills/generated/`
+2. It generates a skill file
+3. It writes the skill to `skills/<name>/SKILL.md`
 4. It executes the task immediately
 5. The skill is available for all future sessions
 
@@ -142,7 +130,7 @@ You: Track my water intake. I want to log glasses of water
 Agent: I don't have a skill for water tracking yet. Let me
        create one.
 
-       [Creates skills/generated/water-tracker.md]
+       [Creates skills/water-tracker/SKILL.md]
 
        Done. I've created a water tracking skill. Let me log
        your first entry -- how many glasses have you had today?
@@ -154,35 +142,35 @@ Agent: I don't have a skill for water tracking yet. Let me
 
 ```bash
 # List all installed skills
-kyberbot skills list
+kyberbot skill list
 
 # Show details of a specific skill
-kyberbot skills show <name>
+kyberbot skill info <name>
 
-# Create a new skill interactively
-kyberbot skills create
+# Create a new skill
+kyberbot skill create <name>
 
 # Remove a skill
-kyberbot skills remove <name>
+kyberbot skill remove <name>
 
 # Run skill setup (if the skill has setup requirements)
-kyberbot skills setup <name>
+kyberbot skill setup <name>
+
+# Rebuild CLAUDE.md with current skills
+kyberbot skill rebuild
 ```
 
 ### Example Output
 
 ```bash
-$ kyberbot skills list
+$ kyberbot skill list
 
-  Skills (6 installed)
+  Skills
 
-  NAME              TYPE    TRIGGERS
-  morning-briefing  manual  "morning briefing", "start my day"
-  weekly-report     manual  "weekly report", "week summary"
-  water-tracker     auto    "log water", "water intake"
-  run-tracker       auto    "log a run", "running mileage"
-  email-drafter     auto    "draft email", "write email"
-  expense-tracker   auto    "log expense", "categorize spending"
+  NAME              VERSION  DESCRIPTION
+  morning-briefing  1.0.0    Compile a morning briefing from all sources
+  weekly-report     1.0.0    Generate a weekly summary of completed work
+  water-tracker     1.0.0    Track daily water intake
 ```
 
 ---
@@ -197,28 +185,21 @@ The skill generator is the mechanism the agent uses to create skills autonomousl
 
 2. **Research** -- The agent determines the best approach. What tools are needed? What data format? Where should results be stored?
 
-3. **Generate** -- The agent writes the skill file with complete metadata and instructions.
+3. **Generate** -- The agent writes the skill directory and SKILL.md file with complete metadata and instructions.
 
 4. **Validate** -- The agent reads back the skill to verify it is well-formed and complete.
 
 5. **Execute** -- The agent immediately uses the new skill to complete the original task.
 
-6. **Persist** -- The skill file is saved to `skills/generated/` and committed via git auto-sync.
-
-### Generated Skill Location
-
-- Manual skills: `skills/`
-- Auto-generated skills: `skills/generated/`
-
-This separation makes it easy to see which skills you wrote and which the agent created.
+6. **Persist** -- The skill file is saved and CLAUDE.md is rebuilt to include it.
 
 ### Improving Generated Skills
 
 Generated skills are starting points. You can:
 
-- Edit them to refine instructions
-- Move them from `skills/generated/` to `skills/` to promote them
+- Edit the SKILL.md to refine instructions
 - Ask the agent to improve a skill: "Make the water-tracker skill also track the time of each entry"
+- Add setup scripts or environment variable requirements
 
 ---
 
@@ -228,13 +209,13 @@ Generated skills are starting points. You can:
 
 Bad:
 ```markdown
-## Instructions
+## Implementation
 Help the user track expenses.
 ```
 
 Good:
 ```markdown
-## Instructions
+## Implementation
 1. When the user logs an expense, extract: amount, category, date, description
 2. Categories: food, transport, housing, health, entertainment, other
 3. Store in brain with tag "expense" and the category as a second tag
@@ -242,21 +223,18 @@ Good:
 5. Compare against monthly budget if defined in USER.md
 ```
 
-### Define Input and Output
+### Use Trigger Phrases Thoughtfully
 
-Skills work best when the agent knows exactly what to expect and what to produce. Define the input format and output format explicitly.
+The "How to Use" section shows trigger phrases that help the agent match user messages to skills. Use natural phrases that a user would actually say. Include variations:
 
-### Use Triggers Thoughtfully
+```markdown
+## How to Use
 
-Triggers are how the agent matches user messages to skills. Use natural phrases that a user would actually say. Include variations:
-
-```yaml
-triggers:
-  - "log a run"
-  - "I went running"
-  - "running mileage"
-  - "how far did I run"
-  - "track my run"
+- "log a run"
+- "I went running"
+- "running mileage"
+- "how far did I run"
+- "track my run"
 ```
 
 ### Keep Skills Focused

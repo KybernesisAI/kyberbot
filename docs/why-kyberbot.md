@@ -46,7 +46,7 @@ Custom frameworks typically have all-or-nothing access.
 
 ### Git Integration
 
-Claude Code has native git support. It can commit changes, create branches, read diffs, and manage repositories. KyberBot uses this for auto-sync -- your agent's evolution is automatically version-controlled.
+Claude Code has native git support. It can commit changes, create branches, read diffs, and manage repositories. Your agent's living documents and skills can be tracked in version control.
 
 Custom frameworks rarely have built-in version control.
 
@@ -92,7 +92,6 @@ This is possible because Claude Code is a subscription product. You pay a flat m
 | **Scheduling** | HEARTBEAT.md (natural language) | External cron or scheduler |
 | **Messaging** | Telegram, WhatsApp built-in | API endpoints (build your own client) |
 | **Setup** | `npx create-kyberbot` (2 minutes) | Docker + API keys + Python env + config |
-| **Git Integration** | Native auto-sync | None |
 | **MCP Support** | Native via Claude Code | None |
 
 **When to choose LettaBot:** You want a Python-native solution, need to self-host with full control over the inference layer, or prefer to use non-Claude models.
@@ -166,7 +165,7 @@ KyberBot is built on three beliefs:
 
 2. **Your AI should grow.** Static configurations are a snapshot. Living documents that the agent updates are a trajectory. The agent should get better at helping you without you doing anything.
 
-3. **Your data is yours.** Local-first. Git-tracked. No data leaves your machine unless you choose to sync it. No vendor lock-in. MIT licensed.
+3. **Your data is yours.** Local-first. No data leaves your machine unless you choose to sync it. No vendor lock-in. MIT licensed.
 
 ---
 

@@ -29,28 +29,21 @@ In the Kybernesis dashboard, go to Settings > API Keys and generate a new key.
 
 ### Step 3: Configure KyberBot
 
-Add your credentials to `.env`:
+Add your API key to `.env`:
 
 ```env
 KYBERNESIS_API_KEY=your_api_key_here
-KYBERNESIS_WORKSPACE_ID=your_workspace_id
 ```
 
-Or run the setup command:
+Add your Kybernesis identifiers to `identity.yaml`:
 
-```bash
-kyberbot kybernesis setup
+```yaml
+kybernesis:
+  agent_id: your_agent_id
+  workspace_id: your_workspace_id
 ```
 
-This will prompt you for your API key and workspace ID, then test the connection.
-
-### Step 4: Initial Sync
-
-```bash
-kyberbot kybernesis sync
-```
-
-This uploads your local brain to Kybernesis. Depending on the size of your memory, this may take a few minutes.
+This can also be configured during the onboard wizard (`kyberbot onboard`).
 
 ---
 
@@ -106,34 +99,7 @@ When cloud sync is enabled, your agent's memories are stored on Kybernesis serve
 
 ### Opting Out
 
-You can disconnect at any time:
-
-```bash
-kyberbot kybernesis disconnect
-```
-
-This removes the Kybernesis configuration from your `.env` file. Your local data remains intact. Data already synced to Kybernesis remains in your cloud workspace until you delete it manually.
-
----
-
-## Commands
-
-```bash
-# Set up Kybernesis connection
-kyberbot kybernesis setup
-
-# Sync local brain to cloud
-kyberbot kybernesis sync
-
-# Pull cloud data to local
-kyberbot kybernesis pull
-
-# Check sync status
-kyberbot kybernesis status
-
-# Disconnect from Kybernesis
-kyberbot kybernesis disconnect
-```
+You can disconnect at any time by removing the `kybernesis` section from `identity.yaml` and the `KYBERNESIS_API_KEY` from `.env`. Your local data remains intact. Data already synced to Kybernesis remains in your cloud workspace until you delete it manually.
 
 ---
 

@@ -223,13 +223,16 @@ kyberbot --no-channels     # Disable messaging channels
 kyberbot --no-heartbeat    # Disable heartbeat scheduler
 
 # Other commands
-kyberbot status                # Show service status
-kyberbot onboard               # Re-run onboard wizard
-kyberbot brain search "query"  # Search memories
-kyberbot brain entities        # List tracked entities
-kyberbot brain timeline        # Show recent timeline
-kyberbot skills list           # List installed skills
-kyberbot skills create         # Create a new skill
+kyberbot status                     # Show service status
+kyberbot onboard                    # Re-run onboard wizard
+kyberbot brain search "query"       # Search memories
+kyberbot recall                     # List tracked entities
+kyberbot recall "John"              # Query entity graph
+kyberbot timeline                   # Show recent timeline
+kyberbot timeline --today           # Today's events
+kyberbot skill list                 # List installed skills
+kyberbot skill create my-skill      # Create a new skill
+kyberbot skill info my-skill        # Show skill details
 ```
 
 ---

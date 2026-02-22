@@ -348,6 +348,6 @@ When the agent has a conversation with you, it reads SOUL.md and USER.md for con
 
 3. **Start minimal.** The onboard wizard creates a starting point. Resist the urge to write a 2000-line USER.md on day one. Let it grow organically.
 
-4. **Use git history.** With auto-sync enabled, you have a full history of how these documents evolved. Use `git log` and `git diff` to review changes.
+4. **Use git history.** Commit your changes regularly to maintain a full history of how these documents evolved. Use `git log` and `git diff` to review changes.
 
 5. **Correct explicitly.** If the agent gets something wrong, tell it directly. "That's wrong, I actually prefer X" is more effective than silently editing the file.

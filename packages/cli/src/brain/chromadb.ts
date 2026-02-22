@@ -6,7 +6,8 @@
  * Supports both macOS (Docker Desktop) and Linux (docker daemon).
  */
 
-import { spawn, execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
+import { join } from 'path';
 import { createLogger } from '../logger.js';
 import { ServiceHandle } from '../types.js';
 
@@ -182,17 +183,17 @@ export async function startChromaDB(rootDir: string): Promise<ServiceHandle> {
         }
 
         // Create new container
-        const dataDir = `${rootDir}/data/chromadb`;
+        const dataDir = join(rootDir, 'data', 'chromadb');
         logger.info('Creating fresh ChromaDB container...');
-        execSync(`docker run -d \
-          --name ${CONTAINER_NAME} \
-          -p ${getChromaPort()}:8000 \
-          -v "${dataDir}:/chroma/chroma" \
-          -e IS_PERSISTENT=TRUE \
-          -e ANONYMIZED_TELEMETRY=FALSE \
-          chromadb/chroma:latest`, {
-          stdio: 'pipe',
-        });
+        execFileSync('docker', [
+          'run', '-d',
+          '--name', CONTAINER_NAME,
+          '-p', `${getChromaPort()}:8000`,
+          '-v', `${dataDir}:/chroma/chroma`,
+          '-e', 'IS_PERSISTENT=TRUE',
+          '-e', 'ANONYMIZED_TELEMETRY=FALSE',
+          'chromadb/chroma:latest',
+        ], { stdio: 'pipe' });
 
         logger.info('Waiting for ChromaDB to be ready...');
         healthy = await waitForChromaDB(45000);
@@ -208,17 +209,17 @@ export async function startChromaDB(rootDir: string): Promise<ServiceHandle> {
     } else {
       // Create and start new container
       logger.info('Creating ChromaDB container (this may take a moment to pull the image)...');
-      const dataDir = `${rootDir}/data/chromadb`;
+      const dataDir = join(rootDir, 'data', 'chromadb');
 
-      execSync(`docker run -d \
-        --name ${CONTAINER_NAME} \
-        -p ${getChromaPort()}:8000 \
-        -v "${dataDir}:/chroma/chroma" \
-        -e IS_PERSISTENT=TRUE \
-        -e ANONYMIZED_TELEMETRY=FALSE \
-        chromadb/chroma:latest`, {
-        stdio: 'pipe',
-      });
+      execFileSync('docker', [
+        'run', '-d',
+        '--name', CONTAINER_NAME,
+        '-p', `${getChromaPort()}:8000`,
+        '-v', `${dataDir}:/chroma/chroma`,
+        '-e', 'IS_PERSISTENT=TRUE',
+        '-e', 'ANONYMIZED_TELEMETRY=FALSE',
+        'chromadb/chroma:latest',
+      ], { stdio: 'pipe' });
 
       // Wait for ChromaDB to be healthy (longer timeout for first pull)
       logger.info('Waiting for ChromaDB to be ready...');

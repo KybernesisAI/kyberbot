@@ -53,9 +53,10 @@ kyberbot/
 │   │   │   ├── commands/      # CLI command handlers
 │   │   │   ├── brain/         # Memory system (ChromaDB, SQLite, search)
 │   │   │   │   └── sleep/     # Sleep agent (decay, tag, link, tier, summarize)
-│   │   │   ├── server/        # HTTP server for webhooks/channels
-│   │   │   ├── channels/      # Messaging integrations (Telegram, WhatsApp)
+│   │   │   ├── server/        # HTTP server, brain API, channels
+│   │   │   │   └── channels/  # Messaging integrations (Telegram, WhatsApp)
 │   │   │   ├── config.ts      # Configuration management
+│   │   │   ├── logger.ts      # Logging utility
 │   │   │   ├── splash.ts      # ASCII splash screen
 │   │   │   ├── types.ts       # Shared TypeScript types
 │   │   │   └── index.ts       # CLI entry point
@@ -72,7 +73,10 @@ kyberbot/
 │   ├── SOUL.md                # Default personality template
 │   ├── USER.md                # Default user profile template
 │   ├── HEARTBEAT.md           # Default heartbeat tasks
-│   └── CLAUDE.md              # Claude Code instructions
+│   ├── identity.yaml          # Default identity config
+│   └── .claude/
+│       ├── CLAUDE.md          # Claude Code instructions
+│       └── settings.local.json # Default permissions
 │
 ├── docs/                      # Documentation
 ├── package.json               # Root workspace config
@@ -220,22 +224,27 @@ Include:
 
 ## Adding a New Command
 
+KyberBot uses [Commander.js](https://github.com/tj/commander.js) for CLI commands.
+
 1. Create a new file in `packages/cli/src/commands/`:
 
    ```typescript
    // packages/cli/src/commands/my-command.ts
-   import { Command } from '../types.js';
+   import { Command } from 'commander';
 
-   export const myCommand: Command = {
-     name: 'my-command',
-     description: 'What this command does',
-     async execute(args: string[]) {
-       // Implementation
-     }
-   };
+   export function registerMyCommand(program: Command): void {
+     program
+       .command('my-command')
+       .description('What this command does')
+       .argument('[optional-arg]', 'argument description')
+       .option('-f, --flag', 'option description')
+       .action(async (arg, opts) => {
+         // Implementation
+       });
+   }
    ```
 
-2. Register it in the command registry (see existing commands for the pattern).
+2. Register it in `packages/cli/src/index.ts` by importing and calling the register function.
 
 3. Add documentation to `docs/` if it is a user-facing feature.
 
@@ -243,17 +252,15 @@ Include:
 
 ## Adding a New Channel
 
-1. Create a new directory in `packages/cli/src/channels/`:
+1. Create a new file in `packages/cli/src/server/channels/`:
 
    ```
-   packages/cli/src/channels/my-channel/
-   ├── index.ts          # Channel implementation
-   └── types.ts          # Channel-specific types
+   packages/cli/src/server/channels/my-channel.ts
    ```
 
-2. Implement the `Channel` interface (see `docs/channels.md` for the interface definition).
+2. Implement the `Channel` interface from `packages/cli/src/server/channels/types.ts` (see `docs/channels.md` for the interface definition).
 
-3. Register the channel in the service startup flow.
+3. Register the channel in `packages/cli/src/server/index.ts`.
 
 4. Add setup documentation.
 
@@ -261,4 +268,4 @@ Include:
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/kyberbot/kyberbot/discussions) or file an issue. We are happy to help.
+Open a [GitHub Discussion](https://github.com/KybernesisAI/kyberbot/discussions) or file an issue. We are happy to help.

@@ -33,15 +33,7 @@ ChromaDB provides semantic search over all stored memories. When the agent saves
 
 ### Storage
 
-ChromaDB runs as a Docker container. Data is persisted to `data/chroma/` in your project directory.
-
-```bash
-# ChromaDB starts automatically with kyberbot
-# Manual control:
-kyberbot brain chroma start
-kyberbot brain chroma stop
-kyberbot brain chroma status
-```
+ChromaDB runs as a Docker container. Data is persisted to `data/chromadb/` in your project directory. ChromaDB starts automatically when you run `kyberbot`.
 
 ### Metadata
 
@@ -63,7 +55,7 @@ Each memory stored in ChromaDB includes:
 
 ## SQLite -- Entity Graph
 
-The entity graph tracks discrete entities (people, companies, projects, places, topics) and the relationships between them. It is stored in a SQLite database at `data/entities.db`.
+The entity graph tracks discrete entities (people, companies, projects, places, topics) and the relationships between them. It is stored in a SQLite database at `data/entity-graph.db`.
 
 ### Entity Types
 
@@ -111,13 +103,10 @@ CREATE TABLE relationships (
 
 ```bash
 # List all tracked entities
-kyberbot brain entities
+kyberbot recall
 
 # Query a specific entity
-kyberbot brain entities "John"
-
-# Show relationships
-kyberbot brain entities --relationships
+kyberbot recall "John"
 ```
 
 The agent also queries the entity graph during conversation when it needs to recall information about people, projects, or organizations.
@@ -148,16 +137,16 @@ CREATE TABLE events (
 
 ```bash
 # Recent timeline
-kyberbot brain timeline
+kyberbot timeline
 
 # Today's events
-kyberbot brain timeline --today
+kyberbot timeline --today
 
 # This week
-kyberbot brain timeline --week
+kyberbot timeline --week
 
 # Search
-kyberbot brain timeline --search "product launch"
+kyberbot timeline --search "product launch"
 ```
 
 ---
@@ -331,8 +320,8 @@ User Conversation
 
 | File / Directory | Purpose |
 |------------------|---------|
-| `data/chroma/` | ChromaDB persistent storage |
-| `data/entities.db` | Entity graph (SQLite) |
+| `data/chromadb/` | ChromaDB persistent storage |
+| `data/entity-graph.db` | Entity graph (SQLite) |
 | `data/timeline.db` | Timeline (SQLite) |
 | `data/sleep.db` | Sleep agent state (SQLite) |
 | `brain/` | Markdown knowledge files |

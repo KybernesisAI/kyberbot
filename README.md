@@ -77,15 +77,6 @@ When your agent encounters a task it cannot handle, it creates a new skill:
 - Skills accumulate over time, making the agent permanently more capable
 - Full lifecycle management: list, create, remove, setup
 
-### Git Auto-Sync
-
-Your agent's brain, identity, and skills are version-controlled:
-
-- Automatic commits on a configurable interval
-- Full history of how your agent evolved
-- Easy backup and restore
-- Works with any Git remote
-
 ---
 
 ## How It Works
@@ -97,7 +88,6 @@ KyberBot is not a framework that wraps an LLM. It is a layer on top of Claude Co
 3. **Scheduling** -- A heartbeat loop that spawns Claude Code sessions for recurring tasks
 4. **Channels** -- Telegram/WhatsApp bridges that pipe messages to and from Claude Code
 5. **Skills** -- Markdown skill files that teach the agent new capabilities
-6. **Sync** -- Git auto-commit to persist everything
 
 Claude Code handles the hard parts: tool use, sub-agent orchestration, MCP servers, file editing, permissions, and reasoning. KyberBot just gives it a brain and a body.
 
@@ -113,11 +103,11 @@ Claude Code handles the hard parts: tool use, sub-agent orchestration, MCP serve
 │  └─────────┘  └──────────┘  └────────┘  └───────────┘  │
 ├─────────────────────────────────────────────────────────┤
 │                     KyberBot CLI                         │
-│  ┌───────────┐  ┌───────────┐  ┌──────────────────┐    │
-│  │ Heartbeat │  │ Channels  │  │   Git Auto-Sync  │    │
-│  │ Scheduler │  │ Telegram  │  │                   │    │
-│  │           │  │ WhatsApp  │  │                   │    │
-│  └─────┬─────┘  └─────┬─────┘  └──────────────────┘    │
+│  ┌───────────┐  ┌───────────┐                          │
+│  │ Heartbeat │  │ Channels  │                          │
+│  │ Scheduler │  │ Telegram  │                          │
+│  │           │  │ WhatsApp  │                          │
+│  └─────┬─────┘  └─────┬─────┘                          │
 ├────────┼───────────────┼────────────────────────────────┤
 │        │          Brain │                                │
 │  ┌─────▼───────────────▼──────────────────────────┐     │
@@ -148,7 +138,6 @@ Claude Code handles the hard parts: tool use, sub-agent orchestration, MCP serve
 | **Skill Generation** | Agent creates its own skills | Manual tool registration | Manual tool registration |
 | **Scheduling** | HEARTBEAT.md natural language | Cron-based | No built-in scheduler |
 | **Messaging** | Telegram, WhatsApp | API endpoints | API endpoints |
-| **Git Integration** | Native (auto-sync, version history) | None | None |
 | **Setup** | `npx create-kyberbot` (2 minutes) | Docker + API keys + config | Docker + API keys + config |
 | **Sub-Agents** | Native Claude Code sub-agents | Single agent | Single agent |
 | **Permissions** | Claude Code permission system | Custom auth | Custom auth |

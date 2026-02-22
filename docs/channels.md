@@ -10,7 +10,7 @@ KyberBot supports two messaging channels:
 
 | Channel | Auth Method | Features |
 |---------|------------|----------|
-| **Telegram** | BotFather token | Text messages, inline commands, file sharing |
+| **Telegram** | BotFather token + verification code | Text messages, owner-only access |
 | **WhatsApp** | QR code scan | Text messages, voice notes, media |
 
 Both channels are optional. You can use KyberBot entirely through the terminal if you prefer.
@@ -18,14 +18,14 @@ Both channels are optional. You can use KyberBot entirely through the terminal i
 ### How Channels Work
 
 1. You send a message on Telegram or WhatsApp
-2. The KyberBot server receives the message via webhook
+2. The KyberBot server receives the message
 3. The message is forwarded to a Claude Code session
 4. Claude Code processes the message with full agent context (SOUL.md, USER.md, brain, skills)
 5. The response is sent back to your messaging app
 
 ```
-┌──────────┐     webhook     ┌──────────┐     stdin     ┌──────────┐
-│ Telegram │ ───────────────▶│ KyberBot │ ─────────────▶│  Claude  │
+┌──────────┐                 ┌──────────┐                ┌──────────┐
+│ Telegram │ ───────────────▶│ KyberBot │ ──────────────▶│  Claude  │
 │    or    │                 │  Server  │                │   Code   │
 │ WhatsApp │◀─────────────── │          │◀───────────── │          │
 └──────────┘     response    └──────────┘     stdout    └──────────┘
@@ -42,69 +42,69 @@ Both channels are optional. You can use KyberBot entirely through the terminal i
 3. Follow the prompts to choose a name and username for your bot
 4. BotFather will give you a token like: `7123456789:AAHfF3k...`
 
-### Step 2: Configure KyberBot
-
-Add the token to your `.env` file:
-
-```env
-TELEGRAM_BOT_TOKEN=7123456789:AAHfF3k...
-```
-
-Or run the setup command:
+### Step 2: Add the Channel
 
 ```bash
-kyberbot channels telegram setup
+kyberbot channel add telegram
 ```
 
-### Step 3: Start the Channel
+This prompts for your bot token and saves it to `identity.yaml`.
 
-If you used the setup command, Telegram will start automatically with `kyberbot`. You can also start it independently:
+### Step 3: Start KyberBot
 
 ```bash
-kyberbot channels telegram start
+kyberbot
 ```
 
-### Step 4: Test It
+On first start with a new Telegram bot, KyberBot enters **verification mode**. You will see a message in the console:
 
-Open Telegram, find your bot, and send a message:
+```
+Send /start ABCDEF to your Telegram bot to verify ownership
+```
+
+### Step 4: Verify Ownership
+
+Open Telegram, find your bot, and send:
+
+```
+/start ABCDEF
+```
+
+(Replace `ABCDEF` with the actual code from your console.)
+
+If the code is correct, the bot replies:
+
+```
+Connected! I'm [AgentName]. You are now the verified owner.
+```
+
+Your Telegram `chat_id` is saved to `identity.yaml` as `owner_chat_id`. From this point on, **only messages from your account are processed**. Messages from anyone else are silently ignored.
+
+### Step 5: Chat
+
+Send any message to your bot and it will respond as your agent, with full personality (SOUL.md) and user knowledge (USER.md):
 
 ```
 You: Hey, what's on my schedule today?
 Bot: Here's your schedule for today...
 ```
 
-### Telegram Commands
+### Re-verification
 
-Your bot responds to regular messages. You can also register slash commands with BotFather for quick actions:
+If you need to re-pair (new phone, new Telegram account):
 
-```
-/briefing - Morning briefing
-/status   - Service status
-/search   - Search memory
-/help     - Show available commands
+```bash
+kyberbot channel add telegram --reverify
 ```
 
-To register commands, send this to BotFather:
+This clears `owner_chat_id` from `identity.yaml`. The next time you start KyberBot, a new verification code will be generated.
 
-```
-/setcommands
-```
+### Security Model
 
-Then paste your command list.
-
-### Security
-
-- Only your Telegram user ID can interact with the bot (configured during setup)
-- Messages from other users are ignored
-- Set your user ID in `.env`:
-
-```env
-TELEGRAM_ALLOWED_USERS=123456789
-```
-
-Multiple users can be comma-separated: `123456789,987654321`
-
-To find your Telegram user ID, send a message to `@userinfobot`.
+- **One-time verification code**: Printed to the server console (never sent over the network)
+- **Owner-only access**: After verification, only the verified `owner_chat_id` can interact with the bot
+- **Silent rejection**: Messages from non-owners are silently ignored (no error response)
+- **Persistent**: The `owner_chat_id` survives restarts -- you only verify once
 
 ---
 
@@ -113,7 +113,7 @@ To find your Telegram user ID, send a message to `@userinfobot`.
 ### Step 1: Configure
 
 ```bash
-kyberbot channels whatsapp setup
+kyberbot channel add whatsapp
 ```
 
 This starts the WhatsApp Web authentication flow.
@@ -132,8 +132,8 @@ A QR code will appear in your terminal. Scan it with WhatsApp on your phone:
 Once scanned, the terminal will show:
 
 ```
-  ✓ WhatsApp connected
-  ✓ Session saved for future reconnection
+  WhatsApp connected
+  Session saved for future reconnection
 ```
 
 The session is persisted, so you will not need to scan again unless you log out.
@@ -151,7 +151,7 @@ Bot: Based on your timeline, yesterday you...
 
 - WhatsApp uses your personal phone number as the agent's number
 - The session persists in `data/whatsapp-session/`
-- If the session expires, re-run `kyberbot channels whatsapp setup`
+- If the session expires, re-run `kyberbot channel add whatsapp`
 - Rate limits apply per WhatsApp's terms of service
 
 ---
@@ -165,7 +165,7 @@ Both channels implement a common `Channel` interface. This makes it straightforw
 ```typescript
 interface Channel {
   /** Unique channel identifier */
-  name: string;
+  readonly name: string;
 
   /** Initialize the channel (connect, authenticate) */
   start(): Promise<void>;
@@ -173,32 +173,34 @@ interface Channel {
   /** Gracefully shut down the channel */
   stop(): Promise<void>;
 
-  /** Send a message to the user */
-  send(message: string): Promise<void>;
-
-  /** Register a handler for incoming messages */
-  onMessage(handler: (message: IncomingMessage) => Promise<string>): void;
+  /** Send a message to a recipient */
+  send(to: string, message: string): Promise<void>;
 
   /** Check if the channel is currently connected */
   isConnected(): boolean;
+
+  /** Register a handler for incoming messages */
+  onMessage(handler: (message: ChannelMessage) => Promise<void>): void;
 }
 
-interface IncomingMessage {
-  /** Raw text content */
-  text: string;
+interface ChannelMessage {
+  /** Unique message identifier */
+  id: string;
+
+  /** Channel type (e.g., 'telegram', 'whatsapp') */
+  channelType: string;
 
   /** Sender identifier */
   from: string;
 
+  /** Raw text content */
+  text: string;
+
   /** Timestamp */
   timestamp: Date;
 
-  /** Optional attached media */
-  media?: {
-    type: 'image' | 'audio' | 'document';
-    url: string;
-    filename?: string;
-  };
+  /** Optional extra data */
+  metadata?: Record<string, unknown>;
 }
 ```
 
@@ -206,19 +208,17 @@ interface IncomingMessage {
 
 To add a new messaging platform:
 
-1. Create a directory in `packages/cli/src/channels/`:
+1. Create a file in `packages/cli/src/server/channels/`:
 
    ```
-   packages/cli/src/channels/discord/
-   ├── index.ts
-   └── types.ts
+   packages/cli/src/server/channels/discord.ts
    ```
 
 2. Implement the `Channel` interface
 
-3. Register the channel in the service startup flow
+3. Register the channel in `packages/cli/src/server/index.ts`
 
-4. Add configuration to `.env` and the onboard wizard
+4. Add configuration to `identity.yaml` and the onboard wizard
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for more details.
 
@@ -230,7 +230,7 @@ When a message arrives from any channel, it goes through the following pipeline:
 
 ### 1. Authentication
 
-The server verifies the message is from an allowed user. Unauthorized messages are silently dropped.
+The server verifies the message is from the verified owner. Unauthorized messages are silently dropped.
 
 ### 2. Context Loading
 
@@ -246,7 +246,7 @@ The message is sent to Claude Code for processing. The agent has access to all i
 
 ### 4. Response
 
-The agent's response is sent back through the originating channel. Long responses may be split into multiple messages based on the platform's character limits.
+The agent's response is sent back through the originating channel. Long responses are split into multiple messages based on the platform's character limits (Telegram: 4096 characters).
 
 ### 5. Memory
 
@@ -258,22 +258,21 @@ The conversation is stored in the brain (ChromaDB) and timeline (SQLite) for fut
 
 ```bash
 # List configured channels
-kyberbot channels list
+kyberbot channel list
 
-# Start a specific channel
-kyberbot channels telegram start
-kyberbot channels whatsapp start
+# Add a channel
+kyberbot channel add telegram
+kyberbot channel add whatsapp
 
-# Stop a specific channel
-kyberbot channels telegram stop
-kyberbot channels whatsapp stop
+# Re-verify Telegram (clears owner and generates new code)
+kyberbot channel add telegram --reverify
+
+# Remove a channel
+kyberbot channel remove telegram
+kyberbot channel remove whatsapp
 
 # Check channel status
-kyberbot channels status
-
-# Re-run setup for a channel
-kyberbot channels telegram setup
-kyberbot channels whatsapp setup
+kyberbot channel status
 ```
 
 ---
@@ -282,14 +281,20 @@ kyberbot channels whatsapp setup
 
 ### Telegram bot not responding
 
-- Verify the token in `.env` is correct
-- Check that your Telegram user ID is in `TELEGRAM_ALLOWED_USERS`
-- Run `kyberbot channels status` to see if the channel is running
-- Check logs: `kyberbot channels telegram logs`
+- Verify the bot token in `identity.yaml` is correct
+- Check that you have completed the verification flow (look for `owner_chat_id` in `identity.yaml`)
+- Run `kyberbot channel status` to see if the channel is configured
+- Restart KyberBot if the bot was recently created
+
+### Telegram verification code not working
+
+- Codes are case-sensitive -- type them exactly as shown
+- Each code is single-use. If you restart KyberBot, a new code is generated
+- Make sure you are sending `/start CODE` (with the `/start` prefix)
 
 ### WhatsApp disconnected
 
-- Run `kyberbot channels whatsapp setup` to re-authenticate
+- Run `kyberbot channel add whatsapp` to re-authenticate
 - Delete `data/whatsapp-session/` and set up from scratch if authentication fails
 - Ensure your phone has an active internet connection (WhatsApp Web requires the phone to be online)
 

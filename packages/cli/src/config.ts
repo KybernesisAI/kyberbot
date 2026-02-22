@@ -6,7 +6,7 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join, resolve } from 'path';
+import { join, resolve, dirname } from 'path';
 import yaml from 'js-yaml';
 import { IdentityConfig } from './types.js';
 
@@ -32,7 +32,8 @@ export function getRoot(): string {
   // Safety: skip directories that look like the kyberbot monorepo source
   // (they contain packages/ alongside identity.yaml from the template)
   let dir = process.cwd();
-  while (dir !== '/') {
+  let parent = dirname(dir);
+  while (dir !== parent) {
     if (existsSync(join(dir, 'identity.yaml'))) {
       // Guard: don't resolve to the monorepo source root
       const isMonorepo = existsSync(join(dir, 'packages', 'cli', 'src'));
@@ -41,7 +42,8 @@ export function getRoot(): string {
         return _root;
       }
     }
-    dir = resolve(dir, '..');
+    dir = parent;
+    parent = dirname(dir);
   }
 
   throw new Error(

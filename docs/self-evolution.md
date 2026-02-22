@@ -72,7 +72,7 @@ When your agent encounters a task that no existing skill handles, it can create 
 1. You ask the agent to do something new (e.g., "Track my running mileage")
 2. The agent checks existing skills -- none found
 3. The agent assesses whether this is feasible with available tools
-4. It generates a new skill file at `skills/generated/<skill-name>.md`
+4. It generates a new skill at `skills/<skill-name>/SKILL.md`
 5. It executes the task immediately using the new skill
 6. The skill persists for future use
 
@@ -102,10 +102,10 @@ triggers:
 
 ### Lifecycle
 
-- **Creation** -- Automatic when needed, or manual via `kyberbot skills create`
+- **Creation** -- Automatic when needed, or manual via `kyberbot skill create <name>`
 - **Discovery** -- The agent scans `skills/` at session start
 - **Execution** -- Skills are loaded as context when their triggers match
-- **Retirement** -- Unused skills can be removed via `kyberbot skills remove <name>`
+- **Retirement** -- Unused skills can be removed via `kyberbot skill remove <name>`
 
 See [Skills](skills.md) for the complete skill system reference.
 
@@ -133,8 +133,8 @@ Not everything can be modified by the agent. The following files are protected a
 |------|---------------------|
 | `identity.yaml` | Core identity config (agent name, ID). Changing this could break integrations. |
 | `.env` | Secrets and API keys. The agent should never write credentials. |
-| `CLAUDE.md` | Claude Code instructions. This is the agent's operating system -- changes here affect everything. |
-| `.claude/settings.json` | Claude Code settings and permissions. |
+| `CLAUDE.md` | Claude Code instructions. This is the agent's operating system -- auto-generated, changes are overwritten. |
+| `.claude/settings.local.json` | Claude Code settings and permissions. |
 
 The agent can read these files but will not modify them. If it needs a change to a protected file, it will ask you to make the edit manually.
 
@@ -146,7 +146,7 @@ Self-evolution is powerful but needs guardrails:
 
 ### Git History
 
-Every change the agent makes is tracked in git (if auto-sync is enabled). You can always:
+Every change the agent makes can be tracked in git. You can:
 
 ```bash
 git log --oneline SOUL.md    # See how personality evolved

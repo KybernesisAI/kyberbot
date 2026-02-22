@@ -80,12 +80,12 @@ Both modes use the same brain, skills, and living documents.
 │                        Brain                                     │
 │                                                                  │
 │  ┌────────────┐  ┌────────────┐  ┌─────────────┐               │
-│  │  ChromaDB  │  │   SQLite   │  │   brain/    │               │
-│  │  (Docker)  │  │            │  │ (markdown)  │               │
-│  │            │  │ entities.db│  │             │               │
-│  │  vectors,  │  │ timeline.db│  │  knowledge  │               │
-│  │  metadata  │  │ sleep.db   │  │  documents  │               │
-│  └────────────┘  └────────────┘  └─────────────┘               │
+│  │  ChromaDB  │  │    SQLite      │  │   brain/    │            │
+│  │  (Docker)  │  │                │  │ (markdown)  │            │
+│  │            │  │entity-graph.db │  │             │            │
+│  │  vectors,  │  │ timeline.db    │  │  knowledge  │            │
+│  │  metadata  │  │ sleep.db       │  │  documents  │            │
+│  └────────────┘  └────────────────┘  └─────────────┘            │
 │                                                                  │
 │  ┌────────────────────────────────────────────┐                 │
 │  │              Sleep Agent                    │                 │
@@ -116,7 +116,7 @@ When you run `kyberbot`, services start in this order:
    └─ Start container, wait for health check
 
 3. SQLite Databases
-   └─ Open/create entities.db, timeline.db, sleep.db
+   └─ Open/create entity-graph.db, timeline.db, sleep.db
 
 4. Sleep Agent
    └─ Begin background maintenance cycle
@@ -258,19 +258,19 @@ my-agent/                          # Your KyberBot project
 │   └── ...                        # User-defined structure
 │
 ├── skills/                        # Skill files
-│   ├── my-skill.md                # Manually created skills
-│   └── generated/                 # Agent-generated skills
-│       └── auto-skill.md
+│   └── my-skill/                  # Each skill is a directory
+│       └── SKILL.md               # Skill definition
 │
 ├── data/                          # Runtime data (gitignored)
-│   ├── chroma/                    # ChromaDB persistent storage
-│   ├── entities.db                # Entity graph (SQLite)
+│   ├── chromadb/                  # ChromaDB persistent storage
+│   ├── entity-graph.db            # Entity graph (SQLite)
 │   ├── timeline.db                # Timeline (SQLite)
 │   ├── sleep.db                   # Sleep agent state (SQLite)
 │   └── whatsapp-session/          # WhatsApp auth (if configured)
 │
 ├── .claude/                       # Claude Code configuration
-│   ├── settings.json              # Permissions and settings
+│   ├── CLAUDE.md                  # Auto-generated operating instructions
+│   ├── settings.local.json        # Permissions and settings
 │   └── agents/                    # Sub-agent definitions
 │
 ├── logs/                          # Application logs
@@ -286,17 +286,15 @@ my-agent/                          # Your KyberBot project
 
 | Tracked | Not Tracked |
 |---------|-------------|
-| CLAUDE.md | data/ (runtime databases) |
-| SOUL.md | .env (secrets) |
-| USER.md | logs/ (application logs) |
-| HEARTBEAT.md | data/whatsapp-session/ |
-| identity.yaml | node_modules/ |
-| brain/ | |
+| SOUL.md | data/ (runtime databases) |
+| USER.md | .env (secrets) |
+| HEARTBEAT.md | logs/ (application logs) |
+| identity.yaml | heartbeat-state.json (scheduler state) |
+| brain/ | node_modules/ |
 | skills/ | |
-| heartbeat-state.json | |
 | .claude/ | |
 
-This means your agent's identity, knowledge, and skills are version-controlled, while runtime data and secrets are not.
+This means your agent's identity, knowledge, and skills are version-controlled, while runtime data, scheduler state, and secrets are not.
 
 ---
 
