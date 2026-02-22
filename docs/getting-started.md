@@ -148,6 +148,53 @@ After completing onboarding, you will see:
 
 ---
 
+## Updating KyberBot
+
+When a new version of KyberBot is released, you need to update the CLI source code **and** refresh template files inside your agent instance. The `update` command handles both:
+
+```bash
+cd ~/my-agent
+kyberbot update
+```
+
+This runs the full update flow:
+
+1. **Fetches** the latest changes from the KyberBot source repo
+2. **Shows** new commits (changelog)
+3. **Pulls** and **rebuilds** the CLI
+4. **Backs up** `.claude/CLAUDE.md` to `.claude/CLAUDE.md.bak`
+5. **Refreshes** template/infrastructure files (`.claude/CLAUDE.md`, settings, commands, skill generator, docker-compose)
+6. **Rebuilds** the CLAUDE.md skill registry (preserves installed skills)
+7. **Stamps** the `kyberbot_version` in `identity.yaml`
+
+### What's Refreshed vs What's Preserved
+
+**Never touched** (your data is safe):
+- `SOUL.md`, `USER.md`, `HEARTBEAT.md`
+- `brain/`, `skills/`, `data/`, `logs/`
+- `.env`, `identity.yaml` (only `kyberbot_version` field is updated)
+- `heartbeat-state.json`
+
+**Refreshed** (infrastructure files):
+- `.claude/CLAUDE.md` (backed up first)
+- `.claude/settings.local.json`
+- `.claude/commands/kyberbot.md`
+- `.claude/skills/skill-generator.md`
+- `.claude/skills/templates/skill-template.md`
+- `docker-compose.yml`
+
+### Update Options
+
+```bash
+kyberbot update              # Full update: CLI source + agent templates
+kyberbot update --check      # Preview what would change, don't modify anything
+kyberbot update --templates  # Only refresh template files (skip CLI source update)
+```
+
+Use `--check` to see what's available before committing to an update. Use `--templates` if you've already pulled and rebuilt the CLI manually and just need to refresh your agent's files.
+
+---
+
 ## Starting Services
 
 ```bash
@@ -218,6 +265,9 @@ kyberbot timeline --today           # Today's events
 kyberbot skill list                 # List installed skills
 kyberbot skill create my-skill      # Create a new skill
 kyberbot skill info my-skill        # Show skill details
+kyberbot update                     # Update CLI and refresh templates
+kyberbot update --check             # Preview available updates
+kyberbot update --templates         # Refresh templates only
 ```
 
 ---

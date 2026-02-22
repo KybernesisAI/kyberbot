@@ -53,6 +53,19 @@ The onboard wizard asks you a few questions (agent name, your name, personality 
 
 **This folder is your agent.** Everything it knows, everything it learns, its entire personality and memory -- all lives here.
 
+### Updating KyberBot
+
+When a new version is released, update the CLI and refresh your agent's template files in one command:
+
+```bash
+cd ~/my-agent
+kyberbot update
+```
+
+This pulls the latest source, rebuilds the CLI, and refreshes infrastructure files (`.claude/CLAUDE.md`, settings, commands) while preserving all your agent's data (`SOUL.md`, `USER.md`, `brain/`, `skills/`, etc.).
+
+Use `kyberbot update --check` to preview changes before applying them.
+
 ### Step 3: Start Your Agent
 
 From your agent's folder, run:
@@ -195,7 +208,7 @@ Claude Code handles the hard parts: tool use, sub-agent orchestration, MCP serve
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md) -- Installation, onboarding, first conversation
+- [Getting Started](docs/getting-started.md) -- Installation, onboarding, first conversation, updating
 - [Self-Evolution](docs/self-evolution.md) -- How the agent evolves its identity and knowledge
 - [Living Documents](docs/living-documents.md) -- SOUL.md, USER.md, HEARTBEAT.md reference
 - [Brain](docs/brain.md) -- Memory architecture (ChromaDB, SQLite, sleep agent)

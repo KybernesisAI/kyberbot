@@ -24,6 +24,7 @@ export interface ServiceConfig {
 export interface IdentityConfig {
   agent_name: string;
   agent_description?: string;
+  kyberbot_version?: string;
   timezone: string;
   locale?: string;
   heartbeat_interval: string;

@@ -18,6 +18,7 @@
  *   kyberbot skill         # Skill lifecycle (list, create, remove, setup)
  *   kyberbot channel       # Messaging channels (list, add, remove, status)
  *   kyberbot status        # Service health dashboard
+ *   kyberbot update        # Update CLI source and refresh agent templates
  */
 
 import { config as loadEnv } from 'dotenv';
@@ -44,6 +45,7 @@ import { createHeartbeatCommand } from './commands/heartbeat.js';
 import { createSkillCommand } from './commands/skill.js';
 import { createChannelCommand } from './commands/channel.js';
 import { createStatusCommand } from './commands/status.js';
+import { createUpdateCommand } from './commands/update.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VERSION
@@ -76,6 +78,7 @@ program
 // Core lifecycle
 program.addCommand(createRunCommand(), { isDefault: true });
 program.addCommand(createOnboardCommand());
+program.addCommand(createUpdateCommand());
 program.addCommand(createStatusCommand());
 
 // Brain operations

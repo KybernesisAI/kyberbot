@@ -298,6 +298,20 @@ This means your agent's identity, knowledge, and skills are version-controlled, 
 
 ---
 
+## Updating
+
+KyberBot provides a built-in update mechanism via `kyberbot update`. The command handles both halves of an update:
+
+1. **CLI source update** -- Resolves the source repo via `__dirname` (works because `npm link` creates a symlink), runs `git pull origin main`, then `npm install && npm run build` from the monorepo root.
+
+2. **Template refresh** -- Copies the latest infrastructure files from the template directory into the current agent instance. Backs up `.claude/CLAUDE.md` first, replaces placeholders, rebuilds the skill registry, and stamps the `kyberbot_version` in `identity.yaml`.
+
+**Protected files** (never modified by update): `SOUL.md`, `USER.md`, `HEARTBEAT.md`, `brain/`, `skills/`, `data/`, `.env`, `heartbeat-state.json`.
+
+**Refreshed files**: `.claude/CLAUDE.md`, `.claude/settings.local.json`, `.claude/commands/kyberbot.md`, `.claude/skills/skill-generator.md`, `.claude/skills/templates/skill-template.md`, `docker-compose.yml`.
+
+---
+
 ## Key Design Decisions
 
 ### Why Claude Code as Runtime

@@ -277,6 +277,38 @@ When a Telegram bot token is configured but no owner has been verified, KyberBot
 
 ---
 
+### Update
+
+#### `/kyberbot update`
+Update KyberBot CLI source and refresh agent template files. Pulls latest changes, rebuilds, refreshes `.claude/CLAUDE.md` and other infrastructure files while preserving all user data.
+
+**Implementation:**
+```bash
+cd $KYBERBOT_ROOT && kyberbot update
+```
+
+#### `/kyberbot update --check`
+Preview what would change without making any modifications.
+
+**Implementation:**
+```bash
+cd $KYBERBOT_ROOT && kyberbot update --check
+```
+
+#### `/kyberbot update --templates`
+Only refresh template files (skip CLI source git pull and rebuild).
+
+**Implementation:**
+```bash
+cd $KYBERBOT_ROOT && kyberbot update --templates
+```
+
+**What gets refreshed**: `.claude/CLAUDE.md` (backed up first), `.claude/settings.local.json`, `.claude/commands/kyberbot.md`, `.claude/skills/skill-generator.md`, `.claude/skills/templates/skill-template.md`, `docker-compose.yml`.
+
+**What is never touched**: `SOUL.md`, `USER.md`, `HEARTBEAT.md`, `brain/`, `skills/`, `data/`, `.env`, `heartbeat-state.json`.
+
+---
+
 ### System
 
 #### `/kyberbot status`
