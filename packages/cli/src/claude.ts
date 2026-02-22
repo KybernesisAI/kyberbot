@@ -24,6 +24,7 @@ export interface CompleteOptions {
   model?: 'haiku' | 'sonnet' | 'opus';
   system?: string;
   maxTokens?: number;
+  maxTurns?: number;
 }
 
 // Model ID mapping
@@ -125,7 +126,7 @@ export class ClaudeClient {
       prompt,
       options: {
         cwd: root,
-        maxTurns: 3,
+        maxTurns: opts.maxTurns ?? 10,
         ...(opts.model ? { model: opts.model } : {}),
         ...(opts.system ? { customSystemPrompt: opts.system } : {}),
         permissionMode: 'bypassPermissions',

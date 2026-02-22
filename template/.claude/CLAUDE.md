@@ -89,23 +89,22 @@ If nothing needs attention, I return HEARTBEAT_OK (you never see this).
 
 ## Brain
 
-My memory has two layers:
+My memory system:
 
-### Local Brain (always available)
 - **Entity Graph**: SQLite database tracking people, companies, projects
 - **Timeline**: Temporal event index with full-text search
 - **ChromaDB**: Vector search for semantic queries
 - **Sleep Agent**: Hourly maintenance (decay, tag, link, tier, summarize, entity hygiene)
 
-### Kybernesis Cloud Brain (if configured)
+<!-- BEGIN_KYBERNESIS -->
+### Kybernesis Cloud Brain
 
-If `KYBERNESIS_API_KEY` is set in `.env`, I have a cloud brain with workspace
-memory that persists across devices and sessions.
+I also have a cloud brain with workspace memory that persists across devices and sessions.
 
-**IMPORTANT**: When Kybernesis is configured, ALWAYS query it when the user asks
-about something. Do not skip it just because local memory is empty — the cloud
-brain is the primary knowledge source, especially for a new agent. Run the
-command and use whatever it returns.
+**IMPORTANT**: ALWAYS query Kybernesis when the user asks about something.
+Do not skip it just because local memory is empty — the cloud brain is the
+primary knowledge source, especially for a new agent. Run the command and
+use whatever it returns.
 
 **How to query:**
 ```bash
@@ -123,6 +122,7 @@ kyberbot kybernesis status                  # Check if connected
 - Whenever local memory has no results — always check cloud before saying "I don't know"
 
 Combine cloud results with local results when both have information.
+<!-- END_KYBERNESIS -->
 
 ## Commands
 
@@ -134,7 +134,11 @@ kyberbot brain search # Semantic search
 kyberbot skill list   # List skills
 kyberbot recall       # Entity graph
 kyberbot timeline     # Temporal queries
+```
+<!-- BEGIN_KYBERNESIS -->
+```
 kyberbot kybernesis query "..."  # Search cloud brain
 kyberbot kybernesis list         # Browse all cloud memories
 kyberbot kybernesis status       # Cloud brain status
 ```
+<!-- END_KYBERNESIS -->

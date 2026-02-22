@@ -6,7 +6,7 @@
 
 import { readFileSync, writeFileSync, existsSync, rmSync } from 'fs';
 import { join } from 'path';
-import { paths, getAgentName, getHeartbeatInterval } from '../config.js';
+import { paths, getAgentName, getHeartbeatInterval, getKybernesisApiKey } from '../config.js';
 import { loadInstalledSkills } from './loader.js';
 import { InstalledSkill } from './types.js';
 import { createLogger } from '../logger.js';
@@ -43,6 +43,18 @@ export function rebuildClaudeMd(): void {
     content = content.replace(/\{\{HEARTBEAT_INTERVAL\}\}/g, intervalStr);
   } catch {
     content = content.replace(/\{\{HEARTBEAT_INTERVAL\}\}/g, '30 minutes');
+  }
+
+  // Strip Kybernesis sections if no API key configured
+  if (!getKybernesisApiKey()) {
+    content = content.replace(
+      /<!-- BEGIN_KYBERNESIS -->[\s\S]*?<!-- END_KYBERNESIS -->\n?/g,
+      ''
+    );
+  } else {
+    // Remove the markers, keep the content
+    content = content.replace(/<!-- BEGIN_KYBERNESIS -->\n?/g, '');
+    content = content.replace(/<!-- END_KYBERNESIS -->\n?/g, '');
   }
 
   // Insert skill list
