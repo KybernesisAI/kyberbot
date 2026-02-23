@@ -122,7 +122,7 @@ export class TelegramChannel implements Channel {
         // Default: route to agent
         try {
           const client = getClaudeClient();
-          const reply = await client.complete(text, { system: buildChannelSystemPrompt('telegram') });
+          const reply = await client.complete(text, { system: buildChannelSystemPrompt('telegram'), maxTurns: 30 });
           if (!reply || reply.trim().length === 0) {
             logger.warn('Claude returned empty response, skipping reply');
             return;

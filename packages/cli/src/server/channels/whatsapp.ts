@@ -79,6 +79,7 @@ export class WhatsAppChannel implements Channel {
             const client = getClaudeClient();
             const reply = await client.complete(text, {
               system: buildChannelSystemPrompt('whatsapp'),
+              maxTurns: 30,
             });
             if (!reply || reply.trim().length === 0) {
               logger.warn('Claude returned empty response, skipping reply');
