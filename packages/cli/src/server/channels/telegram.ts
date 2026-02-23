@@ -21,6 +21,7 @@ import { getClaudeClient } from '../../claude.js';
 import { getAgentName, getRoot } from '../../config.js';
 import { Channel, ChannelMessage } from './types.js';
 import { storeConversation } from '../../brain/store-conversation.js';
+import { buildChannelSystemPrompt } from './system-prompt.js';
 
 const logger = createLogger('telegram');
 
@@ -121,8 +122,7 @@ export class TelegramChannel implements Channel {
         // Default: route to agent
         try {
           const client = getClaudeClient();
-          const systemPrompt = this.buildSystemPrompt();
-          const reply = await client.complete(text, { system: systemPrompt });
+          const reply = await client.complete(text, { system: buildChannelSystemPrompt('telegram') });
           if (!reply || reply.trim().length === 0) {
             logger.warn('Claude returned empty response, skipping reply');
             return;
@@ -200,40 +200,6 @@ export class TelegramChannel implements Channel {
     } catch (error) {
       logger.error('Failed to save owner_chat_id to identity.yaml', { error: String(error) });
     }
-  }
-
-  private buildSystemPrompt(): string {
-    const agentName = getAgentName();
-    const parts: string[] = [];
-
-    parts.push(`You are ${agentName}, a personal AI agent. The user is messaging via Telegram.`);
-    parts.push('Keep responses concise — Telegram messages have a 4096 character limit.');
-
-    // Load SOUL.md for personality
-    try {
-      const root = getRoot();
-      const soulPath = join(root, 'SOUL.md');
-      if (existsSync(soulPath)) {
-        const soul = readFileSync(soulPath, 'utf-8');
-        parts.push('\n## Personality & Values\n' + soul);
-      }
-    } catch {
-      // Non-fatal
-    }
-
-    // Load USER.md for user context
-    try {
-      const root = getRoot();
-      const userPath = join(root, 'USER.md');
-      if (existsSync(userPath)) {
-        const user = readFileSync(userPath, 'utf-8');
-        parts.push('\n## About the User\n' + user);
-      }
-    } catch {
-      // Non-fatal
-    }
-
-    return parts.join('\n');
   }
 
   private loadGreeting(agentName: string): string {

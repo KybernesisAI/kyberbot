@@ -7,10 +7,11 @@
 
 import { createLogger } from '../../logger.js';
 import { getClaudeClient } from '../../claude.js';
-import { getAgentName, getRoot } from '../../config.js';
+import { getRoot } from '../../config.js';
 import { Channel, ChannelMessage } from './types.js';
 import { join } from 'path';
 import { storeConversation } from '../../brain/store-conversation.js';
+import { buildChannelSystemPrompt } from './system-prompt.js';
 
 const logger = createLogger('channel');
 
@@ -76,9 +77,8 @@ export class WhatsAppChannel implements Channel {
         } else {
           try {
             const client = getClaudeClient();
-            const agentName = getAgentName();
             const reply = await client.complete(text, {
-              system: `You are ${agentName}, a personal AI agent. Respond helpfully and concisely. The user is messaging via WhatsApp.`,
+              system: buildChannelSystemPrompt('whatsapp'),
             });
             if (!reply || reply.trim().length === 0) {
               logger.warn('Claude returned empty response, skipping reply');
