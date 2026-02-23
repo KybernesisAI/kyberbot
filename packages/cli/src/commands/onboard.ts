@@ -37,6 +37,18 @@ export function createOnboardCommand(): Command {
       const root = process.cwd();
 
       // ─────────────────────────────────────────────────────────────────
+      // Safety: refuse to onboard inside the KyberBot source repo
+      // ─────────────────────────────────────────────────────────────────
+
+      const isMonorepo = existsSync(join(root, 'packages', 'cli', 'package.json'));
+      if (isMonorepo) {
+        console.error(chalk.red('\n  Error: You are inside the KyberBot source repository.'));
+        console.error(chalk.dim('  Create a separate directory for your agent:\n'));
+        console.error(chalk.yellow('    mkdir ~/my-agent && cd ~/my-agent && kyberbot onboard\n'));
+        process.exit(1);
+      }
+
+      // ─────────────────────────────────────────────────────────────────
       // Welcome banner
       // ─────────────────────────────────────────────────────────────────
 
