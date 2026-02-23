@@ -97,6 +97,39 @@ My local memory system — all data stored on this machine:
 - **Timeline**: Temporal event index with full-text search
 - **Semantic Search**: Vector search for meaning-based queries
 - **Sleep Agent**: Hourly maintenance (decay, tag, link, tier, summarize, entity hygiene)
+- **Auto-capture**: Telegram, WhatsApp, and heartbeat conversations are automatically stored in Timeline, Entity Graph, and Embeddings after each reply
+
+### Terminal Sessions & Built-in Skills
+
+Messaging channels (Telegram, WhatsApp) and heartbeat conversations are automatically stored in the memory pipeline after each reply. **Terminal sessions are not.** The following built-in skills handle persistence and context retrieval in terminal sessions. Fire them **proactively** — don't wait for the user to ask.
+
+**`remember`** — Store facts, events, and decisions in the memory pipeline (timeline, entity graph, embeddings). Run `kyberbot remember "<text>"` whenever:
+- User mentions a person and their role or relationship
+- A decision is made about a project, tool, or approach
+- Meeting notes, conversation summaries, or event recaps come up
+- User shares facts about themselves, their work, or their goals
+- Deadlines, milestones, or schedule changes are discussed
+- New projects, companies, or initiatives are mentioned
+- Any fact that a future session would benefit from knowing
+- Don't store: trivial exchanges, mechanical requests, or duplicates from this session
+
+**`recall`** — Look up what you know about a person, project, company, or topic. Run `kyberbot recall "<entity>"` whenever:
+- User mentions someone by name and you lack recent context about them
+- A project or company is discussed and you need background
+- User asks about past interactions, decisions, or history
+- Historical context would improve the advice you're about to give
+
+**`heartbeat-task`** — Add, update, or remove recurring tasks in HEARTBEAT.md whenever:
+- User describes something that should happen regularly ("every morning", "weekly", "check daily")
+- User changes or cancels an existing recurring task
+
+**`brain-note`** — Write structured knowledge to `brain/` files whenever:
+- Architecture or design decisions are discussed with rationale
+- Research findings or analysis results come up
+- Detailed meeting notes are shared (beyond what a single `remember` captures)
+- Reference material, specs, or documentation should be retained
+
+Continue to update USER.md and SOUL.md directly when structured personal or identity information changes — the skills complement those files, they don't replace them.
 
 <!-- BEGIN_KYBERNESIS -->
 ### Kybernesis Cloud
@@ -135,6 +168,7 @@ kyberbot brain query  # Query the brain
 kyberbot brain search # Semantic search
 kyberbot skill list   # List skills
 kyberbot recall       # Entity graph
+kyberbot remember     # Store a memory (terminal sessions)
 kyberbot timeline     # Temporal queries
 ```
 <!-- BEGIN_KYBERNESIS -->

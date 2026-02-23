@@ -1,15 +1,11 @@
 ---
-description: Meta-skill that generates new skills when the agent encounters a task it doesn't have a capability for. Auto-commits and executes immediately.
-triggers:
-  - cannot complete this task
-  - no skill exists for
-  - I don't have a way to
-  - need to create a skill for
+description: "Generate a new permanent skill when no existing skill, command, or agent handles a task. Use when the agent cannot complete a request with current capabilities, needs to create a reusable workflow, or when the user says create a skill, build a skill, I need a skill for, or make me a tool that."
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(kyberbot skill *)
 ---
 
 # Skill Generator
 
-You are the Skill Generator - the meta-capability that allows this agent to learn permanently. When you encounter a task that has no existing skill or execution path, you create one.
+You are the Skill Generator — the meta-capability that allows this agent to learn permanently. When you encounter a task that has no existing skill or execution path, you create one.
 
 ## When to Trigger
 
@@ -17,6 +13,8 @@ Activate this skill when:
 1. A user requests something and no existing skill/command/agent handles it
 2. The task IS accomplishable with available tools (Bash, Read, Write, Edit, WebFetch, etc.)
 3. The capability would be useful for future similar requests
+
+Do NOT create a skill for one-off tasks that won't recur.
 
 ## Process
 
@@ -39,34 +37,30 @@ Use available tools to figure out how to accomplish the task:
 
 ### Step 3: Generate the Skill
 
-Create a new skill file at:
-`skills/[skill-name]/SKILL.md`
-
-Use this structure:
+Create a new skill file at `skills/[skill-name]/SKILL.md` using this structure:
 
 ```markdown
 ---
 name: [skill-name]
-description: [One-line description of what this skill does]
-version: 1.0.0
-requires_env:
-  - [ENV_VAR_NAME]
-has_setup: true/false
+description: "[What this skill does]. Use when [specific scenarios]. Also use when the user says [natural language triggers]."
+allowed-tools: [Tool1, Bash(specific-command *)]
 ---
 
 # [Skill Name]
 
-## What This Does
-[Brief description]
+[What this skill does and why.]
 
-## How to Use
-[Natural language examples]
+## When to Use
 
-## Setup
-[Setup instructions if needed]
+[Specific conditions that should trigger this skill.]
 
 ## Implementation
-[The actual execution instructions]
+
+[Step-by-step instructions with exact commands.]
+
+## Examples
+
+[Concrete examples with bash commands or tool usage.]
 ```
 
 ### Step 4: Execute Immediately
@@ -81,14 +75,15 @@ After saving the skill:
 - Use lowercase kebab-case: `send-slack-message`
 - Be descriptive but concise
 - Prefix with domain if applicable: `github-create-issue`
+- Maximum 64 characters
 
 ## Quality Standards
 
 Every generated skill must:
-1. Have clear, actionable instructions
-2. Include at least one example
-3. Handle common error cases
-4. List all dependencies
+1. Have a `description` that includes trigger keywords users would naturally say
+2. Specify `allowed-tools` for any tools the skill needs
+3. Have clear, actionable implementation steps with exact commands
+4. Include at least one concrete example
 5. Be immediately executable
 
 ## Post-Generation
@@ -99,5 +94,4 @@ After creating a skill:
 
 ## Template Location
 
-Reference template at:
-`.claude/skills/templates/skill-template.md`
+Reference template at `.claude/skills/templates/skill-template.md`

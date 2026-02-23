@@ -1,36 +1,16 @@
 ---
 name: [skill-name]
-description: [One-line description - be specific and actionable]
-version: 1.0.0
-requires_env:
-  - [ENV_VAR_NAME]
-has_setup: false
+description: "[What this skill does]. Use when [specific scenarios and triggers]. Also use when the user says [natural language phrases users would say]."
+allowed-tools: [Tool1, Tool2, Bash(specific-command *)]
 ---
 
 # [Skill Name]
 
-[2-3 sentence description of what this skill accomplishes and why it's useful]
+[2-3 sentence description of what this skill accomplishes and why it's useful.]
 
-## What This Does
+## When to Use
 
-[Clear explanation of the skill's purpose]
-
-## How to Use
-
-- "[natural language trigger 1]"
-- "[natural language trigger 2]"
-- "[command-style trigger]"
-
-## Prerequisites
-
-- [Required API key, credential, or tool]
-- [Required file or configuration]
-
-## Setup
-
-Run `kyberbot skill setup [skill-name]` or:
-1. [Setup step 1]
-2. [Setup step 2]
+[Describe the conditions under which this skill should fire. Be specific about what signals in the conversation should trigger invocation.]
 
 ## Implementation
 
@@ -40,29 +20,23 @@ Run `kyberbot skill setup [skill-name]` or:
 
 ### Step 2: [Core Action]
 
-[The main action this skill performs]
+[The main action this skill performs — include exact commands or tool usage]
 
 ### Step 3: [Verify & Report]
 
-[How to verify success and what to report]
+[How to verify success and what to report to the user]
 
 ## Examples
 
-### Example 1: Basic Usage
+**[Scenario 1]:** [Brief situation description]
+```bash
+[exact command or action]
+```
 
-**Request:** "[example request]"
-**Result:** "[what happens]"
-
-### Example 2: Advanced Usage
-
-**Request:** "[complex request]"
-**Result:** "[what happens]"
-
-## Error Handling
-
-### Error: [Common Error]
-**Cause:** [Why this happens]
-**Fix:** [How to resolve it]
+**[Scenario 2]:** [Brief situation description]
+```bash
+[exact command or action]
+```
 
 ## Notes
 

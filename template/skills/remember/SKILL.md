@@ -1,0 +1,78 @@
+---
+name: remember
+description: "Persist important information from this conversation to long-term memory. Use proactively whenever the user mentions a person, project, company, decision, meeting, deadline, preference, or any fact that future sessions should know about. Also use when the user says remember this, store this, note this, keep track of, or don't forget."
+allowed-tools: Bash(kyberbot remember *)
+---
+
+# Remember
+
+Stores information from terminal sessions into the brain's full memory pipeline — the same one used by Telegram, WhatsApp, and heartbeat. Without this skill, terminal conversations vanish when the session ends.
+
+The `kyberbot remember` command feeds the same `storeConversation()` pipeline as messaging channels:
+- **Timeline** — temporal event index
+- **Entity Graph** — people, companies, projects, and their relationships
+- **Embeddings** — semantic search (when ChromaDB is available)
+
+## When to Fire
+
+Fire this skill **proactively** — don't wait for the user to say "remember this." If they mention a person, a decision, a project update, a preference, or any fact that future sessions would benefit from knowing — store it.
+
+**Always store when:**
+- The user mentions a new person and their role/relationship
+- A decision is made about a project, tool, or approach
+- Meeting notes or conversation summaries come up
+- The user shares facts about themselves, their work, or their goals
+- Deadlines, milestones, or schedule changes are discussed
+- New projects or initiatives are mentioned
+
+**Don't store:**
+- Trivial back-and-forth ("thanks", "ok", "got it")
+- Purely mechanical requests ("format this code", "fix the typo")
+- Information already stored in this session
+
+## How to Store
+
+### Step 1: Compose the Memory
+
+Summarize the key information in a clear, factual sentence. Include names, dates, and context. The text should be understandable out of context — a future session reading this should immediately grasp what happened.
+
+Good: "Met with Sarah Chen from Notion on Feb 23 to discuss API integration for the dashboard project"
+Bad: "Had a meeting about stuff"
+
+### Step 2: Run the Command
+
+```bash
+kyberbot remember "<text>"
+```
+
+If there's a natural response or additional context to pair with it:
+
+```bash
+kyberbot remember "<text>" --response "<context>"
+```
+
+### Step 3: Confirm
+
+Briefly acknowledge to the user that the information has been stored. A simple "Noted." or "Stored." suffices unless the user explicitly asked you to remember something, in which case confirm what you stored.
+
+## Examples
+
+**Person mentioned:** User says "I talked to Jake from the infra team about migrating to Kubernetes"
+```bash
+kyberbot remember "Talked to Jake from the infra team about migrating to Kubernetes"
+```
+
+**Decision made:** User says "Let's go with Next.js for the frontend"
+```bash
+kyberbot remember "Decision: using Next.js for the frontend" --response "Chosen over Remix and SvelteKit"
+```
+
+**Meeting notes:** User shares detailed meeting notes
+```bash
+kyberbot remember "Weekly sync with product team — discussed Q2 roadmap, prioritized auth overhaul and dashboard redesign" --response "Auth overhaul starts March 1, dashboard redesign in April. Sarah leading auth, Mike on dashboard."
+```
+
+## Notes
+
+- This skill complements (not replaces) updating USER.md, SOUL.md, and brain/ files. Use those for structured, long-lived information. Use `remember` for capturing the stream of events and facts.
+- Memories are searchable via `kyberbot recall`, `kyberbot timeline`, and `kyberbot search`.

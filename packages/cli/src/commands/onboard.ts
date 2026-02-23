@@ -167,6 +167,10 @@ export function createOnboardCommand(): Command {
       mkdirSync(join(root, '.claude', 'commands'), { recursive: true });
       mkdirSync(join(root, '.claude', 'skills', 'templates'), { recursive: true });
       mkdirSync(join(root, '.claude', 'agents'), { recursive: true });
+      mkdirSync(join(root, 'skills', 'remember'), { recursive: true });
+      mkdirSync(join(root, 'skills', 'recall'), { recursive: true });
+      mkdirSync(join(root, 'skills', 'heartbeat-task'), { recursive: true });
+      mkdirSync(join(root, 'skills', 'brain-note'), { recursive: true });
 
       // Copy CLAUDE.md, settings, commands, and skill generator
       const templateFiles = [
@@ -175,6 +179,10 @@ export function createOnboardCommand(): Command {
         ['.claude/commands/kyberbot.md', '.claude/commands/kyberbot.md'],
         ['.claude/skills/skill-generator.md', '.claude/skills/skill-generator.md'],
         ['.claude/skills/templates/skill-template.md', '.claude/skills/templates/skill-template.md'],
+        ['skills/remember/SKILL.md', 'skills/remember/SKILL.md'],
+        ['skills/recall/SKILL.md', 'skills/recall/SKILL.md'],
+        ['skills/heartbeat-task/SKILL.md', 'skills/heartbeat-task/SKILL.md'],
+        ['skills/brain-note/SKILL.md', 'skills/brain-note/SKILL.md'],
       ];
 
       for (const [src, dest] of templateFiles) {

@@ -20,6 +20,7 @@ import { createLogger } from '../../logger.js';
 import { getClaudeClient } from '../../claude.js';
 import { getAgentName, getRoot } from '../../config.js';
 import { Channel, ChannelMessage } from './types.js';
+import { storeConversation } from '../../brain/store-conversation.js';
 
 const logger = createLogger('telegram');
 
@@ -135,6 +136,14 @@ export class TelegramChannel implements Channel {
           } else {
             await ctx.reply(reply);
           }
+
+          // Fire-and-forget: store conversation in memory
+          storeConversation(getRoot(), {
+            prompt: text,
+            response: reply,
+            channel: 'telegram',
+            metadata: { chatId, userId },
+          }).catch((err) => logger.warn('Memory storage failed', { error: String(err) }));
         } catch (error) {
           logger.error('Failed to process Telegram message', { error: String(error) });
           await ctx.reply('Sorry, I encountered an error processing your message.');

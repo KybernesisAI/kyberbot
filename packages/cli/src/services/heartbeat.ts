@@ -13,9 +13,10 @@
 import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createLogger } from '../logger.js';
-import { getHeartbeatInterval, getIdentity, paths, getTimezone } from '../config.js';
+import { getHeartbeatInterval, getIdentity, paths, getTimezone, getRoot } from '../config.js';
 import { getClaudeClient } from '../claude.js';
 import { ServiceHandle } from '../types.js';
+import { storeConversation } from '../brain/store-conversation.js';
 
 const logger = createLogger('heartbeat');
 
@@ -119,6 +120,13 @@ async function tick(): Promise<void> {
         `\n--- ${new Date().toISOString()} ---\n${result}\n`,
         'utf-8'
       );
+
+      // Fire-and-forget: store heartbeat result in memory
+      storeConversation(getRoot(), {
+        prompt: 'Heartbeat task execution',
+        response: result,
+        channel: 'heartbeat',
+      }).catch((err) => logger.warn('Memory storage failed', { error: String(err) }));
     }
   } catch (error) {
     logger.error('Heartbeat tick failed', { error: String(error) });

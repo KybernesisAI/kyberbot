@@ -10,6 +10,7 @@ import { getClaudeClient } from '../../claude.js';
 import { getAgentName, getRoot } from '../../config.js';
 import { Channel, ChannelMessage } from './types.js';
 import { join } from 'path';
+import { storeConversation } from '../../brain/store-conversation.js';
 
 const logger = createLogger('channel');
 
@@ -84,6 +85,14 @@ export class WhatsAppChannel implements Channel {
               return;
             }
             await this.send(msg.key.remoteJid!, reply);
+
+            // Fire-and-forget: store conversation in memory
+            storeConversation(getRoot(), {
+              prompt: text,
+              response: reply,
+              channel: 'whatsapp',
+              metadata: { remoteJid: msg.key.remoteJid, pushName: msg.pushName },
+            }).catch((err) => logger.warn('Memory storage failed', { error: String(err) }));
           } catch (error) {
             logger.error('Failed to process WhatsApp message', { error: String(error) });
           }
