@@ -163,7 +163,7 @@ export class ClaudeClient {
     } catch (err) {
       // Agent SDK failed (e.g. nested invocation, version mismatch) — fall back to subprocess
       const errMsg = err instanceof Error ? err.message : String(err);
-      logger.warn(`Agent SDK failed, falling back to subprocess: ${errMsg}`);
+      logger.debug(`Agent SDK unavailable, using subprocess: ${errMsg}`);
       return this.completeSubprocess(prompt, opts);
     }
   }
