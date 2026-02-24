@@ -4,21 +4,27 @@
  * Builds the system prompt for messaging channels (Telegram, WhatsApp).
  * Loads the agent's full operational context so channel sessions have the
  * same capabilities as terminal sessions — skills, heartbeat, brain, etc.
+ *
+ * Cross-channel context: recent timeline events from ALL channels
+ * (terminal, telegram, whatsapp, heartbeat) are included so the agent
+ * has awareness of what happened in other sessions.
  */
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getAgentName, getRoot } from '../../config.js';
 import { loadInstalledSkills } from '../../skills/loader.js';
+import { getRecentActivity } from '../../brain/timeline.js';
 import { createLogger } from '../../logger.js';
 
 const logger = createLogger('system-prompt');
 
 /**
  * Build system prompt for a messaging channel.
- * Includes: identity, personality, user context, and operational knowledge.
+ * Includes: identity, personality, user context, operational knowledge,
+ * and recent cross-channel activity for continuity.
  */
-export function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp'): string {
+export async function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp'): Promise<string> {
   const agentName = getAgentName();
   const root = getRoot();
   const parts: string[] = [];
@@ -91,7 +97,50 @@ export function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp'): stri
     logger.debug('Failed to load skills for channel prompt', { error: String(err) });
   }
 
+  // Load recent cross-channel activity for continuity between sessions
+  try {
+    const recent = await getRecentActivity(root, 15);
+    if (recent.length > 0) {
+      parts.push('\n## Recent Activity (Cross-Channel)\n');
+      parts.push('Recent events from all channels. Use this context to maintain continuity across terminal, Telegram, WhatsApp, and heartbeat sessions.\n');
+      for (const event of recent) {
+        const time = formatRelativeTime(event.timestamp);
+        const summary = event.summary.length > 200
+          ? event.summary.slice(0, 197) + '...'
+          : event.summary;
+        const entities = event.entities.length > 0
+          ? ` [${event.entities.slice(0, 5).join(', ')}]`
+          : '';
+        parts.push(`- ${time} — ${event.title}${entities}`);
+        if (summary) {
+          parts.push(`  ${summary}`);
+        }
+      }
+    }
+  } catch (err) {
+    logger.debug('Failed to load cross-channel context', { error: String(err) });
+  }
+
   return parts.join('\n');
+}
+
+/**
+ * Format an ISO timestamp as a human-readable relative time.
+ */
+function formatRelativeTime(isoTimestamp: string): string {
+  const now = Date.now();
+  const then = new Date(isoTimestamp).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMs / 3600000);
+  const diffDay = Math.floor(diffMs / 86400000);
+
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay === 1) return 'yesterday';
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(isoTimestamp).toLocaleDateString();
 }
 
 /**

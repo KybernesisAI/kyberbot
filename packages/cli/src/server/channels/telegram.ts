@@ -126,7 +126,8 @@ export class TelegramChannel implements Channel {
         try {
           const client = getClaudeClient();
           const prompt = buildPromptWithHistory(convoId, text);
-          const reply = await client.complete(prompt, { system: buildChannelSystemPrompt('telegram'), maxTurns: 30 });
+          const systemPrompt = await buildChannelSystemPrompt('telegram');
+          const reply = await client.complete(prompt, { system: systemPrompt, maxTurns: 30 });
 
           // Track both sides in history
           pushUserMessage(convoId, text);
