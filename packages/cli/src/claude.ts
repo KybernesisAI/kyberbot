@@ -78,13 +78,16 @@ export class ClaudeClient {
    * Single completion — fire and forget prompt
    */
   async complete(prompt: string, opts: CompleteOptions = {}): Promise<string> {
-    const model = opts.model || getClaudeModel();
+    // Always resolve model — never let subprocess/agent-sdk fall back to CLI defaults
+    if (!opts.model) {
+      opts.model = (getClaudeModel() || 'sonnet') as 'haiku' | 'sonnet' | 'opus';
+    }
 
     if (this.mode === 'agent-sdk') {
       return this.completeAgentSDK(prompt, opts);
     }
     if (this.mode === 'sdk' && this.sdk) {
-      return this.completeSDK(prompt, model, opts);
+      return this.completeSDK(prompt, opts.model, opts);
     }
     return this.completeSubprocess(prompt, opts);
   }
@@ -93,14 +96,14 @@ export class ClaudeClient {
    * Multi-turn chat
    */
   async chat(messages: Message[], system: string): Promise<string> {
-    const model = getClaudeModel();
+    const model = (getClaudeModel() || 'sonnet') as 'haiku' | 'sonnet' | 'opus';
 
     if (this.mode === 'agent-sdk') {
       // Flatten messages into a prompt with history for Agent SDK
       const historyPrompt = messages
         .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
         .join('\n\n');
-      return this.completeAgentSDK(historyPrompt, { system });
+      return this.completeAgentSDK(historyPrompt, { system, model });
     }
     if (this.mode === 'sdk' && this.sdk) {
       return this.chatSDK(messages, system, model);
@@ -110,7 +113,7 @@ export class ClaudeClient {
       .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n\n');
     const fullPrompt = `${system}\n\n${historyPrompt}`;
-    return this.completeSubprocess(fullPrompt, {});
+    return this.completeSubprocess(fullPrompt, { model });
   }
 
   private async completeAgentSDK(prompt: string, opts: CompleteOptions): Promise<string> {
