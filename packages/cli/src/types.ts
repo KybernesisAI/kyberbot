@@ -48,6 +48,10 @@ export interface IdentityConfig {
     agent_id: string;
     workspace_id: string;
   };
+  tunnel?: {
+    enabled: boolean;
+    provider?: string;
+  };
   claude?: {
     mode: 'subscription' | 'sdk';
     model?: string;

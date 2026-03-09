@@ -1,14 +1,15 @@
 /**
  * Onboard Command
  *
- * Interactive setup wizard with 7 steps:
+ * Interactive setup wizard with 8 steps:
  *   Step 1: Agent identity (name, description, SOUL.md choice)
  *   Step 2: User identity (name, timezone, location, about)
  *   Step 3: Claude Code mode (subscription vs SDK)
  *   Step 4: Brain & heartbeat init (mkdir data/, init memory DBs)
  *   Step 5: Kybernesis (optional cloud sync)
- *   Step 6: Channels (Telegram/WhatsApp - optional)
- *   Step 7: Done - show summary
+ *   Step 6: Remote Access (optional ngrok tunnel)
+ *   Step 7: Channels (Telegram/WhatsApp - optional)
+ *   Step 8: Done - show summary
  *
  * Usage:
  *   kyberbot onboard
@@ -19,6 +20,7 @@ import chalk from 'chalk';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import yaml from 'js-yaml';
@@ -59,7 +61,7 @@ export function createOnboardCommand(): Command {
       // Step 1: Agent Identity
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('Step 1 of 7: Agent Identity\n'));
+      console.log(chalk.bold.underline('Step 1 of 8: Agent Identity\n'));
 
       const agentName = await input({
         message: 'What should your AI agent be called?',
@@ -98,7 +100,7 @@ export function createOnboardCommand(): Command {
       // Step 2: User Identity
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 2 of 7: About You\n'));
+      console.log(chalk.bold.underline('\nStep 2 of 8: About You\n'));
 
       const userName = await input({
         message: 'Your name:',
@@ -124,7 +126,7 @@ export function createOnboardCommand(): Command {
       // Step 3: Claude Code Mode
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 3 of 7: Claude Code\n'));
+      console.log(chalk.bold.underline('\nStep 3 of 8: Claude Code\n'));
 
       const claudeMode = await select({
         message: 'How would you like to connect to Claude?',
@@ -150,7 +152,7 @@ export function createOnboardCommand(): Command {
       // Step 4: Brain & Heartbeat Init
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 4 of 7: Initializing Brain\n'));
+      console.log(chalk.bold.underline('\nStep 4 of 8: Initializing Brain\n'));
 
       // Create directories
       const dirs = ['data', 'logs', 'brain', 'skills'];
@@ -210,6 +212,8 @@ export function createOnboardCommand(): Command {
         server: { port: 3456 },
         claude: { mode: claudeMode },
       };
+
+      // NOTE: tunnel config is added after Step 6 if user enables it
 
       writeFileSync(join(root, 'identity.yaml'), yaml.dump(identity, { lineWidth: 120 }));
       console.log(chalk.green('  + identity.yaml'));
@@ -324,7 +328,7 @@ export function createOnboardCommand(): Command {
       // Step 5: Kybernesis (optional cloud sync)
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 5 of 7: Cloud Sync\n'));
+      console.log(chalk.bold.underline('\nStep 5 of 8: Cloud Sync\n'));
       console.log(chalk.dim('  Your agent\'s memory is stored locally by default.'));
       console.log(chalk.dim('  Kybernesis Cloud adds optional cross-device access to workspace memory.\n'));
 
@@ -353,10 +357,55 @@ export function createOnboardCommand(): Command {
       }
 
       // ─────────────────────────────────────────────────────────────────
-      // Step 6: Channels (optional)
+      // Step 6: Remote Access (optional ngrok tunnel)
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('Step 6 of 7: Messaging Channels\n'));
+      console.log(chalk.bold.underline('Step 6 of 8: Remote Access\n'));
+
+      let tunnelEnabled = false;
+      const setupTunnel = await confirm({
+        message: 'Set up ngrok for remote access (allows KyberCo to reach this agent)?',
+        default: false,
+      });
+
+      if (setupTunnel) {
+        console.log(chalk.dim('\nngrok creates a secure tunnel so KyberCo can reach this agent remotely.'));
+        console.log(chalk.dim('Sign up at https://ngrok.com and copy your authtoken from the dashboard.\n'));
+
+        const ngrokToken = await input({
+          message: 'ngrok authtoken:',
+          default: '',
+        });
+
+        if (ngrokToken && ngrokToken.trim()) {
+          // Configure ngrok
+          const { spawnSync } = await import('node:child_process');
+          const result = spawnSync('ngrok', ['config', 'add-authtoken', ngrokToken.trim()], { stdio: 'inherit' });
+          if (result.status === 0) {
+            tunnelEnabled = true;
+            console.log(chalk.green('  ngrok configured'));
+          } else {
+            console.log(chalk.yellow('  Could not configure ngrok. Install it from https://ngrok.com/download'));
+            console.log(chalk.dim('  You can set it up later with `kyberbot tunnel setup`'));
+          }
+        }
+      } else {
+        console.log(chalk.dim('  You can set up remote access later with `kyberbot tunnel setup`'));
+      }
+
+      // Write tunnel config to identity.yaml if enabled
+      if (tunnelEnabled) {
+        const identityPath = join(root, 'identity.yaml');
+        const currentIdentity = yaml.load(readFileSync(identityPath, 'utf-8')) as Record<string, unknown>;
+        currentIdentity.tunnel = { enabled: true, provider: 'ngrok' };
+        writeFileSync(identityPath, yaml.dump(currentIdentity, { lineWidth: 120 }));
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // Step 7: Channels (optional)
+      // ─────────────────────────────────────────────────────────────────
+
+      console.log(chalk.bold.underline('\nStep 7 of 8: Messaging Channels\n'));
 
       const useChannels = await confirm({
         message: 'Connect messaging channels? (Telegram / WhatsApp)',
@@ -407,6 +456,10 @@ export function createOnboardCommand(): Command {
       if (openaiKey) envLines.push(`OPENAI_API_KEY=${openaiKey}`);
       if (kybernesisApiKey) envLines.push(`KYBERNESIS_API_KEY=${kybernesisApiKey}`);
       envLines.push('');
+      envLines.push('# API authentication token (auto-generated)');
+      const apiToken = `kb_${randomBytes(24).toString('hex')}`;
+      envLines.push(`KYBERBOT_API_TOKEN=${apiToken}`);
+      envLines.push('');
       envLines.push('# ChromaDB URL (default)');
       envLines.push('CHROMA_URL=http://localhost:8001');
       envLines.push('');
@@ -420,10 +473,10 @@ export function createOnboardCommand(): Command {
       }
 
       // ─────────────────────────────────────────────────────────────────
-      // Step 7: Done
+      // Step 8: Done
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('Step 7 of 7: Summary\n'));
+      console.log(chalk.bold.underline('Step 8 of 8: Summary\n'));
 
       console.log(chalk.green('  + identity.yaml    -- Agent configuration'));
       console.log(chalk.green('  + SOUL.md          -- Agent personality'));

@@ -12,6 +12,7 @@ import { createLogger } from '../logger.js';
 import { getServerPort, getIdentity, getRoot } from '../config.js';
 import { authMiddleware, getApiToken } from '../middleware/auth.js';
 import { createBrainRouter } from './brain-api.js';
+import { executeHandler } from './execute-api.js';
 import { ServiceHandle } from '../types.js';
 import { TelegramChannel } from './channels/telegram.js';
 import { WhatsAppChannel } from './channels/whatsapp.js';
@@ -41,6 +42,9 @@ export async function startServer(options: {
 
   // Brain API (authenticated)
   app.use('/brain', authMiddleware, createBrainRouter());
+
+  // Execute API (authenticated)
+  app.post('/api/execute', authMiddleware, executeHandler);
 
   // Start channels if configured
   if (options.enableChannels !== false) {

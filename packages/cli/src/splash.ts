@@ -131,3 +131,20 @@ export function displayReadyMessage(): void {
   console.log(DIM('═'.repeat(WIDTH)));
   console.log();
 }
+
+export function displayConnectionInfo(info: {
+  port: number;
+  apiToken?: string;
+  tunnelUrl?: string;
+}) {
+  const { port, apiToken, tunnelUrl } = info;
+  console.log('');
+  console.log(`  ${DIM('Local:')}    http://localhost:${port}`);
+  if (tunnelUrl) {
+    console.log(`  ${DIM('Remote:')}   ${EMERALD(tunnelUrl)}`);
+  }
+  if (apiToken) {
+    console.log(`  ${DIM('API Key:')}  ${apiToken}`);
+  }
+  console.log('');
+}

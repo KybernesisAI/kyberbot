@@ -1,12 +1,13 @@
 /**
  * Run Command
  *
- * Start all 5 KyberBot services in order:
+ * Start all 6 KyberBot services in order:
  *   1. ChromaDB check
  *   2. Server (Express + brain API)
  *   3. Heartbeat
  *   4. Sleep Agent
  *   5. Channels (if configured)
+ *   6. Tunnel (optional ngrok tunnel)
  *
  * Usage:
  *   kyberbot                      # Start everything (default command)
@@ -19,7 +20,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { getRoot, getAgentName } from '../config.js';
+import { getRoot, getAgentName, getServerPort, getIdentity } from '../config.js';
 import { createLogger, setLogLevel } from '../logger.js';
 import {
   registerService,
@@ -31,8 +32,10 @@ import {
   displaySplash,
   displayServiceStatus,
   displayReadyMessage,
+  displayConnectionInfo,
   displayShutdownMessage,
 } from '../splash.js';
+import { startTunnel, getTunnelUrl } from '../services/tunnel.js';
 
 const logger = createLogger('cli');
 
@@ -146,6 +149,18 @@ export function createRunCommand(): Command {
         });
 
         // ─────────────────────────────────────────────────────────────
+        // Service 6: Tunnel (optional ngrok tunnel)
+        // ─────────────────────────────────────────────────────────────
+
+        const identity = getIdentity();
+        const tunnelEnabled = identity.tunnel?.enabled === true;
+        registerService({
+          name: 'Tunnel',
+          enabled: tunnelEnabled,
+          start: async () => startTunnel(getServerPort()),
+        });
+
+        // ─────────────────────────────────────────────────────────────
         // Start all registered services
         // ─────────────────────────────────────────────────────────────
 
@@ -155,6 +170,11 @@ export function createRunCommand(): Command {
         const statuses = getServiceStatuses();
         displayServiceStatus(statuses);
         displayReadyMessage();
+        displayConnectionInfo({
+          port: getServerPort(),
+          apiToken: process.env.KYBERBOT_API_TOKEN || undefined,
+          tunnelUrl: getTunnelUrl() || undefined,
+        });
 
         // ─────────────────────────────────────────────────────────────
         // Graceful shutdown on SIGINT / SIGTERM
