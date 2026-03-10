@@ -184,8 +184,7 @@ Messaging channels (Telegram, WhatsApp) and heartbeat conversations are automati
 - A project or company is discussed and you need background
 - User asks about past interactions, decisions, or history
 - Historical context would improve the advice you're about to give
-- Multiple entities: `kyberbot recall "John,Project Alpha"` (comma-separated)
-- Filter by type: `kyberbot recall --type person` or `--type company`
+- Run with no args to see all tracked entities: `kyberbot recall`
 
 **`heartbeat-task`** — Add, update, or remove recurring tasks in HEARTBEAT.md whenever:
 - User describes something that should happen regularly ("every morning", "weekly", "check daily")
@@ -257,10 +256,8 @@ kyberbot status --json            # Machine-readable health output
 ### Memory & Search
 
 ```bash
+kyberbot recall                             # Show all tracked entities
 kyberbot recall "<entity>"                  # Look up a person, project, company
-kyberbot recall "<e1>,<e2>"                 # Look up multiple entities
-kyberbot recall --type person               # Filter by entity type
-kyberbot recall --json                      # JSON output
 
 kyberbot remember "<text>"                  # Store a memory (terminal sessions)
 kyberbot remember "<text>" -r "<response>"  # Store with agent response context

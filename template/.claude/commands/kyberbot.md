@@ -60,8 +60,6 @@ Examples:
 - `recall` — Show all tracked entities
 - `recall "John Smith"` — Look up a specific person
 - `recall "Project Alpha"` — Get project context
-- `recall --type person` — All people
-- `recall --type company` — All companies
 
 #### `/kyberbot timeline [options]`
 Query temporal events — what happened when.
