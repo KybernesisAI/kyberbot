@@ -50,7 +50,7 @@ export function scaffoldAgent(options: AgentScaffoldOptions): string {
     .replace(/\[Agent Name\]/g, formatAgentName(options.name))
     .replace(/\[One-line description.*?\]/g, options.description)
     .replace(/\[Role description.*?\]/g, options.role || `A specialized ${options.name} agent`)
-    .replace(/model: sonnet/g, `model: ${options.model || 'sonnet'}`)
+    .replace(/model: sonnet/g, `model: ${options.model || 'opus'}`)
     .replace(/max-turns: 10/g, `max-turns: ${options.maxTurns || 10}`)
     .replace(/allowed-tools: \[Read, Glob, Grep, Bash\(kyberbot \*\)\]/g, `allowed-tools: ${allowedTools}`);
 
@@ -73,7 +73,7 @@ name: [agent-name]
 description: "[One-line description]"
 role: "[Role description]"
 allowed-tools: [Read, Glob, Grep, Bash(kyberbot *)]
-model: sonnet
+model: opus
 max-turns: 10
 ---
 

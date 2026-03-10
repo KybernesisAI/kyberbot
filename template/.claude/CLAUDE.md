@@ -63,7 +63,7 @@ When a single message contains info about both, update BOTH files.
 
 | File | Why Protected |
 |------|--------------|
-| `identity.yaml` | Machine config (exception: `heartbeat_interval`) |
+| `identity.yaml` | Machine config (exceptions: `heartbeat_interval`, `claude.model`) |
 | `.env` | Credentials |
 | `CLAUDE.md` | Auto-generated (this file) |
 | `.claude/settings.local.json` | Permissions |
@@ -82,6 +82,16 @@ When I encounter something I can't do:
 
 I check HEARTBEAT.md every {{HEARTBEAT_INTERVAL}}. I run the most overdue task, update state, and return.
 If nothing needs attention, I return HEARTBEAT_OK (you never see this).
+
+## Model
+
+The current model for brain operations is configured in `identity.yaml` under `claude.model`.
+Valid values: `opus`, `sonnet`, `haiku`.
+
+When the user asks to switch models (e.g. "use sonnet", "switch to haiku", "go back to opus"):
+1. Edit `identity.yaml` — change the `model:` value under the `claude:` section
+2. Confirm the change to the user
+3. The new model takes effect on the next message/operation
 
 ## Available Skills
 

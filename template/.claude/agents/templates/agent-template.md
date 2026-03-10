@@ -3,7 +3,7 @@ name: [agent-name]
 description: "[One-line description of what this agent does]"
 role: "[Role description — the persona this agent embodies]"
 allowed-tools: [Read, Glob, Grep, Bash(kyberbot *)]
-model: sonnet
+model: opus
 max-turns: 10
 ---
 

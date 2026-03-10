@@ -25,7 +25,7 @@ server:
 # Claude mode
 claude:
   mode: "subscription"  # "subscription" or "sdk"
-  # model: "sonnet"     # default model for brain operations
+  model: "opus"         # haiku, sonnet, or opus
 
 # Messaging channels (optional)
 # channels:

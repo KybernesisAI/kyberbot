@@ -52,7 +52,7 @@ export function loadInstalledAgents(): InstalledAgent[] {
         description: manifest.description || '',
         role: manifest.role || '',
         path: agentPath,
-        model: manifest.model || 'sonnet',
+        model: manifest.model || 'opus',
         maxTurns: manifest['max-turns'] || 10,
         allowedTools: manifest['allowed-tools'] || [],
         systemPromptBody: body,

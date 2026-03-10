@@ -121,7 +121,7 @@ export function getKybernesisApiKey(): string | null {
  * Get preferred Claude model
  */
 export function getClaudeModel(): string {
-  return getIdentity().claude?.model || 'sonnet';
+  return getIdentity().claude?.model || 'opus';
 }
 
 /**

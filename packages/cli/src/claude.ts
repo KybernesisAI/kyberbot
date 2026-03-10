@@ -29,9 +29,9 @@ export interface CompleteOptions {
 
 // Model ID mapping
 const MODEL_IDS: Record<string, string> = {
-  haiku: 'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-6-20250514',
-  opus: 'claude-opus-4-6-20250514',
+  haiku: 'claude-haiku-4-5',
+  sonnet: 'claude-sonnet-4-6',
+  opus: 'claude-opus-4-6',
 };
 
 export class ClaudeClient {
@@ -80,7 +80,7 @@ export class ClaudeClient {
   async complete(prompt: string, opts: CompleteOptions = {}): Promise<string> {
     // Always resolve model — never let subprocess/agent-sdk fall back to CLI defaults
     if (!opts.model) {
-      opts.model = (getClaudeModel() || 'sonnet') as 'haiku' | 'sonnet' | 'opus';
+      opts.model = (getClaudeModel() || 'opus') as 'haiku' | 'sonnet' | 'opus';
     }
 
     if (this.mode === 'agent-sdk') {
@@ -96,7 +96,7 @@ export class ClaudeClient {
    * Multi-turn chat
    */
   async chat(messages: Message[], system: string): Promise<string> {
-    const model = (getClaudeModel() || 'sonnet') as 'haiku' | 'sonnet' | 'opus';
+    const model = (getClaudeModel() || 'opus') as 'haiku' | 'sonnet' | 'opus';
 
     if (this.mode === 'agent-sdk') {
       // Flatten messages into a prompt with history for Agent SDK
@@ -176,7 +176,7 @@ export class ClaudeClient {
     model: string,
     opts: CompleteOptions
   ): Promise<string> {
-    const modelId = MODEL_IDS[model] || MODEL_IDS.sonnet;
+    const modelId = MODEL_IDS[model] || MODEL_IDS.opus;
     const response = await this.sdk.messages.create({
       model: modelId,
       max_tokens: opts.maxTokens || 4096,
@@ -193,7 +193,7 @@ export class ClaudeClient {
     system: string,
     model: string
   ): Promise<string> {
-    const modelId = MODEL_IDS[model] || MODEL_IDS.sonnet;
+    const modelId = MODEL_IDS[model] || MODEL_IDS.opus;
     const response = await this.sdk.messages.create({
       model: modelId,
       max_tokens: 4096,

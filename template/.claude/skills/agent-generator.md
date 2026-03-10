@@ -32,7 +32,7 @@ Determine:
 - What perspective or expertise is needed?
 - What should the agent's persona be?
 - What tools does it need access to?
-- What model is appropriate? (haiku for fast/simple, sonnet for balanced, opus for complex reasoning)
+- What model is appropriate? (haiku for fast/simple, sonnet for balanced, opus for complex reasoning — default is opus)
 - How many turns might it need?
 
 ### Step 2: Scaffold the Agent
@@ -43,7 +43,7 @@ kyberbot agent create <name> -d "<description>" -r "<role>" -m <model> -t <max-t
 
 Example:
 ```bash
-kyberbot agent create code-reviewer -d "Reviews code for bugs, patterns, and best practices" -r "A thorough, constructively critical code reviewer" -m sonnet -t 10
+kyberbot agent create code-reviewer -d "Reviews code for bugs, patterns, and best practices" -r "A thorough, constructively critical code reviewer" -m opus -t 10
 ```
 
 ### Step 3: Edit the Agent Definition

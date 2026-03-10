@@ -75,7 +75,7 @@ export function createAgentCommand(): Command {
     .argument('<name>', 'Agent name (lowercase, hyphens ok)')
     .option('-d, --description <desc>', 'Agent description', '')
     .option('-r, --role <role>', 'Agent role/persona', '')
-    .option('-m, --model <model>', 'Model to use (haiku, sonnet, opus)', 'sonnet')
+    .option('-m, --model <model>', 'Model to use (haiku, sonnet, opus)', 'opus')
     .option('-t, --max-turns <turns>', 'Maximum turns', '10')
     .action((name: string, options: { description: string; role: string; model: string; maxTurns: string }) => {
       try {
