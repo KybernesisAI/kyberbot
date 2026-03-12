@@ -22,6 +22,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { getRoot, getAgentName, getServerPort, getIdentity } from '../config.js';
 import { createLogger, setLogLevel } from '../logger.js';
+import { initMonitoring } from '../monitoring.js';
 import {
   registerService,
   startAllServices,
@@ -60,6 +61,9 @@ export function createRunCommand(): Command {
         if (options.verbose) {
           setLogLevel('debug');
         }
+
+        // Initialize monitoring (Sentry, process error handlers)
+        await initMonitoring();
 
         // Show splash screen
         displaySplash(root);

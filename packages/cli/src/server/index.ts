@@ -19,6 +19,8 @@ import { ServiceHandle } from '../types.js';
 import { TelegramChannel } from './channels/telegram.js';
 import { WhatsAppChannel } from './channels/whatsapp.js';
 import { Channel } from './channels/types.js';
+import { getMetrics, errorMiddleware } from '../monitoring.js';
+import { getServiceStatuses } from '../orchestrator.js';
 import http from 'http';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
@@ -36,12 +38,22 @@ export async function startServer(options: {
 
   app.use(express.json());
 
-  // Public health endpoint
+  // Public health endpoint — comprehensive system status
   app.get('/health', (_req, res) => {
+    const metrics = getMetrics();
+    const services = getServiceStatuses();
+    const allHealthy = services.every(s => s.status === 'running' || s.status === 'disabled');
+
     res.json({
-      status: 'ok',
+      status: allHealthy ? 'ok' : 'degraded',
       timestamp: new Date().toISOString(),
+      uptime: metrics.uptime_human,
       channels: channels.map(c => ({ name: c.name, connected: c.isConnected() })),
+      services: services.map(s => ({ name: s.name, status: s.status })),
+      errors: metrics.errors,
+      memory: metrics.memory,
+      pid: metrics.pid,
+      node_version: metrics.node_version,
     });
   });
 
@@ -99,6 +111,9 @@ export async function startServer(options: {
       logger.warn('Channel initialization failed (non-fatal)', { error: String(error) });
     }
   }
+
+  // Error middleware — must be after all routes
+  app.use(errorMiddleware);
 
   const server = http.createServer(app);
 
