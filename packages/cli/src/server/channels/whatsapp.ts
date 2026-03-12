@@ -30,7 +30,8 @@ export class WhatsAppChannel implements Channel {
       const authDir = join(getRoot(), 'data', 'whatsapp-auth');
       const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
-      this.sock = makeWASocket({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.sock = (makeWASocket as any)({
         auth: state,
         printQRInTerminal: true,
       });

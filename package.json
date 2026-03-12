@@ -11,8 +11,10 @@
   "scripts": {
     "build": "pnpm -r run build",
     "clean": "rm -rf packages/*/dist",
-    "lint": "eslint packages/*/src --ext .ts",
-    "typecheck": "tsc --noEmit -p packages/cli/tsconfig.json"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit -p packages/cli/tsconfig.json",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -21,5 +23,13 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/kyberbot/kyberbot.git"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/supertest": "^7.2.0",
+    "eslint": "^10.0.3",
+    "supertest": "^7.2.2",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^3.2.4"
   }
 }
