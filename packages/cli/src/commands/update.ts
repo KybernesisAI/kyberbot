@@ -24,6 +24,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const EMERALD = chalk.hex('#50C878');
 
+function hasBinary(name: string): boolean {
+  try {
+    execFileSync('which', [name], { stdio: ['pipe', 'pipe', 'pipe'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Template files to copy from template/.claude/ into agent .claude/
 const TEMPLATE_FILES = [
   ['.claude/CLAUDE.md', '.claude/CLAUDE.md'],
@@ -156,13 +165,15 @@ function pullAndBuild(repoPath: string): void {
   }
 
   console.log(chalk.dim('\n  Installing dependencies...'));
-  execFileSync('npm', ['install'], {
+  const hasPnpm = hasBinary('pnpm');
+  const pm = hasPnpm ? 'pnpm' : 'npm';
+  execFileSync(pm, ['install'], {
     cwd: repoPath,
     stdio: 'inherit',
   });
 
   console.log(chalk.dim('\n  Building...'));
-  execFileSync('npm', ['run', 'build'], {
+  execFileSync(pm, ['run', 'build'], {
     cwd: repoPath,
     stdio: 'inherit',
   });
