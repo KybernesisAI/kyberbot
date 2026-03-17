@@ -772,6 +772,9 @@ interface EvalOptions {
   root?: string;
   json?: boolean;
   fix?: boolean;
+  locomo?: string;
+  conversations?: string;
+  categories?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -902,6 +905,75 @@ function runDataCleanup(root: string): void {
 }
 
 async function handleEval(options: EvalOptions) {
+  // ── LoCoMo benchmark mode ──────────────────────────────────────────
+  if (options.locomo) {
+    const dataPath = resolve(options.locomo);
+    if (!existsSync(dataPath)) {
+      console.error(`Error: LoCoMo dataset not found at ${dataPath}`);
+      process.exit(1);
+    }
+
+    const { runLoCoMoBenchmark } = await import('../brain/eval/locomo.js');
+
+    const locomoOptions: {
+      dataPath: string;
+      maxConversations?: number;
+      categories?: number[];
+      verbose: boolean;
+    } = {
+      dataPath,
+      verbose: true,
+    };
+
+    if (options.conversations) {
+      locomoOptions.maxConversations = parseInt(options.conversations);
+    }
+    if (options.categories) {
+      locomoOptions.categories = options.categories.split(',').map(Number);
+    }
+
+    try {
+      const result = await runLoCoMoBenchmark(locomoOptions);
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('  LoCoMo Benchmark Results');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('');
+        console.log(`  Overall: ${(result.overall.accuracy * 100).toFixed(1)}% (${result.overall.count} questions)`);
+        console.log('');
+        console.log('  By Category:');
+        const catNames: Record<number, string> = {
+          1: 'Multi-hop',
+          2: 'Temporal',
+          3: 'Open-domain',
+          4: 'Single-hop',
+          5: 'Adversarial',
+        };
+        for (const [cat, data] of Object.entries(result.byCategory)) {
+          const name = catNames[Number(cat)] || `Cat ${cat}`;
+          console.log(`    ${name} (${cat}): ${(data.accuracy * 100).toFixed(1)}% (${data.count} questions)`);
+        }
+        console.log('');
+        console.log('  By Conversation:');
+        for (const [convId, data] of Object.entries(result.byConversation)) {
+          console.log(`    ${convId}: ${(data.accuracy * 100).toFixed(1)}% (${data.count} questions)`);
+        }
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════════');
+        console.log('');
+      }
+    } catch (error) {
+      console.error(`LoCoMo benchmark failed: ${error}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // ── Standard eval mode ─────────────────────────────────────────────
   let root: string;
 
   if (options.root) {
@@ -953,5 +1025,8 @@ export function createEvalCommand(): Command {
     .option('-r, --root <path>', 'Agent directory to evaluate (default: current agent)')
     .option('--json', 'Output results as JSON', false)
     .option('--fix', 'Run retroactive data cleanup before eval', false)
+    .option('--locomo <path>', 'Run LoCoMo benchmark against dataset file')
+    .option('--conversations <n>', 'Limit LoCoMo to first N conversations')
+    .option('--categories <list>', 'LoCoMo categories to evaluate (e.g., "1,2,4")')
     .action(handleEval);
 }
