@@ -69,7 +69,7 @@ export function loadInstalledAgents(): InstalledAgent[] {
  * Parse YAML frontmatter + body from an agent .md file
  */
 function parseAgentFile(content: string): { manifest: AgentManifest; body: string } | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)/);
   if (!match) return null;
 
   try {

@@ -68,7 +68,7 @@ export function loadInstalledSkills(): InstalledSkill[] {
  * Parse YAML frontmatter from a SKILL.md file
  */
 function parseSkillManifest(content: string): SkillManifest | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return null;
 
   try {

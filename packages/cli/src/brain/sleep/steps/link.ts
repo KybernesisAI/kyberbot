@@ -116,10 +116,19 @@ export async function runLinkStep(
         }
       }
 
+      let itemEdgesCreated = 0;
       for (const [otherPath, sharedTags] of candidates) {
+        if (edgeCount + itemEdgesCreated >= config.maxEdgesPerMemory) break;
         const pairKey = [item.source_path, otherPath].sort().join('|');
         if (seen.has(pairKey)) continue;
         seen.add(pairKey);
+
+        // Also check the target's edge count against the limit
+        const otherEdgeCount = (sleep.prepare(`
+          SELECT COUNT(*) as count FROM memory_edges
+          WHERE from_path = ? OR to_path = ?
+        `).get(otherPath, otherPath) as { count: number })?.count || 0;
+        if (otherEdgeCount >= config.maxEdgesPerMemory) continue;
 
         // Skip if edge already exists
         const existing = sleep.prepare(`
@@ -166,6 +175,7 @@ export async function runLinkStep(
             `Jaccard: ${(jaccardSimilarity(tags, otherTags) * 100).toFixed(1)}% + boosts on: ${sharedTagsList.slice(0, 5).join(', ')}${sharedTagsList.length > 5 ? '...' : ''}`
           );
           created++;
+          itemEdgesCreated++;
 
           if (created >= config.maxLinksPerRun) break;
         }

@@ -95,7 +95,7 @@ export function createWebApiRouter(): Router {
   // PUT /identity — Update identity.yaml fields
   router.put('/identity', (req, res) => {
     const changes = req.body;
-    if (!changes || typeof changes !== 'object') {
+    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
       res.status(400).json({ error: 'Body must be a JSON object with fields to update' });
       return;
     }
@@ -120,7 +120,7 @@ export function createWebApiRouter(): Router {
       logger.info('Identity updated via web UI', { fields: Object.keys(changes) });
       res.json({ ok: true });
     } catch (err) {
-      logger.error('Failed to update identity', { error: String(err) });
+      logger.error('Failed to update identity', { error: String(err), stack: (err as Error).stack });
       res.status(500).json({ error: 'Failed to update identity configuration' });
     }
   });

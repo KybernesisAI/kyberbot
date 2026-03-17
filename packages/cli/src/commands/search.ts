@@ -57,7 +57,7 @@ interface GroupedResult {
   entities?: string[];
 }
 
-function groupResultsByDocument(results: SearchResult[]): GroupedResult[] {
+export function groupResultsByDocument(results: SearchResult[]): GroupedResult[] {
   const grouped = new Map<string, GroupedResult>();
 
   for (const result of results) {
@@ -170,7 +170,7 @@ function formatResultsJson(results: SearchResult[]): void {
 // FILTERING
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function filterByEntity(
+export function filterByEntity(
   results: SearchResult[],
   entity: string,
   matchMode: 'all' | 'any' = 'all'
@@ -199,7 +199,7 @@ function filterByEntity(
   });
 }
 
-function filterByTime(
+export function filterByTime(
   results: SearchResult[],
   after?: Date,
   before?: Date
