@@ -2,8 +2,8 @@
  * KyberBot — LoCoMo Long-Term Memory Benchmark
  *
  * Evaluates KyberBot's memory pipeline against the LoCoMo dataset:
- *   1. Ingest each conversation's sessions through entity extraction + timeline storage
- *   2. Query the resulting brain (FTS + entity graph) for each QA item
+ *   1. Ingest each conversation's turns into ChromaDB with ±1 turn context windows
+ *   2. Query using ChromaDB semantic search + entity graph for each QA item
  *   3. Score answers using token-level F1 with Porter stemming
  *   4. Report per-category and overall accuracy
  *
@@ -24,6 +24,8 @@ import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import Database from 'better-sqlite3';
+import { ChromaClient, type IEmbeddingFunction } from 'chromadb';
+import OpenAI from 'openai';
 import { getClaudeClient } from '../../claude.js';
 import { createLogger } from '../../logger.js';
 
@@ -98,6 +100,37 @@ export async function runLoCoMoBenchmark(
     verbose = false,
   } = options;
 
+  // Fail fast if required env vars are missing
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error(
+      'OPENAI_API_KEY environment variable is required for ChromaDB embeddings'
+    );
+  }
+
+  const chromaUrl = process.env.CHROMA_URL || 'http://localhost:8001';
+  const chroma = new ChromaClient({ path: chromaUrl });
+
+  // Verify ChromaDB is reachable
+  try {
+    await chroma.heartbeat();
+  } catch (err) {
+    throw new Error(
+      `ChromaDB is not available at ${chromaUrl}. ` +
+      `Start ChromaDB or set CHROMA_URL. Error: ${String(err)}`
+    );
+  }
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const embedder: IEmbeddingFunction = {
+    generate: async (texts: string[]) => {
+      const resp = await openai.embeddings.create({
+        model: 'text-embedding-3-small',
+        input: texts,
+      });
+      return resp.data.map((d) => d.embedding);
+    },
+  };
+
   const categorySet = new Set(categories);
 
   // Load dataset
@@ -108,7 +141,9 @@ export async function runLoCoMoBenchmark(
     conversations = conversations.slice(0, maxConversations);
   }
 
-  logger.info(`LoCoMo benchmark: ${conversations.length} conversations, categories [${categories.join(',')}]`);
+  logger.info(
+    `LoCoMo benchmark: ${conversations.length} conversations, categories [${categories.join(',')}]`
+  );
 
   const allDetails: LoCoMoResult['details'] = [];
   const categoryScores: Record<number, { total: number; sum: number }> = {};
@@ -126,18 +161,41 @@ export async function runLoCoMoBenchmark(
     const qaItems = conv.qa.filter((q) => categorySet.has(q.category));
     logger.info(`Evaluating ${sampleId}: ${qaItems.length} questions`);
 
-    // Create isolated temporary brain
+    // Create isolated temporary brain for entity graph + timeline FTS
     const tempRoot = mkdtempSync(join(tmpdir(), `kyberbot-locomo-${sampleId}-`));
 
+    // Create a ChromaDB collection name that is 3-63 chars, alphanumeric + underscores only
+    const collectionName = `locomo_conv_${sampleId.replace(/[^a-zA-Z0-9]/g, '_')}`.slice(0, 63);
+
     try {
-      // Phase 1: Ingest conversation sessions
-      await ingestConversation(tempRoot, conv);
+      // Phase 1: Ingest conversation sessions into ChromaDB + entity graph
+      const collection = await chroma.getOrCreateCollection({
+        name: collectionName,
+        embeddingFunction: embedder,
+        metadata: { 'hnsw:space': 'cosine' },
+      });
+
+      const { processed } = await ingestConversation(
+        tempRoot,
+        conv,
+        collection
+      );
+      logger.info(`  Indexed ${processed} turns into ChromaDB collection '${collectionName}'`);
 
       // Phase 2: Query and score each QA item
+      const speakerA = conv.conversation.speaker_a;
+      const speakerB = conv.conversation.speaker_b;
+
       for (let i = 0; i < qaItems.length; i++) {
         const qa = qaItems[i];
         try {
-          const predicted = await answerQuestion(tempRoot, qa, conv);
+          const predicted = await answerQuestion(
+            tempRoot,
+            qa,
+            collection,
+            speakerA,
+            speakerB
+          );
           const groundTruth = getGroundTruth(qa);
           const f1 = scoreAnswer(predicted, groundTruth, qa.category);
 
@@ -158,12 +216,15 @@ export async function runLoCoMoBenchmark(
           }
 
           if ((i + 1) % 50 === 0) {
-            logger.info(`  ${sampleId}: ${i + 1}/${qaItems.length} questions processed`);
+            logger.info(
+              `  ${sampleId}: ${i + 1}/${qaItems.length} questions processed`
+            );
           }
         } catch (err) {
-          logger.warn(`  Failed on question: "${qa.question.slice(0, 60)}..."`, {
-            error: String(err),
-          });
+          logger.warn(
+            `  Failed on question: "${qa.question.slice(0, 60)}..."`,
+            { error: String(err) }
+          );
           // Count as zero F1 but don't break the run
           categoryScores[qa.category].total++;
           conversationScores[sampleId].total++;
@@ -181,11 +242,22 @@ export async function runLoCoMoBenchmark(
         }
       }
 
-      const convAcc = conversationScores[sampleId].total > 0
-        ? conversationScores[sampleId].sum / conversationScores[sampleId].total
-        : 0;
-      logger.info(`  ${sampleId}: ${convAcc.toFixed(3)} avg F1 (${conversationScores[sampleId].total} questions)`);
+      const convAcc =
+        conversationScores[sampleId].total > 0
+          ? conversationScores[sampleId].sum /
+            conversationScores[sampleId].total
+          : 0;
+      logger.info(
+        `  ${sampleId}: ${convAcc.toFixed(3)} avg F1 (${conversationScores[sampleId].total} questions)`
+      );
     } finally {
+      // Clean up ChromaDB collection
+      try {
+        await chroma.deleteCollection({ name: collectionName });
+      } catch {
+        logger.warn(`Failed to clean up ChromaDB collection: ${collectionName}`);
+      }
+
       // Clean up temp directory
       try {
         rmSync(tempRoot, { recursive: true, force: true });
@@ -205,7 +277,8 @@ export async function runLoCoMoBenchmark(
     };
   }
 
-  const byConversation: Record<string, { accuracy: number; count: number }> = {};
+  const byConversation: Record<string, { accuracy: number; count: number }> =
+    {};
   let overallSum = 0;
   let overallCount = 0;
   for (const [id, s] of Object.entries(conversationScores)) {
@@ -232,7 +305,9 @@ export async function runLoCoMoBenchmark(
 
   // Print summary
   logger.info('=== LoCoMo Benchmark Results ===');
-  logger.info(`Overall: ${result.overall.accuracy.toFixed(3)} F1 (${result.overall.count} questions)`);
+  logger.info(
+    `Overall: ${result.overall.accuracy.toFixed(3)} F1 (${result.overall.count} questions)`
+  );
   for (const cat of categories) {
     const c = byCategory[cat];
     const label = CATEGORY_LABELS[cat] || `cat-${cat}`;
@@ -255,21 +330,28 @@ const CATEGORY_LABELS: Record<number, string> = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Ingest all sessions from a LoCoMo conversation into a temporary brain.
- * Creates timeline events and entity graph entries for each session.
+ * Ingest all sessions from a LoCoMo conversation into ChromaDB (turn-level)
+ * and the entity graph + timeline FTS (session-level).
+ *
+ * Each turn is stored as a document with ±1 turn context window for
+ * better semantic retrieval. The full session transcript is also stored
+ * in timeline FTS as a fallback search channel.
  */
 async function ingestConversation(
   root: string,
-  conv: LoCoMoConversation
-): Promise<void> {
+  conv: LoCoMoConversation,
+  collection: any
+): Promise<{ processed: number }> {
   const dataDir = join(root, 'data');
   mkdirSync(dataDir, { recursive: true });
 
-  // Initialize databases
+  // Initialize databases for entity graph and timeline FTS
   const timelineDb = createTimelineDb(join(dataDir, 'timeline.db'));
   const entityDb = createEntityGraphDb(join(dataDir, 'entity-graph.db'));
 
   const conversation = conv.conversation;
+  const speakerA = conversation.speaker_a;
+  const speakerB = conversation.speaker_b;
 
   // Find all sessions with actual turns
   const sessions: Array<{ num: number; dateTime: string; turns: Turn[] }> = [];
@@ -291,24 +373,71 @@ async function ingestConversation(
   // Sort by session number for chronological ingestion
   sessions.sort((a, b) => a.num - b.num);
 
-  logger.debug(`  Ingesting ${sessions.length} sessions for ${conv.sample_id}`);
+  logger.debug(
+    `  Ingesting ${sessions.length} sessions for ${conv.sample_id}`
+  );
 
   const client = getClaudeClient();
-  const speakerA = conversation.speaker_a;
-  const speakerB = conversation.speaker_b;
+  let totalProcessed = 0;
 
   for (const session of sessions) {
     const timestamp = parseLocomoDateTime(session.dateTime);
+    const sessionDateTime = session.dateTime;
+    const sessionNum = session.num;
 
-    // Build transcript text from turns
+    // Build full transcript for entity extraction and timeline FTS
     const transcript = buildTranscript(session.turns, speakerA, speakerB);
 
-    // Truncate for entity extraction (Haiku context limit)
-    const truncated = transcript.length > 4000
-      ? transcript.slice(0, 4000) + '\n[Transcript truncated...]'
-      : transcript;
+    // ── ChromaDB: turn-level indexing with ±1 context window ──
+    const batchIds: string[] = [];
+    const batchDocs: string[] = [];
+    const batchMetas: Array<Record<string, string | number>> = [];
 
-    // Extract entities via Claude Haiku
+    for (const [i, turn] of session.turns.entries()) {
+      const prev = session.turns[i - 1];
+      const next = session.turns[i + 1];
+
+      let content = '';
+      if (prev?.text) content += `${prev.speaker}: ${prev.text}\n`;
+      content += `${turn.speaker}: ${turn.text || ''}`;
+      if (turn.blip_caption) content += ` [shared image: ${turn.blip_caption}]`;
+      if (next?.text) content += `\n${next.speaker}: ${next.text}`;
+
+      // Skip turns with no meaningful content
+      if (content.trim().length === 0) continue;
+
+      const turnId = `${conv.sample_id}_s${sessionNum}_t${i}`;
+
+      batchIds.push(turnId);
+      batchDocs.push(content);
+      batchMetas.push({
+        session: sessionNum,
+        date: sessionDateTime,
+        speaker: turn.speaker,
+        dia_id: turn.dia_id || '',
+        turn_index: i,
+      });
+    }
+
+    // Add to ChromaDB in batches of up to 100
+    for (let batchStart = 0; batchStart < batchIds.length; batchStart += 100) {
+      const batchEnd = Math.min(batchStart + 100, batchIds.length);
+      await collection.add({
+        ids: batchIds.slice(batchStart, batchEnd),
+        documents: batchDocs.slice(batchStart, batchEnd),
+        metadatas: batchMetas.slice(batchStart, batchEnd),
+      });
+    }
+
+    totalProcessed += batchIds.length;
+
+    // ── Entity extraction via Claude Haiku ──
+    // Truncate for entity extraction (Haiku context limit)
+    const truncated =
+      transcript.length > 4000
+        ? transcript.slice(0, 4000) + '\n[Transcript truncated...]'
+        : transcript;
+
     let entities: Array<{ name: string; type: string }> = [];
     let relationships: Array<{
       source: { name: string; type: string };
@@ -340,17 +469,15 @@ async function ingestConversation(
         );
       }
     } catch (err) {
-      logger.debug(`  Entity extraction failed for session ${session.num}`, {
-        error: String(err),
-      });
+      logger.debug(
+        `  Entity extraction failed for session ${session.num}`,
+        { error: String(err) }
+      );
     }
 
-    // Store in timeline
+    // ── Timeline FTS: store full session transcript (not truncated) ──
     const sourcePath = `locomo://${conv.sample_id}/session_${session.num}`;
     const title = `[locomo] ${speakerA} & ${speakerB} - Session ${session.num}`;
-    const summary = transcript.length > 500
-      ? transcript.slice(0, 497) + '...'
-      : transcript;
     const entityNames = entities.map((e) => e.name);
     const topicNames = entities
       .filter((e) => e.type === 'topic')
@@ -366,26 +493,35 @@ async function ingestConversation(
         'conversation',
         timestamp,
         title,
-        summary,
+        transcript, // Full transcript, not truncated
         sourcePath,
         JSON.stringify(entityNames),
         JSON.stringify(topicNames)
       );
 
-    // Store entities in entity graph
+    // ── Entity graph: store entities ──
     for (const entity of entities) {
       try {
-        const normalized = entity.name.toLowerCase().trim().replace(/\s+/g, ' ');
+        const normalized = entity.name
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, ' ');
         const validTypes = ['person', 'company', 'project', 'place', 'topic'];
-        const entityType = validTypes.includes(entity.type) ? entity.type : 'topic';
+        const entityType = validTypes.includes(entity.type)
+          ? entity.type
+          : 'topic';
 
         const existing = entityDb
-          .prepare('SELECT id FROM entities WHERE normalized_name = ? AND type = ?')
+          .prepare(
+            'SELECT id FROM entities WHERE normalized_name = ? AND type = ?'
+          )
           .get(normalized, entityType) as { id: number } | undefined;
 
         if (existing) {
           entityDb
-            .prepare('UPDATE entities SET last_seen = ?, mention_count = mention_count + 1 WHERE id = ?')
+            .prepare(
+              'UPDATE entities SET last_seen = ?, mention_count = mention_count + 1 WHERE id = ?'
+            )
             .run(timestamp, existing.id);
         } else {
           entityDb
@@ -400,11 +536,17 @@ async function ingestConversation(
       }
     }
 
-    // Store relationships in entity graph
+    // ── Entity graph: store relationships ──
     for (const rel of relationships) {
       try {
-        const sourceNorm = rel.source.name.toLowerCase().trim().replace(/\s+/g, ' ');
-        const targetNorm = rel.target.name.toLowerCase().trim().replace(/\s+/g, ' ');
+        const sourceNorm = rel.source.name
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, ' ');
+        const targetNorm = rel.target.name
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, ' ');
 
         const sourceEntity = entityDb
           .prepare('SELECT id FROM entities WHERE normalized_name = ?')
@@ -413,10 +555,15 @@ async function ingestConversation(
           .prepare('SELECT id FROM entities WHERE normalized_name = ?')
           .get(targetNorm) as { id: number } | undefined;
 
-        if (sourceEntity && targetEntity && sourceEntity.id !== targetEntity.id) {
-          const [id1, id2] = sourceEntity.id < targetEntity.id
-            ? [sourceEntity.id, targetEntity.id]
-            : [targetEntity.id, sourceEntity.id];
+        if (
+          sourceEntity &&
+          targetEntity &&
+          sourceEntity.id !== targetEntity.id
+        ) {
+          const [id1, id2] =
+            sourceEntity.id < targetEntity.id
+              ? [sourceEntity.id, targetEntity.id]
+              : [targetEntity.id, sourceEntity.id];
 
           entityDb
             .prepare(
@@ -426,7 +573,13 @@ async function ingestConversation(
                  strength = strength + 1,
                  confidence = MAX(entity_relations.confidence, excluded.confidence)`
             )
-            .run(id1, id2, rel.relationship, rel.confidence || 0.7, rel.rationale || '');
+            .run(
+              id1,
+              id2,
+              rel.relationship,
+              rel.confidence || 0.7,
+              rel.rationale || ''
+            );
         }
       } catch {
         // Skip invalid relationships
@@ -436,6 +589,8 @@ async function ingestConversation(
 
   timelineDb.close();
   entityDb.close();
+
+  return { processed: totalProcessed };
 }
 
 /**
@@ -454,7 +609,9 @@ function buildTranscript(
 
     // Include image descriptions as contextual information
     if (turn.blip_caption) {
-      content += content ? ` [Image: ${turn.blip_caption}]` : `[Image: ${turn.blip_caption}]`;
+      content += content
+        ? ` [Image: ${turn.blip_caption}]`
+        : `[Image: ${turn.blip_caption}]`;
     }
 
     if (content) {
@@ -470,20 +627,25 @@ function buildTranscript(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Answer a single QA item using the ingested brain.
+ * Answer a single QA item using ChromaDB semantic search + entity graph.
  */
 async function answerQuestion(
   root: string,
   qa: QAItem,
-  conv: LoCoMoConversation
+  collection: any,
+  speakerA: string,
+  speakerB: string
 ): Promise<string> {
   const dataDir = join(root, 'data');
-  const timelineDb = new Database(join(dataDir, 'timeline.db'));
   const entityDb = new Database(join(dataDir, 'entity-graph.db'));
 
   try {
-    const context = retrieveContext(timelineDb, entityDb, qa.question);
-    const prompt = buildPrompt(qa, context);
+    const context = await retrieveContext(
+      collection,
+      entityDb,
+      qa.question
+    );
+    const prompt = buildPrompt(qa, context, speakerA, speakerB);
 
     const client = getClaudeClient();
     const answer = await client.complete(prompt, {
@@ -494,28 +656,46 @@ async function answerQuestion(
 
     return answer.trim();
   } finally {
-    timelineDb.close();
     entityDb.close();
   }
 }
 
 /**
- * Retrieve relevant context from timeline FTS and entity graph.
+ * Retrieve relevant context from ChromaDB semantic search and entity graph.
  */
-function retrieveContext(
-  timelineDb: Database.Database,
+async function retrieveContext(
+  collection: any,
   entityDb: Database.Database,
   question: string
-): string {
+): Promise<string> {
   const contextParts: string[] = [];
 
-  // 1. Timeline FTS search
-  const ftsResults = searchTimelineFTS(timelineDb, question, 5);
-  for (const result of ftsResults) {
-    contextParts.push(`[${result.timestamp}] ${result.title}\n${result.summary}`);
+  // 1. ChromaDB semantic search — retrieve top 15 turn-level documents
+  try {
+    const results = await collection.query({
+      queryTexts: [question],
+      nResults: 15,
+    });
+
+    if (results.documents?.[0]) {
+      for (let i = 0; i < results.documents[0].length; i++) {
+        const meta = results.metadatas?.[0]?.[i];
+        const doc = results.documents[0][i];
+        if (doc) {
+          const sessionLabel = meta
+            ? `[Session ${meta.session}, ${meta.date}]`
+            : '[Unknown session]';
+          contextParts.push(`${sessionLabel}\n${doc}`);
+        }
+      }
+    }
+  } catch (err) {
+    logger.debug(`ChromaDB query failed, falling back to entity graph only`, {
+      error: String(err),
+    });
   }
 
-  // 2. Entity graph search
+  // 2. Entity graph search — supplementary context for relationship questions
   const entityResults = searchEntityGraph(entityDb, question, 5);
   for (const entity of entityResults) {
     let line = `Entity: ${entity.name} (${entity.type})`;
@@ -529,85 +709,6 @@ function retrieveContext(
   }
 
   return contextParts.join('\n\n');
-}
-
-/**
- * Query timeline FTS5 with graceful fallback.
- */
-function searchTimelineFTS(
-  db: Database.Database,
-  query: string,
-  limit: number
-): Array<{ timestamp: string; title: string; summary: string }> {
-  // Extract meaningful search words (3+ chars, no stopwords)
-  const stopwords = new Set([
-    'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all',
-    'can', 'had', 'her', 'was', 'one', 'our', 'out', 'has',
-    'his', 'how', 'its', 'may', 'who', 'did', 'get', 'she',
-    'him', 'his', 'what', 'when', 'where', 'which', 'will',
-    'with', 'would', 'could', 'should', 'about', 'been', 'have',
-    'from', 'they', 'does', 'this', 'that', 'than', 'then',
-    'them', 'these', 'those', 'into', 'some', 'such', 'were',
-  ]);
-
-  const words = query
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length >= 3 && !stopwords.has(w));
-
-  if (words.length === 0) return [];
-
-  // Try FTS5 match first
-  const ftsQuery = words.join(' OR ');
-  try {
-    const results = db
-      .prepare(
-        `SELECT t.timestamp, t.title, t.summary
-         FROM timeline_events t
-         JOIN timeline_fts fts ON t.id = fts.rowid
-         WHERE timeline_fts MATCH ?
-         ORDER BY rank
-         LIMIT ?`
-      )
-      .all(ftsQuery, limit) as Array<{
-        timestamp: string;
-        title: string;
-        summary: string;
-      }>;
-
-    if (results.length > 0) return results;
-  } catch {
-    // FTS query syntax error — fall through to LIKE search
-  }
-
-  // Fallback: LIKE search on title and summary
-  const likeConditions = words
-    .slice(0, 5)
-    .map(() => '(title LIKE ? OR summary LIKE ?)')
-    .join(' OR ');
-  const likeParams: string[] = [];
-  for (const w of words.slice(0, 5)) {
-    likeParams.push(`%${w}%`, `%${w}%`);
-  }
-
-  try {
-    return db
-      .prepare(
-        `SELECT timestamp, title, summary
-         FROM timeline_events
-         WHERE ${likeConditions}
-         ORDER BY timestamp DESC
-         LIMIT ?`
-      )
-      .all(...likeParams, limit) as Array<{
-        timestamp: string;
-        title: string;
-        summary: string;
-      }>;
-  } catch {
-    return [];
-  }
 }
 
 interface EntitySearchResult {
@@ -647,11 +748,15 @@ function searchEntityGraph(
   // If no direct name matches, try partial word matching
   const results: EntitySearchResult[] = [];
 
-  const toSearch = matched.length > 0 ? matched.slice(0, limit) : findPartialMatches(entities, queryLower, limit);
+  const toSearch =
+    matched.length > 0
+      ? matched.slice(0, limit)
+      : findPartialMatches(entities, queryLower, limit);
 
   for (const entity of toSearch) {
     // Get relationships for this entity
-    let relationships: Array<{ relationship: string; relatedName: string }> = [];
+    let relationships: Array<{ relationship: string; relatedName: string }> =
+      [];
     try {
       const rels = db
         .prepare(
@@ -666,9 +771,9 @@ function searchEntityGraph(
            LIMIT 5`
         )
         .all(entity.id, entity.id, entity.id) as Array<{
-          relationship: string;
-          related_name: string;
-        }>;
+        relationship: string;
+        related_name: string;
+      }>;
 
       relationships = rels.map((r) => ({
         relationship: r.relationship,
@@ -697,7 +802,10 @@ function findPartialMatches(
   limit: number
 ): Array<{ id: number; name: string; type: string }> {
   const queryWords = new Set(
-    queryLower.replace(/[^\w\s]/g, ' ').split(/\s+/).filter((w) => w.length >= 3)
+    queryLower
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 3)
   );
 
   const scored = entities.map((e) => {
@@ -714,37 +822,61 @@ function findPartialMatches(
 }
 
 /**
- * Build a category-specific prompt for the QA item.
+ * Build a category-specific prompt for the QA item with speaker context.
  */
-function buildPrompt(qa: QAItem, context: string): string {
-  if (qa.category === 5) {
-    return [
-      "Based on the following memories from past conversations, answer the question.",
-      "If the information is not mentioned in the context, say 'Not mentioned in the conversation'.",
-      "",
-      "Context:",
-      context || '(No relevant memories found)',
-      "",
-      `Question: ${qa.question}`,
-      "Short answer:",
-    ].join('\n');
-  }
+function buildPrompt(
+  qa: QAItem,
+  context: string,
+  speakerA: string,
+  speakerB: string
+): string {
+  const baseContext =
+    `The following are excerpts from conversations between ${speakerA} and ${speakerB}, retrieved from memory.\n\n` +
+    `Context:\n${context || '(No relevant memories found)'}\n\n`;
 
-  let extra = '';
-  if (qa.category === 2) {
-    extra = ' Use dates from the conversation context to answer with an approximate date.';
-  }
+  switch (qa.category) {
+    case 1: // Single-hop
+      return (
+        baseContext +
+        `Answer the following question using the exact words from the conversation. Be brief — use a short phrase or a few words.\n\n` +
+        `Question: ${qa.question}\nShort answer:`
+      );
 
-  return [
-    `Based on the following memories from past conversations, answer with a short phrase.${extra}`,
-    "Answer with exact words from the context whenever possible.",
-    "",
-    "Context:",
-    context || '(No relevant memories found)',
-    "",
-    `Question: ${qa.question}`,
-    "Short answer:",
-  ].join('\n');
+    case 2: // Temporal
+      return (
+        baseContext +
+        `Answer the following question with a specific date. Look for dates mentioned in the session headers (e.g., "3 May, 2023"). Answer in the format "day Month year" or "Month year".\n\n` +
+        `Question: ${qa.question}\nShort answer:`
+      );
+
+    case 3: // Open-domain
+      return (
+        baseContext +
+        `Answer the following question based on what can be reasonably inferred from the conversation. If yes/no is applicable, start with that.\n\n` +
+        `Question: ${qa.question}\nShort answer:`
+      );
+
+    case 4: // Multi-hop
+      return (
+        baseContext +
+        `Answer the following question by combining information from the conversation excerpts. If the answer has multiple parts, separate them with commas.\n\n` +
+        `Question: ${qa.question}\nShort answer:`
+      );
+
+    case 5: // Adversarial
+      return (
+        baseContext +
+        `Answer the following question. IMPORTANT: If the specific information asked about is NOT mentioned in any of the conversation excerpts, respond with exactly "Not mentioned in the conversation". Do not guess or use information about a different person.\n\n` +
+        `Question: ${qa.question}\nShort answer:`
+      );
+
+    default:
+      return (
+        baseContext +
+        `Answer the following question briefly using information from the conversation.\n\n` +
+        `Question: ${qa.question}\nShort answer:`
+      );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -853,8 +985,14 @@ function normalizeAnswer(s: string): string {
  * with Porter stemming applied to each token.
  */
 function f1Score(prediction: string, groundTruth: string): number {
-  const predTokens = normalizeAnswer(prediction).split(' ').filter(Boolean).map(porterStem);
-  const gtTokens = normalizeAnswer(groundTruth).split(' ').filter(Boolean).map(porterStem);
+  const predTokens = normalizeAnswer(prediction)
+    .split(' ')
+    .filter(Boolean)
+    .map(porterStem);
+  const gtTokens = normalizeAnswer(groundTruth)
+    .split(' ')
+    .filter(Boolean)
+    .map(porterStem);
 
   if (predTokens.length === 0 && gtTokens.length === 0) return 1.0;
   if (predTokens.length === 0 || gtTokens.length === 0) return 0.0;
@@ -1107,9 +1245,18 @@ function parseLocomoDateTime(dt: string): string {
   if (ampm === 'am' && hours === 12) hours = 0;
 
   const months: Record<string, number> = {
-    january: 0, february: 1, march: 2, april: 3,
-    may: 4, june: 5, july: 6, august: 7,
-    september: 8, october: 9, november: 10, december: 11,
+    january: 0,
+    february: 1,
+    march: 2,
+    april: 3,
+    may: 4,
+    june: 5,
+    july: 6,
+    august: 7,
+    september: 8,
+    october: 9,
+    november: 10,
+    december: 11,
   };
 
   const month = months[monthStr.toLowerCase()];
