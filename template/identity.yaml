@@ -34,6 +34,13 @@ claude:
 #   whatsapp:
 #     enabled: true
 
+# GitHub backup (optional)
+# backup:
+#   enabled: true
+#   remote_url: "git@github.com:user/agent-backup.git"
+#   schedule: "4h"
+#   branch: "main"
+
 # Kybernesis cloud sync (optional)
 # kybernesis:
 #   agent_id: "your-agent-id"

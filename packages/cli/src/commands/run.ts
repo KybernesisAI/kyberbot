@@ -157,6 +157,41 @@ export function createRunCommand(): Command {
         // ─────────────────────────────────────────────────────────────
 
         const identity = getIdentity();
+
+        // ─────────────────────────────────────────────────────────────
+        // Backup: auto-initialize git if configured but not set up
+        // ─────────────────────────────────────────────────────────────
+
+        if (identity.backup?.enabled) {
+          const { spawnSync } = await import('node:child_process');
+          const gitCheck = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], {
+            cwd: root,
+            stdio: 'pipe',
+          });
+          if (gitCheck.status !== 0) {
+            logger.info('Backup configured but git not initialized — setting up...');
+            spawnSync('git', ['init'], { cwd: root, stdio: 'pipe' });
+            if (identity.backup.remote_url) {
+              spawnSync('git', ['remote', 'add', 'origin', identity.backup.remote_url], {
+                cwd: root,
+                stdio: 'pipe',
+              });
+            }
+            spawnSync('git', ['add', '-A'], { cwd: root, stdio: 'pipe' });
+            spawnSync('git', ['commit', '-m', 'Initial agent state'], {
+              cwd: root,
+              stdio: 'pipe',
+            });
+            if (identity.backup.remote_url) {
+              spawnSync('git', ['push', '-u', 'origin', identity.backup.branch || 'main'], {
+                cwd: root,
+                stdio: 'pipe',
+              });
+            }
+            logger.info('Git backup repository initialized');
+          }
+        }
+
         const tunnelEnabled = identity.tunnel?.enabled === true;
         registerService({
           name: 'Tunnel',

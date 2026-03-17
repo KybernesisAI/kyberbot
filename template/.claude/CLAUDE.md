@@ -347,6 +347,15 @@ kyberbot channel remove <type>   # Remove a channel
 kyberbot channel status          # Check connectivity and verification
 ```
 
+### Backup
+
+```bash
+kyberbot backup run              # Checkpoint DBs, sync memory, commit & push
+kyberbot backup verify           # Verify backup integrity (SQLite, git, files)
+kyberbot backup status           # Show backup config, last commit, sync state
+kyberbot backup setup            # Interactive backup configuration
+```
+
 ### Remote Access & API
 
 ```bash
@@ -365,7 +374,7 @@ kyberbot token regenerate        # Generate a new API token (updates .env)
 kyberbot update                  # Full update: pull CLI source + refresh templates
 kyberbot update --check          # Preview what would change
 kyberbot update --templates      # Only refresh templates (skip CLI update)
-kyberbot onboard                 # Run the initial setup wizard (8-step process)
+kyberbot onboard                 # Run the initial setup wizard (9-step process)
 ```
 
 <!-- BEGIN_KYBERNESIS -->

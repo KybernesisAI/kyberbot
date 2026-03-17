@@ -52,6 +52,7 @@ import { createUpdateCommand } from './commands/update.js';
 import { createKybernesisCommand } from './commands/kybernesis.js';
 import { createTokenCommand } from './commands/token.js';
 import { createTunnelCommand } from './commands/tunnel.js';
+import { createBackupCommand } from './commands/backup.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VERSION
@@ -103,6 +104,7 @@ program.addCommand(createChannelCommand());
 program.addCommand(createKybernesisCommand());
 program.addCommand(createTokenCommand());
 program.addCommand(createTunnelCommand());
+program.addCommand(createBackupCommand());
 
 // When no subcommand is given, `run` executes as the default (isDefault: true).
 

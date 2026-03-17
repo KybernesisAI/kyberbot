@@ -52,6 +52,12 @@ export interface IdentityConfig {
     enabled: boolean;
     provider?: string;
   };
+  backup?: {
+    enabled: boolean;
+    remote_url: string;
+    schedule: string;
+    branch?: string;
+  };
   claude?: {
     mode: 'subscription' | 'sdk';
     model?: string;

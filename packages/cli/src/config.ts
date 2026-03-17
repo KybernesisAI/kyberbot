@@ -144,6 +144,31 @@ export function parseDuration(duration: string): number {
 }
 
 /**
+ * Get backup configuration from identity.yaml
+ */
+export function getBackupConfig() {
+  const backup = getIdentity().backup;
+  if (!backup?.enabled) return null;
+  return {
+    enabled: backup.enabled,
+    remote_url: backup.remote_url,
+    schedule: backup.schedule || '4h',
+    branch: backup.branch || 'main',
+  };
+}
+
+/**
+ * Derive the Claude Code project memory path from the agent root.
+ * Claude Code stores memory at ~/.claude/projects/-{path-with-slashes-replaced}/memory/
+ */
+export function getClaudeMemorySourcePath(): string {
+  const root = getRoot();
+  const projectSlug = root.replace(/\//g, '-');
+  const homedir = process.env.HOME || process.env.USERPROFILE || '';
+  return join(homedir, '.claude', 'projects', projectSlug, 'memory');
+}
+
+/**
  * Standard paths within a KyberBot instance
  */
 export const paths = {
@@ -166,6 +191,9 @@ export const paths = {
   get entityDb() { return join(getRoot(), 'data', 'entity-graph.db'); },
   get timelineDb() { return join(getRoot(), 'data', 'timeline.db'); },
   get sleepDb() { return join(getRoot(), 'data', 'sleep.db'); },
+  get messagesDb() { return join(getRoot(), 'data', 'messages.db'); },
+  get claudeMemory() { return join(getRoot(), 'data', 'claude-memory'); },
+  get scripts() { return join(getRoot(), 'scripts'); },
   get heartbeatLog() { return join(getRoot(), 'logs', 'heartbeat.log'); },
 };
 

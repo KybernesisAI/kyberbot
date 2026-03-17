@@ -1,7 +1,7 @@
 /**
  * Onboard Command
  *
- * Interactive setup wizard with 8 steps:
+ * Interactive setup wizard with 9 steps:
  *   Step 1: Agent identity (name, description, SOUL.md choice)
  *   Step 2: User identity (name, timezone, location, about)
  *   Step 3: Claude Code mode (subscription vs SDK)
@@ -9,7 +9,8 @@
  *   Step 5: Kybernesis (optional cloud sync)
  *   Step 6: Remote Access (optional ngrok tunnel)
  *   Step 7: Channels (Telegram/WhatsApp - optional)
- *   Step 8: Done - show summary
+ *   Step 8: GitHub Backup (optional)
+ *   Step 9: Done - show summary
  *
  * Usage:
  *   kyberbot onboard
@@ -27,6 +28,7 @@ import yaml from 'js-yaml';
 import { input, select, confirm } from '@inquirer/prompts';
 
 import { displayBanner } from '../splash.js';
+import { writeBackupGitignore, injectHeartbeatTask } from './backup.js';
 
 const EMERALD = chalk.hex('#50C878');
 const PRIMARY = chalk.hex('#FF6B6B');
@@ -61,7 +63,7 @@ export function createOnboardCommand(): Command {
       // Step 1: Agent Identity
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('Step 1 of 8: Agent Identity\n'));
+      console.log(chalk.bold.underline('Step 1 of 9: Agent Identity\n'));
 
       const agentName = await input({
         message: 'What should your AI agent be called?',
@@ -100,7 +102,7 @@ export function createOnboardCommand(): Command {
       // Step 2: User Identity
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 2 of 8: About You\n'));
+      console.log(chalk.bold.underline('\nStep 2 of 9: About You\n'));
 
       const userName = await input({
         message: 'Your name:',
@@ -126,7 +128,7 @@ export function createOnboardCommand(): Command {
       // Step 3: Claude Code Mode
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 3 of 8: Claude Code\n'));
+      console.log(chalk.bold.underline('\nStep 3 of 9: Claude Code\n'));
 
       const claudeMode = await select({
         message: 'How would you like to connect to Claude?',
@@ -152,7 +154,7 @@ export function createOnboardCommand(): Command {
       // Step 4: Brain & Heartbeat Init
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 4 of 8: Initializing Brain\n'));
+      console.log(chalk.bold.underline('\nStep 4 of 9: Initializing Brain\n'));
 
       // Create directories
       const dirs = ['data', 'logs', 'brain', 'skills'];
@@ -328,7 +330,7 @@ export function createOnboardCommand(): Command {
       // Step 5: Kybernesis (optional cloud sync)
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 5 of 8: Cloud Sync\n'));
+      console.log(chalk.bold.underline('\nStep 5 of 9: Cloud Sync\n'));
       console.log(chalk.dim('  Your agent\'s memory is stored locally by default.'));
       console.log(chalk.dim('  Kybernesis Cloud adds optional cross-device access to workspace memory.\n'));
 
@@ -360,7 +362,7 @@ export function createOnboardCommand(): Command {
       // Step 6: Remote Access (optional ngrok tunnel)
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('Step 6 of 8: Remote Access\n'));
+      console.log(chalk.bold.underline('Step 6 of 9: Remote Access\n'));
 
       let tunnelEnabled = false;
       const setupTunnel = await confirm({
@@ -405,7 +407,7 @@ export function createOnboardCommand(): Command {
       // Step 7: Channels (optional)
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('\nStep 7 of 8: Messaging Channels\n'));
+      console.log(chalk.bold.underline('\nStep 7 of 9: Messaging Channels\n'));
 
       const useChannels = await confirm({
         message: 'Connect messaging channels? (Telegram / WhatsApp)',
@@ -445,6 +447,114 @@ export function createOnboardCommand(): Command {
       }
 
       // ─────────────────────────────────────────────────────────────────
+      // Step 8: GitHub Backup (optional)
+      // ─────────────────────────────────────────────────────────────────
+
+      console.log(chalk.bold.underline('\nStep 8 of 9: GitHub Backup\n'));
+      console.log(chalk.dim('  Your agent\'s data (memory, skills, brain) can be backed up to a private GitHub repo.'));
+      console.log(chalk.dim('  This enables recovery, migration to a new machine, and version history.\n'));
+
+      let backupEnabled = false;
+      const useBackup = await confirm({
+        message: 'Enable GitHub backup? (optional)',
+        default: false,
+      });
+
+      if (useBackup) {
+        // Check for git
+        const { spawnSync } = await import('node:child_process');
+        const gitCheck = spawnSync('git', ['--version'], { stdio: 'pipe' });
+        if (gitCheck.status !== 0) {
+          console.log(chalk.yellow('\n  git is not installed. Install it first: https://git-scm.com'));
+          console.log(chalk.dim('  You can set up backup later with `kyberbot backup setup`'));
+        } else {
+          console.log(chalk.dim('\n  Create a private GitHub repo first, then paste the URL below.'));
+          console.log(chalk.dim('  Example: git@github.com:yourname/my-agent.git\n'));
+
+          const backupUrl = await input({
+            message: 'GitHub repo URL (SSH):',
+            default: '',
+          });
+
+          if (backupUrl && backupUrl.trim()) {
+            const backupSchedule = await input({
+              message: 'Backup schedule:',
+              default: '4h',
+            });
+
+            const backupBranch = await input({
+              message: 'Branch name:',
+              default: 'main',
+            });
+
+            // Validate SSH access
+            console.log(chalk.dim('\n  Validating access...'));
+            const lsRemote = spawnSync('git', ['ls-remote', backupUrl.trim()], {
+              stdio: 'pipe',
+              encoding: 'utf-8',
+              timeout: 15000,
+            });
+
+            if (lsRemote.status !== 0) {
+              console.log(chalk.yellow('  Could not reach the repository.'));
+              console.log(chalk.dim(`  Error: ${(lsRemote.stderr as string || '').trim()}`));
+              console.log(chalk.dim('  The backup will be configured — fix SSH access before first run.'));
+            } else {
+              console.log(chalk.green('  Repository accessible.'));
+            }
+
+            // Initialize git
+            spawnSync('git', ['init'], { cwd: root, stdio: 'pipe' });
+            spawnSync('git', ['remote', 'add', 'origin', backupUrl.trim()], { cwd: root, stdio: 'pipe' });
+
+            // Rewrite .gitignore for backup mode
+            writeBackupGitignore(root);
+
+            // Create directories
+            mkdirSync(join(root, 'data', 'claude-memory'), { recursive: true });
+            mkdirSync(join(root, 'scripts'), { recursive: true });
+
+            // Install backup skill
+            const backupSkillSrc = join(templateDir, 'skills', 'backup', 'SKILL.md');
+            if (existsSync(backupSkillSrc)) {
+              mkdirSync(join(root, 'skills', 'backup'), { recursive: true });
+              copyFileSync(backupSkillSrc, join(root, 'skills', 'backup', 'SKILL.md'));
+              console.log(chalk.green('  + skills/backup/SKILL.md'));
+            }
+
+            // Install verify script
+            const verifyScriptSrc = join(templateDir, 'scripts', 'verify-backup.sh');
+            if (existsSync(verifyScriptSrc)) {
+              const { chmodSync } = await import('node:fs');
+              copyFileSync(verifyScriptSrc, join(root, 'scripts', 'verify-backup.sh'));
+              chmodSync(join(root, 'scripts', 'verify-backup.sh'), 0o755);
+              console.log(chalk.green('  + scripts/verify-backup.sh'));
+            }
+
+            // Add backup config to identity
+            const identityPath = join(root, 'identity.yaml');
+            const currentIdentity = yaml.load(readFileSync(identityPath, 'utf-8')) as Record<string, unknown>;
+            currentIdentity.backup = {
+              enabled: true,
+              remote_url: backupUrl.trim(),
+              schedule: backupSchedule,
+              branch: backupBranch,
+            };
+            writeFileSync(identityPath, yaml.dump(currentIdentity, { lineWidth: 120 }));
+
+            // Inject backup task into HEARTBEAT.md
+            injectHeartbeatTask(root, backupSchedule);
+
+            backupEnabled = true;
+            console.log(chalk.green('  GitHub backup configured.'));
+            console.log(chalk.dim('  Run `kyberbot backup run` after setup to create the first backup.'));
+          }
+        }
+      } else {
+        console.log(chalk.dim('  You can enable backup later with `kyberbot backup setup`.\n'));
+      }
+
+      // ─────────────────────────────────────────────────────────────────
       // Write .env (after all steps have collected keys)
       // ─────────────────────────────────────────────────────────────────
 
@@ -476,7 +586,7 @@ export function createOnboardCommand(): Command {
       // Step 8: Done
       // ─────────────────────────────────────────────────────────────────
 
-      console.log(chalk.bold.underline('Step 8 of 8: Summary\n'));
+      console.log(chalk.bold.underline('Step 9 of 9: Summary\n'));
 
       console.log(chalk.green('  + identity.yaml    -- Agent configuration'));
       console.log(chalk.green('  + SOUL.md          -- Agent personality'));
@@ -487,6 +597,9 @@ export function createOnboardCommand(): Command {
       console.log(chalk.green('  + brain/           -- Knowledge base'));
       console.log(chalk.green('  + skills/          -- Auto-generated capabilities'));
       console.log(chalk.green('  + logs/            -- Service logs'));
+      if (backupEnabled) {
+        console.log(chalk.green('  + backup           -- GitHub backup enabled'));
+      }
 
       console.log();
       console.log(PRIMARY.bold(`  ${agentName} is alive.`));
