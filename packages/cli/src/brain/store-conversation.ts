@@ -208,7 +208,7 @@ export async function storeConversation(
         await addConversationToTimeline(
           root, conversationId, sourcePath, timestamp, undefined,
           fullTitle,
-          fullText, // Store full text as summary for the parent entry
+          fullText.slice(0, 2000), // Parent entry gets first 2000 chars; segments have full text
           entityNames, topicNames
         );
       }
@@ -216,7 +216,7 @@ export async function storeConversation(
       await addConversationToTimeline(
         root, conversationId, sourcePath, timestamp, undefined,
         fullTitle,
-        fullText, // Store full text as summary for the parent entry
+        fullText.slice(0, 2000), // Parent entry gets first 2000 chars; segments have full text
         entityNames, topicNames
       );
     }
@@ -328,8 +328,12 @@ export async function storeConversation(
   }
 
   // ── Step 4: Embeddings (best-effort) ─────────────────────────────────
+  // Skip parent-level ChromaDB indexing if segments were created (Step 2b).
+  // Segments provide finer-grained embeddings; indexing the full text too
+  // would double-index and waste memory/API calls.
+  const hasSegments = fullText.length > 250;
   try {
-    if (isChromaAvailable()) {
+    if (isChromaAvailable() && !hasSegments) {
       await indexDocument(conversationId, fullText, {
         type: 'conversation',
         source_path: sourcePath,
