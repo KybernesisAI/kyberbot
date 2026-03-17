@@ -74,6 +74,7 @@ export async function runLinkStep(
   const timeline = await getTimelineDb(root);
   const sleep = getSleepDb(root);
   let created = 0;
+  let retyped = 0;
   const errors: string[] = [];
 
   // Metadata/generic tags to exclude from similarity (noise, not semantic)
@@ -244,7 +245,6 @@ export async function runLinkStep(
     }
 
     // Phase 2: Retype existing 'related' edges that can be more specific
-    let retyped = 0;
     try {
       const untypedEdges = sleep.prepare(`
         SELECT id, from_path, to_path FROM memory_edges
