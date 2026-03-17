@@ -98,18 +98,27 @@ export async function runSummarizeStep(
           continue;
         }
 
-        // Read source content
+        // Read source content — file paths or channel:// virtual paths
         let content = '';
-        try {
-          const raw = await fs.readFile(item.source_path, 'utf-8');
-          // Strip frontmatter and limit to 4000 chars for cost control
-          content = raw.replace(/^---[\s\S]*?---\n*/m, '').slice(0, 4000);
-        } catch {
-          if (queueMap.has(itemId)) markProcessed(sleep, queueMap.get(itemId)!);
-          continue;
+        if (item.source_path.startsWith('channel://')) {
+          // Virtual path: use the title + existing summary as content
+          // Conversations store truncated response as summary at ingestion
+          const parts: string[] = [];
+          if (item.title) parts.push(item.title);
+          if (item.summary && item.summary.length > 10) parts.push(item.summary);
+          content = parts.join('\n\n').slice(0, 4000);
+        } else {
+          try {
+            const raw = await fs.readFile(item.source_path, 'utf-8');
+            // Strip frontmatter and limit to 4000 chars for cost control
+            content = raw.replace(/^---[\s\S]*?---\n*/m, '').slice(0, 4000);
+          } catch {
+            if (queueMap.has(itemId)) markProcessed(sleep, queueMap.get(itemId)!);
+            continue;
+          }
         }
 
-        if (content.length < 50) {
+        if (content.length < 20) {
           if (queueMap.has(itemId)) markProcessed(sleep, queueMap.get(itemId)!);
           continue;
         }

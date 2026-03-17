@@ -243,11 +243,39 @@ export async function runLinkStep(
       if (created >= config.maxLinksPerRun) break;
     }
 
-    logger.debug('Link step completed', { processed: items.length, created });
+    // Phase 2: Retype existing 'related' edges that can be more specific
+    let retyped = 0;
+    try {
+      const untypedEdges = sleep.prepare(`
+        SELECT id, from_path, to_path FROM memory_edges
+        WHERE relation = 'related'
+        LIMIT ?
+      `).all(config.maxLinksPerRun) as Array<{ id: number; from_path: string; to_path: string }>;
+
+      for (const edge of untypedEdges) {
+        const fromItem = itemLookup.get(edge.from_path);
+        const toItem = itemLookup.get(edge.to_path);
+        if (!fromItem || !toItem) continue;
+
+        const fromTags = itemTags.get(edge.from_path) || new Set<string>();
+        const toTags = itemTags.get(edge.to_path) || new Set<string>();
+        const shared = new Set([...fromTags].filter(t => toTags.has(t)));
+
+        const newRelation = determineRelationType(fromItem, toItem, shared);
+        if (newRelation !== 'related') {
+          sleep.prepare('UPDATE memory_edges SET relation = ? WHERE id = ?').run(newRelation, edge.id);
+          retyped++;
+        }
+      }
+    } catch (retypeErr) {
+      errors.push(`Edge retype failed: ${retypeErr}`);
+    }
+
+    logger.debug('Link step completed', { processed: items.length, created, retyped });
   } catch (error) {
     logger.error('Link step failed', { error: String(error) });
     errors.push(`Link step failed: ${error}`);
   }
 
-  return { count: created, processed: created, errors: errors.length > 0 ? errors : undefined };
+  return { count: created + retyped, processed: created + retyped, errors: errors.length > 0 ? errors : undefined };
 }

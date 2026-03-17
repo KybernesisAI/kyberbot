@@ -113,13 +113,29 @@ function detectFragmentation(entities: Entity[]): Array<{ group: string[]; reaso
   const seen = new Set<string>();
 
   for (let i = 0; i < names.length; i++) {
-    if (names[i].length < 3 || entities[i].mention_count < 3) continue;
+    if (names[i].length < 4 || entities[i].mention_count < 3) continue;
 
     const matches: string[] = [];
     for (let j = 0; j < names.length; j++) {
-      if (i !== j && names[j].includes(names[i])) {
-        matches.push(entities[j].name);
-      }
+      if (i === j) continue;
+
+      // Must be a word-boundary substring, not a coincidental overlap
+      // e.g., "Ian" inside "Chiang Mai" is NOT fragmentation
+      const shorter = names[i];
+      const longer = names[j];
+      if (!longer.includes(shorter)) continue;
+
+      // Check word boundary: shorter must appear at start of a word in longer
+      const idx = longer.indexOf(shorter);
+      const atWordStart = idx === 0 || /[\s\-_]/.test(longer[idx - 1]);
+      if (!atWordStart) continue;
+
+      // Skip if the longer name is a different product/subtype
+      // (e.g., "Cloudflare" vs "Cloudflare Workers" — different entities)
+      const suffix = longer.slice(idx + shorter.length).trim();
+      if (suffix.length > 0 && entities[i].type !== entities[j].type) continue;
+
+      matches.push(entities[j].name);
     }
 
     if (matches.length > 0) {
