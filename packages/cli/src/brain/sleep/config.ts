@@ -41,6 +41,9 @@ export interface SleepConfig {
   enableConsolidation: boolean;
   consolidationTitleThreshold: number;
   repetitiveDecayMultiplier: number;
+
+  enableObservations: boolean;
+  maxObservationsPerRun: number;
 }
 
 export const DEFAULT_CONFIG: SleepConfig = {
@@ -82,4 +85,7 @@ export const DEFAULT_CONFIG: SleepConfig = {
   enableConsolidation: true,
   consolidationTitleThreshold: 3,
   repetitiveDecayMultiplier: 3.0,
+
+  enableObservations: true,
+  maxObservationsPerRun: 10,
 };

@@ -40,8 +40,8 @@ export interface SearchResult {
 
 const CONFIG = {
   COLLECTION_NAME: 'kyberbot_data',
-  CHUNK_SIZE: 500,
-  CHUNK_OVERLAP: 50,
+  CHUNK_SIZE: 300,
+  CHUNK_OVERLAP: 75,
   MAX_RESULTS: 20,
   EMBEDDING_MODEL: 'text-embedding-3-small',
 };

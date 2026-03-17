@@ -22,6 +22,7 @@ import { runTierStep, TierResult } from './steps/tier.js';
 import { runSummarizeStep, SummarizeResult } from './steps/summarize.js';
 import { runEntityHygieneStep, EntityHygieneResult } from './steps/entity-hygiene.js';
 import { runConsolidateStep, ConsolidateResult } from './steps/consolidate.js';
+import { runObserveStep, ObserveResult } from './steps/observe.js';
 import { saveCheckpoint } from './utils/checkpoint.js';
 
 const logger = createLogger('sleep-agent');
@@ -33,6 +34,7 @@ export interface RunMetrics {
   link: LinkResult & { durationMs: number };
   tier: TierResult & { durationMs: number };
   summarize: SummarizeResult & { durationMs: number };
+  observe?: ObserveResult & { durationMs: number };
   entityHygiene?: EntityHygieneResult & { durationMs: number };
   totalDurationMs: number;
 }
@@ -117,6 +119,14 @@ export async function startSleepAgent(
       recordTelemetry(db, runId, 'summarize', metrics.summarize);
       logger.info('Summarize step completed', { runId, ...metrics.summarize });
 
+      // Step 5.5: Observe (extract structured observations from conversations)
+      saveCheckpoint(db, runId, 'observe');
+      const observeStart = Date.now();
+      const observeResult = await runObserveStep(root, cfg);
+      metrics.observe = { ...observeResult, durationMs: Date.now() - observeStart };
+      recordTelemetry(db, runId, 'observe', metrics.observe);
+      logger.info('Observe step completed', { runId, ...metrics.observe });
+
       // Step 6: Entity Hygiene
       saveCheckpoint(db, runId, 'entity-hygiene');
       const hygieneStart = Date.now();
@@ -146,6 +156,7 @@ export async function startSleepAgent(
         link: metrics.link?.count,
         tier: metrics.tier?.count,
         summarize: metrics.summarize?.count,
+        observe: metrics.observe?.count,
         entityHygiene: metrics.entityHygiene?.count,
       });
     } catch (error) {
@@ -246,6 +257,12 @@ export async function runSleepCycleNow(root: string, config: Partial<SleepConfig
     const summarize = { ...summarizeResult, durationMs: Date.now() - summarizeStart };
     recordTelemetry(db, runId, 'summarize', summarize);
 
+    saveCheckpoint(db, runId, 'observe');
+    const observeStart = Date.now();
+    const observeResult = await runObserveStep(root, cfg);
+    const observe = { ...observeResult, durationMs: Date.now() - observeStart };
+    recordTelemetry(db, runId, 'observe', observe);
+
     saveCheckpoint(db, runId, 'entity-hygiene');
     const hygieneStart = Date.now();
     const hygieneResult = await runEntityHygieneStep(root, cfg);
@@ -253,7 +270,7 @@ export async function runSleepCycleNow(root: string, config: Partial<SleepConfig
     recordTelemetry(db, runId, 'entity-hygiene', entityHygiene);
 
     const totalDurationMs = Date.now() - startTime;
-    const metrics: RunMetrics = { decay, tag, consolidate, link, tier, summarize, entityHygiene, totalDurationMs };
+    const metrics: RunMetrics = { decay, tag, consolidate, link, tier, summarize, observe, entityHygiene, totalDurationMs };
 
     db.prepare(`
       UPDATE sleep_runs

@@ -24,6 +24,49 @@ import { indexDocument, isChromaAvailable } from './embeddings.js';
 const logger = createLogger('brain');
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SEGMENT SPLITTING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Split text into overlapping segments for fine-grained indexing.
+ * Each segment is a self-contained chunk that can be independently searched.
+ */
+function segmentText(text: string, segmentSize: number = 250, overlap: number = 50): Array<{ text: string; index: number }> {
+  if (text.length <= segmentSize) {
+    return [{ text, index: 0 }];
+  }
+
+  const segments: Array<{ text: string; index: number }> = [];
+  let start = 0;
+  let index = 0;
+
+  while (start < text.length) {
+    let end = start + segmentSize;
+
+    // Try to break at a sentence or line boundary
+    if (end < text.length) {
+      const slice = text.slice(start, end + 50); // look ahead a bit
+      const breakPoint = slice.lastIndexOf('\n');
+      const sentenceBreak = slice.search(/[.!?]\s+[A-Z]/);
+      if (breakPoint > segmentSize * 0.6) {
+        end = start + breakPoint + 1;
+      } else if (sentenceBreak > segmentSize * 0.6) {
+        end = start + sentenceBreak + 2;
+      }
+    } else {
+      end = text.length;
+    }
+
+    segments.push({ text: text.slice(start, end).trim(), index });
+    index++;
+    start = end - overlap;
+    if (start >= text.length) break;
+  }
+
+  return segments;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // NOISE ENTITY FILTERING
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -147,12 +190,12 @@ export async function storeConversation(
     .map((e) => e.name);
 
   // ── Step 2: Timeline ─────────────────────────────────────────────────
-  try {
-    const title = input.prompt.length > 100
-      ? input.prompt.slice(0, 97) + '...'
-      : input.prompt;
+  const title = input.prompt.length > 100
+    ? input.prompt.slice(0, 97) + '...'
+    : input.prompt;
+  const fullTitle = `[${input.channel}] ${title}`;
 
-    const fullTitle = `[${input.channel}] ${title}`;
+  try {
 
     // Deduplicate heartbeat/repetitive content
     if (input.channel === 'heartbeat') {
@@ -165,7 +208,7 @@ export async function storeConversation(
         await addConversationToTimeline(
           root, conversationId, sourcePath, timestamp, undefined,
           fullTitle,
-          input.response.length > 500 ? input.response.slice(0, 497) + '...' : input.response,
+          fullText, // Store full text as summary for the parent entry
           entityNames, topicNames
         );
       }
@@ -173,7 +216,7 @@ export async function storeConversation(
       await addConversationToTimeline(
         root, conversationId, sourcePath, timestamp, undefined,
         fullTitle,
-        input.response.length > 500 ? input.response.slice(0, 497) + '...' : input.response,
+        fullText, // Store full text as summary for the parent entry
         entityNames, topicNames
       );
     }
@@ -181,6 +224,50 @@ export async function storeConversation(
     logger.debug('Stored conversation in timeline', { conversationId });
   } catch (err) {
     logger.warn('Timeline storage failed', { error: String(err) });
+  }
+
+  // ── Step 2b: Segment-level indexing for fine-grained retrieval ────
+  try {
+    const segments = segmentText(fullText, 250, 50);
+    if (segments.length > 1) { // Only segment if text is long enough to split
+      for (const seg of segments) {
+        const segPath = `${sourcePath}/seg_${seg.index}`;
+        const segId = `${conversationId}_seg_${seg.index}`;
+
+        // Store segment in timeline (for FTS)
+        try {
+          await addConversationToTimeline(
+            root, segId, segPath, timestamp, undefined,
+            fullTitle, seg.text, entityNames, topicNames
+          );
+        } catch {
+          // Segment storage is best-effort
+        }
+
+        // Store segment in ChromaDB (for semantic search)
+        try {
+          if (isChromaAvailable()) {
+            await indexDocument(segId, seg.text, {
+              type: 'conversation',
+              source_path: segPath,
+              title: fullTitle,
+              timestamp,
+              entities: entityNames,
+              topics: topicNames,
+              summary: seg.text, // full segment text, not truncated
+            });
+          }
+        } catch {
+          // Segment embedding is best-effort
+        }
+      }
+      logger.debug('Stored conversation segments', {
+        conversationId,
+        segments: segments.length,
+      });
+    }
+  } catch (err) {
+    logger.warn('Segment storage failed', { error: String(err) });
   }
 
   // ── Step 3: Entity Graph ─────────────────────────────────────────────

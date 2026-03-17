@@ -13,6 +13,11 @@ import { getSleepDb } from './sleep/db.js';
 
 const logger = createLogger('hybrid-search');
 
+/** Strip /seg_N suffix to get the parent conversation path */
+function getParentPath(sourcePath: string): string {
+  return sourcePath.replace(/\/seg_\d+$/, '');
+}
+
 export interface HybridSearchResult {
   id: string;
   title: string;
@@ -79,13 +84,36 @@ export async function hybridSearch(
   const maxSemantic = Math.max(...semanticResults.map(r => 1 - r.distance), 0.001);
   const maxMetadata = Math.max(...metadataResults.map(r => r.score), 0.001);
 
-  // Merge results - deduplicate by source_path, keep best semantic chunk
+  // Merge results - group by parent path, keep best 3 segments per conversation
+  const MAX_SEGMENTS_PER_PARENT = 3;
   const merged = new Map<string, HybridSearchResult>();
+
+  // Track segments per parent path to allow multiple high-quality segments
+  const parentSegments = new Map<string, Array<{ sourcePath: string; score: number }>>();
 
   for (const r of semanticResults) {
     const normalizedScore = (1 - r.distance) / maxSemantic;
-    const existing = merged.get(r.metadata.source_path);
+    const parentPath = getParentPath(r.metadata.source_path);
+    const segments = parentSegments.get(parentPath) || [];
 
+    // Check if we should include this segment
+    if (segments.length < MAX_SEGMENTS_PER_PARENT) {
+      segments.push({ sourcePath: r.metadata.source_path, score: normalizedScore });
+      parentSegments.set(parentPath, segments);
+    } else {
+      // Replace the weakest segment if this one is better
+      const weakestIdx = segments.reduce((minIdx, seg, idx, arr) =>
+        seg.score < arr[minIdx].score ? idx : minIdx, 0);
+      if (normalizedScore > segments[weakestIdx].score) {
+        // Remove the old weakest entry from merged
+        merged.delete(segments[weakestIdx].sourcePath);
+        segments[weakestIdx] = { sourcePath: r.metadata.source_path, score: normalizedScore };
+      } else {
+        continue; // Skip this segment, it's weaker than all existing ones
+      }
+    }
+
+    const existing = merged.get(r.metadata.source_path);
     if (!existing || normalizedScore > existing.semanticScore) {
       merged.set(r.metadata.source_path, {
         id: r.id,
@@ -104,11 +132,23 @@ export async function hybridSearch(
 
   for (const r of metadataResults) {
     const normalizedScore = r.score / maxMetadata;
-    const existing = merged.get(r.source_path);
+    const parentPath = getParentPath(r.source_path);
+
+    // Try to match against existing entries: exact path first, then any segment of same parent
+    let existing = merged.get(r.source_path);
+    if (!existing) {
+      // Check if any segment of this parent conversation is already in merged
+      for (const [key, val] of merged) {
+        if (getParentPath(key) === parentPath) {
+          existing = val;
+          break;
+        }
+      }
+    }
 
     if (existing) {
-      existing.metadataScore = normalizedScore;
-      existing.hybridScore = existing.semanticScore * semanticWeight + normalizedScore * metadataWeight;
+      existing.metadataScore = Math.max(existing.metadataScore, normalizedScore);
+      existing.hybridScore = existing.semanticScore * semanticWeight + existing.metadataScore * metadataWeight;
       existing.matchType = existing.semanticScore > 0 ? 'both' : 'keyword';
       existing.tier = r.tier;
       existing.priority = r.priority;
