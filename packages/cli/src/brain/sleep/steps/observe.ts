@@ -24,18 +24,21 @@ export interface ObserveResult {
   errors?: string[];
 }
 
-const OBSERVATION_PROMPT = `Extract key facts from this conversation as a JSON array of short, self-contained statements. Each fact should be independently understandable without context.
+const OBSERVATION_PROMPT = `Extract key facts from this conversation as a JSON array of short, self-contained statements.
 
 Rules:
-- Include: names, relationships, dates, places, preferences, events, decisions, feelings, plans
-- Each fact should be a single sentence, 5-20 words
-- Use specific names, not pronouns
-- Include temporal context when mentioned (dates, "last year", etc.)
-- Do NOT include greetings, small talk, or meta-commentary
-- Return 3-15 facts depending on conversation length
+- Each fact must be SPECIFIC and verifiable — not vague or generic
+- Include the person's NAME in each fact (never use pronouns like "she" or "they")
+- Include dates, numbers, and proper nouns whenever mentioned
+- Prefer facts about: relationships, preferences, events, decisions, origins, occupations, hobbies
+- Skip: greetings, opinions about the conversation itself, meta-commentary, filler
+- 5-15 facts depending on conversation length, each 8-25 words
 
-Example output:
-["Caroline is originally from Sweden", "Melanie has two kids who like dinosaurs", "The charity race raised awareness for mental health", "Caroline wants to pursue counseling as a career"]
+Good examples:
+["Caroline moved from Sweden 4 years ago", "Melanie's daughter's birthday is August 13", "The charity race raised awareness for mental health", "Caroline collects classic children's books"]
+
+Bad examples (too vague):
+["They had a nice conversation", "Someone mentioned a trip", "Things were discussed"]
 
 Conversation:
 `;

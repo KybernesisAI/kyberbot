@@ -47,6 +47,35 @@ export interface HybridSearchOptions {
   entityMatch?: 'all' | 'any';
   after?: Date;
   before?: Date;
+  expandQuery?: boolean;
+}
+
+/**
+ * Decompose a complex query into sub-queries for multi-hop retrieval.
+ * Generates pairs of key words as additional search terms.
+ */
+function expandQueryTerms(query: string): string[] {
+  const stopwords = new Set([
+    'what', 'when', 'where', 'who', 'how', 'does', 'did', 'is', 'was',
+    'are', 'were', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for',
+    'of', 'with', 'has', 'have', 'had', 'do', 'from', 'about', 'been',
+    'they', 'this', 'that', 'would', 'could', 'should', 'which', 'will',
+    'can', 'but', 'not', 'all', 'her', 'his', 'its', 'our', 'your',
+  ]);
+
+  const words = query.toLowerCase().replace(/[?.,!'"]/g, '').split(/\s+/)
+    .filter(w => w.length >= 3 && !stopwords.has(w));
+
+  if (words.length <= 3) return [query];
+
+  const subQueries = [query];
+  for (let i = 0; i < words.length && subQueries.length < 5; i++) {
+    for (let j = i + 1; j < words.length && j < i + 3 && subQueries.length < 5; j++) {
+      subQueries.push(`${words[i]} ${words[j]}`);
+    }
+  }
+
+  return subQueries;
 }
 
 export async function hybridSearch(
@@ -67,18 +96,39 @@ export async function hybridSearch(
     entityMatch = 'all',
     after,
     before,
+    expandQuery = false,
   } = options;
 
-  logger.debug('Hybrid search starting', { query, tier, limit });
+  logger.debug('Hybrid search starting', { query, tier, limit, expandQuery });
 
-  // Run both searches in parallel
-  const [semanticResults, metadataResults] = await Promise.all([
-    semanticSearch(query, { limit: limit * 3, type }).catch((err) => {
-      logger.debug('Semantic search unavailable, using keyword only', { error: String(err) });
-      return [] as SearchResult[];
-    }),
-    metadataSearch(query, root, { limit: limit * 3 }),
-  ]);
+  // Generate sub-queries for multi-hop retrieval
+  const queries = expandQuery ? expandQueryTerms(query) : [query];
+
+  // Run semantic search for all queries (sequentially to control memory)
+  let semanticResults: SearchResult[] = [];
+  for (const q of queries) {
+    try {
+      const results = await semanticSearch(q, { limit: limit * 3, type });
+      semanticResults.push(...results);
+    } catch (err) {
+      if (q === query) {
+        logger.debug('Semantic search unavailable, using keyword only', { error: String(err) });
+      }
+    }
+  }
+
+  // Deduplicate semantic results by source_path (keep best score)
+  const seenPaths = new Map<string, SearchResult>();
+  for (const r of semanticResults) {
+    const existing = seenPaths.get(r.metadata.source_path);
+    if (!existing || r.distance < existing.distance) {
+      seenPaths.set(r.metadata.source_path, r);
+    }
+  }
+  semanticResults = Array.from(seenPaths.values());
+
+  // Run metadata search (keywords only — expansion handled by semantic)
+  const metadataResults = await metadataSearch(query, root, { limit: limit * 3 });
 
   // Normalize scores
   const maxSemantic = Math.max(...semanticResults.map(r => 1 - r.distance), 0.001);
@@ -169,6 +219,55 @@ export async function hybridSearch(
         hybridScore: normalizedScore * metadataWeight,
         matchType: 'keyword',
       });
+    }
+  }
+
+  // Entity graph augmentation for expanded queries
+  if (expandQuery) {
+    try {
+      const timeline = await getTimelineDb(root);
+      const { getEntityGraphDb } = await import('./entity-graph.js');
+      const entityDb = await getEntityGraphDb(root);
+
+      // Find entities whose names appear in the query
+      const queryLower = query.toLowerCase();
+      const allEntities = entityDb.prepare(
+        'SELECT id, name FROM entities ORDER BY mention_count DESC LIMIT 100'
+      ).all() as Array<{ id: number; name: string }>;
+
+      const matchedEntities = allEntities.filter(
+        e => queryLower.includes(e.name.toLowerCase()) && e.name.length >= 3
+      );
+
+      for (const ent of matchedEntities.slice(0, 3)) {
+        const mentions = entityDb.prepare(
+          'SELECT DISTINCT source_path FROM entity_mentions WHERE entity_id = ? ORDER BY timestamp DESC LIMIT 10'
+        ).all(ent.id) as Array<{ source_path: string }>;
+
+        for (const m of mentions) {
+          if (merged.has(m.source_path)) continue;
+          const event = timeline.prepare(
+            'SELECT id, title, summary, source_path, timestamp, type FROM timeline_events WHERE source_path = ?'
+          ).get(m.source_path) as any;
+
+          if (event) {
+            merged.set(event.source_path, {
+              id: String(event.id),
+              title: event.title || '',
+              content: event.summary || '',
+              source_path: event.source_path,
+              timestamp: event.timestamp,
+              type: event.type,
+              semanticScore: 0,
+              metadataScore: 0.3,
+              hybridScore: 0.15,
+              matchType: 'keyword' as const,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      logger.debug('Entity graph augmentation failed', { error: String(err) });
     }
   }
 

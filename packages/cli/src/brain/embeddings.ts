@@ -43,7 +43,7 @@ const CONFIG = {
   CHUNK_SIZE: 300,
   CHUNK_OVERLAP: 75,
   MAX_RESULTS: 20,
-  EMBEDDING_MODEL: 'text-embedding-3-small',
+  EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'text-embedding-3-large',
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════

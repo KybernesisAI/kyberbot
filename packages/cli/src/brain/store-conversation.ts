@@ -193,7 +193,14 @@ export async function storeConversation(
   const title = input.prompt.length > 100
     ? input.prompt.slice(0, 97) + '...'
     : input.prompt;
-  const fullTitle = `[${input.channel}] ${title}`;
+
+  // Extract date context from the prompt (e.g., "DATE: 8 May, 2023")
+  const dateMatch = input.prompt.match(/^DATE:\s*(.+?)$/m);
+  const sessionDate = dateMatch ? dateMatch[1].trim() : '';
+
+  const fullTitle = sessionDate
+    ? `[${input.channel}] ${sessionDate} — ${title}`
+    : `[${input.channel}] ${title}`;
 
   try {
 
