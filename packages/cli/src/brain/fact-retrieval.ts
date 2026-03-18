@@ -121,7 +121,6 @@ async function searchFactsDirect(
   // Ensure facts table and FTS index exist
   const { ensureFactsTable } = await import('./fact-store.js');
   await ensureFactsTable(root);
-  await ensureFactsFts(db);
 
   const results: ScoredFact[] = [];
 
@@ -158,6 +157,13 @@ async function searchFactsDirect(
       }>;
 
       for (const row of ftsRows) {
+        // Score based on how many query words appear in the fact content
+        const contentLower = row.content.toLowerCase();
+        const matchedWords = words.filter(w => contentLower.includes(w));
+        const wordMatchRatio = matchedWords.length / words.length;
+        // Higher score for facts matching more query words
+        const score = 0.5 + (wordMatchRatio * 0.5); // 0.5-1.0 range
+
         results.push({
           id: row.id,
           content: row.content,
@@ -165,7 +171,7 @@ async function searchFactsDirect(
           confidence: row.confidence || 0.7,
           timestamp: row.timestamp,
           entities: JSON.parse(row.entities_json || '[]'),
-          score: 0.6, // Base score for FTS results
+          score,
           source: 'direct',
           source_conversation_id: row.source_conversation_id,
         });
@@ -361,9 +367,10 @@ async function expandByEntities(
 
     if (matchedEntities.length === 0) return [];
 
-    // 3-hop BFS traversal from seed entities
+    // Only traverse 1 hop for precision — 3-hop pulls too much noise.
+    // Seed entities (hop 0) get ALL their facts; hop 1 only gets relevant ones.
     const seedEntityIds = matchedEntities.slice(0, 5).map(e => e.id);
-    const reachedEntities = traverseEntityGraph(entityDb, seedEntityIds, 3, 20);
+    const reachedEntities = traverseEntityGraph(entityDb, seedEntityIds, 1, 10);
 
     // Build a map of entity ID -> name for all reached entities
     const entityNameMap = new Map<number, string>();
@@ -407,10 +414,17 @@ async function expandByEntities(
         ) || expanded.some(
           ex => wordOverlap(ex.content, ef.content) > 0.8
         );
-
         if (isDuplicate) continue;
 
-        const baseScore = ef.confidence || 0.7;
+        // For non-seed entities (hop > 0), only include facts relevant to the query
+        if (reached.hopDistance > 0) {
+          const relevance = wordOverlap(queryLower, ef.content.toLowerCase());
+          if (relevance < 0.1) continue; // Skip unrelated graph-expanded facts
+        }
+
+        // Entity-matched facts (hop 0) get maximum score — exact name match
+        // is the strongest retrieval signal we have
+        const baseScore = reached.hopDistance === 0 ? 1.0 : (ef.confidence || 0.7);
         expanded.push({
           id: ef.id,
           content: ef.content,
@@ -782,8 +796,10 @@ export async function factFirstSearch(
 
   logger.debug('Layer 2 complete', { expandedFacts: expandedFacts.length });
 
-  // Merge direct + expanded (direct first for scoring priority)
-  const allFacts: ScoredFact[] = [...directFacts, ...expandedFacts];
+  // Merge: entity-expanded facts go FIRST (they have exact name matches),
+  // then direct search results. Sort by score to let entity matches dominate.
+  const allFacts: ScoredFact[] = [...expandedFacts, ...directFacts]
+    .sort((a, b) => b.score - a.score);
 
   // ── Layer 2.5: Scene expansion + bridge discovery ──────────────────────
   let sceneExpandedCount = 0;
@@ -896,7 +912,7 @@ export async function factFirstSearch(
                 confidence: f.confidence || 0.7,
                 timestamp: f.timestamp,
                 entities: JSON.parse(f.entities_json || '[]'),
-                score: 0.8, // Bridge facts are high value
+                score: 0.4, // Bridge facts add context but shouldn't outrank direct matches
                 source: 'bridge',
                 source_conversation_id: f.source_conversation_id,
               });

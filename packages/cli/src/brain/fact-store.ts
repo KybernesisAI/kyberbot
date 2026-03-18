@@ -118,6 +118,28 @@ export async function ensureFactsTable(root: string): Promise<void> {
   if (!colNames.has('access_count')) {
     db.exec(`ALTER TABLE facts ADD COLUMN access_count INTEGER DEFAULT 0`);
   }
+
+  // Create standalone FTS5 table for fact search (no content= mapping to avoid column issues)
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(content, entities);
+
+      CREATE TRIGGER IF NOT EXISTS facts_fts_ai AFTER INSERT ON facts BEGIN
+        INSERT INTO facts_fts(rowid, content, entities) VALUES (new.id, new.content, new.entities_json);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS facts_fts_ad AFTER DELETE ON facts BEGIN
+        INSERT INTO facts_fts(facts_fts, rowid, content, entities) VALUES ('delete', old.id, old.content, old.entities_json);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS facts_fts_au AFTER UPDATE ON facts BEGIN
+        INSERT INTO facts_fts(facts_fts, rowid, content, entities) VALUES ('delete', old.id, old.content, old.entities_json);
+        INSERT INTO facts_fts(rowid, content, entities) VALUES (new.id, new.content, new.entities_json);
+      END;
+    `);
+  } catch {
+    // FTS table or triggers may already exist with different names
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
