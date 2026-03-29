@@ -45,6 +45,7 @@ interface RunOptions {
   sleep: boolean;
   heartbeat: boolean;
   verbose: boolean;
+  watchdog: boolean;
 }
 
 export function createRunCommand(): Command {
@@ -54,7 +55,59 @@ export function createRunCommand(): Command {
     .option('--no-sleep', 'Disable sleep agent')
     .option('--no-heartbeat', 'Disable heartbeat service')
     .option('-v, --verbose', 'Enable verbose (debug) logging', false)
+    .option('--no-watchdog', 'Disable auto-restart on crash')
     .action(async (options: RunOptions) => {
+      // ─────────────────────────────────────────────────────────────
+      // Watchdog: spawn the server as a child process with auto-restart.
+      // Skipped if --no-watchdog or if we're already the child (KYBERBOT_CHILD=1).
+      // ─────────────────────────────────────────────────────────────
+      if (options.watchdog && !process.env.KYBERBOT_CHILD) {
+        const { spawn: spawnChild } = await import('node:child_process');
+        const maxRestarts = 50;
+        const minUptime = 30_000; // 30 seconds — don't restart if it crashes too fast
+        let restarts = 0;
+
+        const startChild = () => {
+          const args = process.argv.slice(2);
+          const child = spawnChild(process.execPath, [process.argv[1], ...args], {
+            env: { ...process.env, KYBERBOT_CHILD: '1' },
+            stdio: 'inherit',
+          });
+
+          const startedAt = Date.now();
+
+          child.on('exit', (code, signal) => {
+            const uptime = Date.now() - startedAt;
+
+            // Clean exit (SIGINT/SIGTERM) — don't restart
+            if (code === 0 || signal === 'SIGINT' || signal === 'SIGTERM') {
+              process.exit(0);
+            }
+
+            restarts++;
+            if (restarts > maxRestarts) {
+              console.error(`KyberBot crashed ${maxRestarts} times — giving up.`);
+              process.exit(1);
+            }
+
+            if (uptime < minUptime) {
+              console.error(`KyberBot crashed after ${Math.round(uptime / 1000)}s — waiting 10s before restart (${restarts}/${maxRestarts})`);
+              setTimeout(startChild, 10_000);
+            } else {
+              console.error(`KyberBot crashed (code=${code}) — restarting (${restarts}/${maxRestarts})`);
+              setTimeout(startChild, 2_000);
+            }
+          });
+
+          // Forward signals to child
+          process.on('SIGINT', () => child.kill('SIGINT'));
+          process.on('SIGTERM', () => child.kill('SIGTERM'));
+        };
+
+        startChild();
+        return;
+      }
+
       try {
         const root = getRoot();
 
