@@ -561,8 +561,8 @@ function optimizeContext(
   let prunedCount = 0;
 
   // Start with all facts sorted by score, capped at limit
-  let keptFacts = [...facts].sort((a, b) => b.score - a.score).slice(0, limit);
-  let keptSupporting = [...supporting].sort((a, b) => b.score - a.score);
+  const keptFacts = [...facts].sort((a, b) => b.score - a.score).slice(0, limit);
+  const keptSupporting = [...supporting].sort((a, b) => b.score - a.score);
 
   // Build context and check token budget
   let assembled = assembleContextString(keptFacts, keptSupporting);

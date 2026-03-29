@@ -61,7 +61,7 @@ const ARTIFACT_PATTERNS = [
   // Shell commands and CLI tools
   /^(curl|wget|bash|sh|zsh|npm|pnpm|yarn|pip|git|docker|node|python|make|gcc)$/i,
   // File paths and extensions
-  /^[.\/~].*\//,
+  /^[./~].*\//,
   /\.(json|yaml|yml|md|ts|js|py|sh|env|toml|lock|log|txt|csv|db)$/i,
   // Error states and operational terms
   /^(BLOCKED|ERROR|FAIL|OK|SUCCESS|null|undefined|true|false|none|N\/A)$/i,

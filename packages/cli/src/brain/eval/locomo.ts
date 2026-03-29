@@ -329,7 +329,7 @@ const NOISE_ENTITY_PATTERNS: RegExp[] = [
   /^(settings|config|permissions?|terminal|shell|command|script)$/i,
   /^(stdout|stderr|stdin|exit code|error|warning)$/i,
   /\.(json|yaml|yml|md|ts|js|py|sh|env|toml|lock|log|txt|csv|db)$/i,
-  /^[.\/~].*\//,
+  /^[./~].*\//,
   /^\d+$/,
   /^.{1,2}$/,
   /^(the|this|that|it|they|we|i|you|he|she|my|our)$/i,
@@ -426,7 +426,8 @@ export async function runLoCoMoBenchmark(
     logger.info('ChromaDB reachable via REST API');
   } catch (err) {
     throw new Error(
-      `ChromaDB is required for LoCoMo benchmark. Start with: docker-compose up -d\n${err}`
+      `ChromaDB is required for LoCoMo benchmark. Start with: docker-compose up -d\n${err}`,
+      { cause: err }
     );
   }
 

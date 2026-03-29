@@ -77,7 +77,7 @@ const NOISE_ENTITY_PATTERNS: RegExp[] = [
   /^(settings|config|permissions?|terminal|shell|command|script)$/i,
   /^(stdout|stderr|stdin|exit code|error|warning)$/i,
   /\.(json|yaml|yml|md|ts|js|py|sh|env|toml|lock|log|txt|csv|db)$/i,
-  /^[.\/~].*\//,       // file paths
+  /^[./~].*\//,       // file paths
   /^\d+$/,              // bare numbers
   /^.{1,2}$/,           // single/double char
   /^(the|this|that|it|they|we|i|you|he|she|my|our)$/i,  // pronouns
