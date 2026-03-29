@@ -60,9 +60,9 @@ export const DEFAULT_CONFIG: SleepConfig = {
   initialDelayMinutes: 5,
 
   batchSize: 50,
-  maxTagsPerRun: 20,
+  maxTagsPerRun: 5,
   maxLinksPerRun: 100,
-  maxSummariesPerRun: 10,
+  maxSummariesPerRun: 5,
 
   decayRatePerHour: 0.002,
   maxDecay: 1.0,
@@ -87,7 +87,7 @@ export const DEFAULT_CONFIG: SleepConfig = {
   enableRewriting: false,
 
   enableEntityHygiene: true,
-  maxMergesPerRun: 10,
+  maxMergesPerRun: 3,
   hygieneConfidenceThreshold: 0.8,
   pruneMinAgeDays: 30,
 
@@ -99,10 +99,10 @@ export const DEFAULT_CONFIG: SleepConfig = {
   maxObservationsPerRun: 10,
 
   enableFactExtraction: true,
-  maxFactsPerRun: 20,
+  maxFactsPerRun: 5,  // Keep low to avoid subprocess OOM in long-running servers
 
   enableContradictionDetection: true,
-  maxContradictionChecksPerRun: 30,
+  maxContradictionChecksPerRun: 5,  // Each check spawns a Haiku subprocess
 
   enableUserProfile: true,
   profileRefreshMinutes: 60,

@@ -19,10 +19,7 @@ import {
   linkEntitiesWithType,
 } from './entity-graph.js';
 import { extractRelationships } from './relationship-extractor.js';
-// NOTE: embeddings.js is NEVER imported in this module. The chromadb npm package
-// loads a ~4GB ONNX runtime that causes OOM in long-running server processes.
-// ChromaDB indexing happens only via explicit CLI commands (kyberbot search),
-// not during conversation ingestion. Facts are searchable via SQLite FTS.
+import { indexDocument, isChromaAvailable } from './embeddings.js';
 
 const logger = createLogger('brain');
 
@@ -254,8 +251,22 @@ export async function storeConversation(
           // Segment storage is best-effort
         }
 
-        // ChromaDB indexing removed from ingestion to prevent OOM in long-running servers.
-        // Facts are searchable via SQLite FTS. ChromaDB indexing can be done via kyberbot reindex.
+        // Store segment in ChromaDB (for semantic search)
+        try {
+          if (isChromaAvailable()) {
+            await indexDocument(segId, seg.text, {
+              type: 'conversation',
+              source_path: segPath,
+              title: fullTitle,
+              timestamp,
+              entities: entityNames,
+              topics: topicNames,
+              summary: seg.text,
+            });
+          }
+        } catch {
+          // Segment embedding is best-effort
+        }
       }
       logger.debug('Stored conversation segments', {
         conversationId,
@@ -323,9 +334,25 @@ export async function storeConversation(
     logger.warn('Entity graph storage failed', { error: String(err) });
   }
 
-  // ChromaDB indexing removed from ingestion to prevent OOM in long-running servers.
-  // Conversations are searchable via timeline FTS + facts FTS + entity graph.
-  // ChromaDB semantic search is available via explicit CLI commands only.
+  // ── Step 4: Embeddings (best-effort) ─────────────────────────────────
+  // Skip parent-level ChromaDB indexing if segments were created (Step 2b).
+  const hasSegments = fullText.length > 250;
+  try {
+    if (isChromaAvailable() && !hasSegments) {
+      await indexDocument(conversationId, fullText, {
+        type: 'conversation',
+        source_path: sourcePath,
+        title: `[${input.channel}] ${input.prompt.slice(0, 80)}`,
+        timestamp,
+        entities: entityNames,
+        topics: topicNames,
+        summary: input.response.slice(0, 300),
+      });
+      logger.debug('Indexed conversation in embeddings', { conversationId });
+    }
+  } catch (err) {
+    logger.warn('Embedding indexing failed', { error: String(err) });
+  }
 
   logger.info('Conversation stored', {
     conversationId,
