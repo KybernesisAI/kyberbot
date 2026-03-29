@@ -231,22 +231,30 @@ export class ClaudeClient {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      let stdout = '';
-      let stderr = '';
+      const chunks: Buffer[] = [];
+      const errChunks: Buffer[] = [];
 
-      proc.stdout.on('data', (data) => { stdout += data.toString(); });
-      proc.stderr.on('data', (data) => { stderr += data.toString(); });
+      proc.stdout.on('data', (data: Buffer) => { chunks.push(data); });
+      proc.stderr.on('data', (data: Buffer) => { errChunks.push(data); });
 
       proc.on('close', (code) => {
+        const stdout = Buffer.concat(chunks).toString().trim();
+        const stderr = Buffer.concat(errChunks).toString();
+        // Clear references to let GC reclaim buffers
+        chunks.length = 0;
+        errChunks.length = 0;
+
         if (code === 0) {
-          resolve(stdout.trim());
+          resolve(stdout);
         } else {
-          logger.error(`claude subprocess exited with code ${code}`, { stderr });
-          reject(new Error(`claude subprocess failed: ${stderr || `exit code ${code}`}`));
+          logger.error(`claude subprocess exited with code ${code}`, { stderr: stderr.slice(0, 500) });
+          reject(new Error(`claude subprocess failed: ${stderr.slice(0, 500) || `exit code ${code}`}`));
         }
       });
 
       proc.on('error', (err) => {
+        chunks.length = 0;
+        errChunks.length = 0;
         reject(new Error(`Failed to spawn claude: ${err.message}. Is Claude Code installed?`));
       });
     });
