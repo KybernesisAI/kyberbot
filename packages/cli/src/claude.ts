@@ -25,6 +25,13 @@ export interface CompleteOptions {
   system?: string;
   maxTokens?: number;
   maxTurns?: number;
+  /**
+   * Force subprocess mode for this call. Each invocation runs in an
+   * isolated child process whose memory is reclaimed on exit.
+   * Use for background/brain operations to avoid heap accumulation
+   * in the long-lived server process.
+   */
+  subprocess?: boolean;
 }
 
 // Model ID mapping
@@ -81,6 +88,12 @@ export class ClaudeClient {
     // Always resolve model — never let subprocess/agent-sdk fall back to CLI defaults
     if (!opts.model) {
       opts.model = (getClaudeModel() || 'opus') as 'haiku' | 'sonnet' | 'opus';
+    }
+
+    // Force subprocess mode for background/brain operations to prevent
+    // heap accumulation from in-process Agent SDK calls
+    if (opts.subprocess) {
+      return this.completeSubprocess(prompt, opts);
     }
 
     if (this.mode === 'agent-sdk') {

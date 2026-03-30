@@ -129,7 +129,8 @@ async function tick(): Promise<void> {
 
     const client = getClaudeClient();
     const result = await client.complete(prompt, {
-      maxTurns: 30,
+      maxTurns: 15,
+      subprocess: true,
       system: [
         'You are a heartbeat task executor for a KyberBot agent.',
         'You have full tool access — you can run Bash commands, read/write files, and make HTTP requests.',

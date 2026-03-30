@@ -120,6 +120,7 @@ export async function extractRelationships(
         system: EXTRACTION_PROMPT,
         maxTokens,
         maxTurns: 1,
+        subprocess: true,
       }
     );
 

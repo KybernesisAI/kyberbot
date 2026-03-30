@@ -123,6 +123,8 @@ export async function executeHandler(req: Request, res: Response) {
 
     // Parse stdout to extract result metadata
     const result = parseStreamJsonResult(stdout);
+    // Release stdout buffer immediately — can be very large for stream-json
+    stdout = '';
 
     sendLine(res, {
       type: 'result',

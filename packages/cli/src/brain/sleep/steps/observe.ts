@@ -130,6 +130,7 @@ export async function runObserveStep(
             model: 'haiku',
             maxTokens: 1024,
             maxTurns: 1,
+            subprocess: true,
           }
         );
 

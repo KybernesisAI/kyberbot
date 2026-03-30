@@ -24,6 +24,18 @@
     "type": "git",
     "url": "https://github.com/kyberbot/kyberbot.git"
   },
+  "pnpm": {
+    "overrides": {
+      "flatted": ">=3.4.2",
+      "music-metadata": ">=11.12.3"
+    },
+    "auditConfig": {
+      "ignoreCves": [
+        "GHSA-c2c7-rcm5-vvqj",
+        "GHSA-37ch-88jc-xwx2"
+      ]
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/supertest": "^7.2.0",

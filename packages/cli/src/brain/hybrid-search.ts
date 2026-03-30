@@ -196,6 +196,7 @@ Ranking (JSON array of numbers):`;
       model: 'haiku',
       maxTokens: 200,
       maxTurns: 1,
+      subprocess: true,
     });
 
     const match = response.match(/\[[\d,\s]+\]/);

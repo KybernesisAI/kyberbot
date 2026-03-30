@@ -134,6 +134,7 @@ Only include facts with "updates" or "extends" relationship. Return [] if no rel
       model: 'haiku',
       maxTokens: 512,
       maxTurns: 1,
+      subprocess: true,
     });
 
     // 5. Parse response

@@ -339,19 +339,25 @@ function buildSameNameCandidates(
 }
 
 function findVariantCandidates(db: import('better-sqlite3').Database): CandidatePair[] {
+  // Cap at 500 entities to keep the O(n²) comparison bounded (~125k pairs max).
+  // Ordered by mention_count DESC so high-value entities are compared first.
   const entities = db.prepare(`
     SELECT id, name, normalized_name, type, mention_count
     FROM entities
     ORDER BY mention_count DESC
+    LIMIT 500
   `).all() as Array<{
     id: number; name: string; normalized_name: string; type: string; mention_count: number;
   }>;
 
   const candidates: CandidatePair[] = [];
   const seen = new Set<string>();
+  const MAX_CANDIDATES = 50;
 
   for (let i = 0; i < entities.length; i++) {
+    if (candidates.length >= MAX_CANDIDATES) break;
     for (let j = i + 1; j < entities.length; j++) {
+      if (candidates.length >= MAX_CANDIDATES) break;
       const a = entities[i];
       const b = entities[j];
       const key = `${Math.min(a.id, b.id)}-${Math.max(a.id, b.id)}`;
@@ -592,7 +598,7 @@ Rules:
 - A person and a company with the same name are usually DIFFERENT unless context clearly shows they refer to the same thing.
 
 Return ONLY the JSON array, no other text.`,
-      { model: 'haiku', maxTokens: 1500 }
+      { model: 'haiku', maxTokens: 1500, subprocess: true }
     ),
     {
       retries: 2,

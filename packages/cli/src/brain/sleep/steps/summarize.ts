@@ -159,7 +159,7 @@ export async function runSummarizeStep(
         );
 
         const responseText = await withRetry(
-          () => claude.complete(prompt, { model: 'haiku', maxTokens: 300 }),
+          () => claude.complete(prompt, { model: 'haiku', maxTokens: 300, subprocess: true }),
           {
             retries: 2,
             delay: 2000,

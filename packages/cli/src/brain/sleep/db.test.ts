@@ -163,13 +163,12 @@ describe('maintenance_queue schema', () => {
     }).toThrow();
   });
 
-  it('should enforce valid task values', () => {
+  it('should accept any task value after migration removes CHECK constraint', () => {
     const db = getSleepDb(root);
-    expect(() => {
-      db.prepare(`
-        INSERT INTO maintenance_queue (item_type, item_id, task) VALUES ('timeline', '1', 'invalid')
-      `).run();
-    }).toThrow();
+    const result = db.prepare(`
+      INSERT INTO maintenance_queue (item_type, item_id, task) VALUES ('timeline', '1', 'consolidate')
+    `).run();
+    expect(result.lastInsertRowid).toBeGreaterThan(0);
   });
 });
 
@@ -200,23 +199,21 @@ describe('memory_edges schema', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('should enforce valid relation values', () => {
+  it('should accept any relation value after migration removes CHECK constraint', () => {
     const db = getSleepDb(root);
-    expect(() => {
-      db.prepare(`
-        INSERT INTO memory_edges (from_path, to_path, relation) VALUES ('a.md', 'c.md', 'invalid')
-      `).run();
-    }).toThrow();
+    const result = db.prepare(`
+      INSERT INTO memory_edges (from_path, to_path, relation) VALUES ('a.md', 'c.md', 'consolidation')
+    `).run();
+    expect(result.lastInsertRowid).toBeGreaterThan(0);
   });
 
-  it('should enforce valid method values', () => {
+  it('should accept any method value after migration removes CHECK constraint', () => {
     const db = getSleepDb(root);
-    expect(() => {
-      db.prepare(`
-        INSERT INTO memory_edges (from_path, to_path, relation, method)
-        VALUES ('a.md', 'd.md', 'related', 'invalid')
-      `).run();
-    }).toThrow();
+    const result = db.prepare(`
+      INSERT INTO memory_edges (from_path, to_path, relation, method)
+      VALUES ('a.md', 'd.md', 'related', 'custom-tool')
+    `).run();
+    expect(result.lastInsertRowid).toBeGreaterThan(0);
   });
 });
 
