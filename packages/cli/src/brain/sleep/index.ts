@@ -68,7 +68,8 @@ export async function startSleepAgent(
     `).run();
     const runId = runResult.lastInsertRowid as number;
 
-    logger.info('Sleep cycle starting', { runId });
+    const memMB = () => Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+    logger.info('Sleep cycle starting', { runId, heapMB: memMB() });
 
     const metrics: Partial<RunMetrics> = {};
 
@@ -79,7 +80,7 @@ export async function startSleepAgent(
       const decayResult = await runDecayStep(root, cfg);
       metrics.decay = { ...decayResult, durationMs: Date.now() - decayStart };
       recordTelemetry(db, runId, 'decay', metrics.decay);
-      logger.info('Decay step completed', { runId, ...metrics.decay });
+      logger.info('Decay step completed', { runId, heapMB: memMB(), ...metrics.decay });
 
       // Step 2: Tag
       saveCheckpoint(db, runId, 'tag');
@@ -87,7 +88,7 @@ export async function startSleepAgent(
       const tagResult = await runTagStep(root, cfg);
       metrics.tag = { ...tagResult, durationMs: Date.now() - tagStart };
       recordTelemetry(db, runId, 'tag', metrics.tag);
-      logger.info('Tag step completed', { runId, ...metrics.tag });
+      logger.info('Tag step completed', { runId, heapMB: memMB(), ...metrics.tag });
 
       // Step 2.5: Consolidate (merge repeated timeline entries)
       saveCheckpoint(db, runId, 'consolidate');
@@ -95,7 +96,7 @@ export async function startSleepAgent(
       const consolidateResult = await runConsolidateStep(root, cfg);
       metrics.consolidate = { ...consolidateResult, durationMs: Date.now() - consolidateStart };
       recordTelemetry(db, runId, 'consolidate', metrics.consolidate);
-      logger.info('Consolidate step completed', { runId, ...metrics.consolidate });
+      logger.info('Consolidate step completed', { runId, heapMB: memMB(), ...metrics.consolidate });
 
       // Step 3: Link
       saveCheckpoint(db, runId, 'link');
@@ -103,7 +104,7 @@ export async function startSleepAgent(
       const linkResult = await runLinkStep(root, cfg);
       metrics.link = { ...linkResult, durationMs: Date.now() - linkStart };
       recordTelemetry(db, runId, 'link', metrics.link);
-      logger.info('Link step completed', { runId, ...metrics.link });
+      logger.info('Link step completed', { runId, heapMB: memMB(), ...metrics.link });
 
       // Step 4: Tier
       saveCheckpoint(db, runId, 'tier');
@@ -111,7 +112,7 @@ export async function startSleepAgent(
       const tierResult = await runTierStep(root, cfg);
       metrics.tier = { ...tierResult, durationMs: Date.now() - tierStart };
       recordTelemetry(db, runId, 'tier', metrics.tier);
-      logger.info('Tier step completed', { runId, ...metrics.tier });
+      logger.info('Tier step completed', { runId, heapMB: memMB(), ...metrics.tier });
 
       // Step 5: Summarize
       saveCheckpoint(db, runId, 'summarize');
@@ -119,7 +120,7 @@ export async function startSleepAgent(
       const summarizeResult = await runSummarizeStep(root, cfg);
       metrics.summarize = { ...summarizeResult, durationMs: Date.now() - summarizeStart };
       recordTelemetry(db, runId, 'summarize', metrics.summarize);
-      logger.info('Summarize step completed', { runId, ...metrics.summarize });
+      logger.info('Summarize step completed', { runId, heapMB: memMB(), ...metrics.summarize });
 
       // Step 5.5: Observe (extract structured observations from conversations)
       saveCheckpoint(db, runId, 'observe');
@@ -127,7 +128,7 @@ export async function startSleepAgent(
       const observeResult = await runObserveStep(root, cfg);
       metrics.observe = { ...observeResult, durationMs: Date.now() - observeStart };
       recordTelemetry(db, runId, 'observe', metrics.observe);
-      logger.info('Observe step completed', { runId, ...metrics.observe });
+      logger.info('Observe step completed', { runId, heapMB: memMB(), ...metrics.observe });
 
       // Step 5.6: Profile (regenerate user profile from fact store)
       saveCheckpoint(db, runId, 'profile');
@@ -135,7 +136,7 @@ export async function startSleepAgent(
       const profileResult = await runProfileStep(root, cfg);
       metrics.profile = { ...profileResult, durationMs: Date.now() - profileStart };
       recordTelemetry(db, runId, 'profile', metrics.profile);
-      logger.info('Profile step completed', { runId, ...metrics.profile });
+      logger.info('Profile step completed', { runId, heapMB: memMB(), ...metrics.profile });
 
       // Step 6: Entity Hygiene
       saveCheckpoint(db, runId, 'entity-hygiene');
@@ -143,7 +144,7 @@ export async function startSleepAgent(
       const hygieneResult = await runEntityHygieneStep(root, cfg);
       metrics.entityHygiene = { ...hygieneResult, durationMs: Date.now() - hygieneStart };
       recordTelemetry(db, runId, 'entity-hygiene', metrics.entityHygiene);
-      logger.info('Entity hygiene step completed', { runId, ...metrics.entityHygiene });
+      logger.info('Entity hygiene step completed', { runId, heapMB: memMB(), ...metrics.entityHygiene });
 
       // Complete run
       const totalDuration = Date.now() - startTime;

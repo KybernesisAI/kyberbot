@@ -143,7 +143,7 @@ async function tick(): Promise<void> {
     if (result.trim() === 'HEARTBEAT_OK') {
       logger.debug('Heartbeat: nothing actionable');
     } else {
-      logger.info('Heartbeat result:', { result: result.substring(0, 200) });
+      logger.info('Heartbeat result:', { result: result.substring(0, 200), heapMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) });
 
       // Log to heartbeat log
       const logDir = dirname(paths.heartbeatLog);
