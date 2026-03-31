@@ -72,6 +72,25 @@ kyberbot remember "Decision: using Next.js for the frontend" --response "Chosen 
 kyberbot remember "Weekly sync with product team — discussed Q2 roadmap, prioritized auth overhaul and dashboard redesign" --response "Auth overhaul starts March 1, dashboard redesign in April. Sarah leading auth, Mike on dashboard."
 ```
 
+## Correction Detection
+
+When the user says things like:
+- "That's wrong about [entity]"
+- "Actually, [entity] works at [X], not [Y]"
+- "No, [correct fact]"
+- "Forget that about [entity]"
+- "[Entity] doesn't work at [X] anymore"
+
+Treat this as a correction:
+
+1. Run `kyberbot recall "<entity>"` to see what you currently know
+2. Store the **correct** fact with `kyberbot remember` — the contradiction detection system will automatically supersede the old, lower-confidence fact
+3. Confirm briefly: "Corrected."
+
+The memory system uses source confidence weighting — facts stored via terminal `remember` get 0.95 confidence (user-direct), which is higher than chat messages (0.85) or AI-extracted facts (0.60). So a correction stored here will naturally take precedence over earlier, less-reliable information.
+
+If the user says something is wrong but doesn't provide a replacement (e.g., "That's not true about John"), acknowledge the issue and ask what the correct information is.
+
 ## Notes
 
 - This skill complements (not replaces) updating USER.md, SOUL.md, and brain/ files. Use those for structured, long-lived information. Use `remember` for capturing the stream of events and facts.

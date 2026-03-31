@@ -13,7 +13,8 @@
 import { getClaudeClient } from '../../../claude.js';
 import { createLogger } from '../../../logger.js';
 import { SleepConfig } from '../config.js';
-import { getEntityGraphDb, mergeEntities, deleteEntity, normalizeEntityName } from '../../entity-graph.js';
+import { getEntityGraphDb, mergeEntities, deleteEntity, normalizeEntityName, getEntityProfile, saveEntityProfile } from '../../entity-graph.js';
+import { getFactsForEntity } from '../../fact-store.js';
 import { withRetry } from '../../../utils/retry.js';
 
 const logger = createLogger('sleep:entity-hygiene');
@@ -281,6 +282,54 @@ export async function runEntityHygieneStep(
   } catch (error) {
     logger.error('Entity hygiene step failed', { error: String(error) });
     errors.push(`Entity hygiene failed: ${error}`);
+  }
+
+  // ── Phase 5: Generate narrative profiles for well-known entities ─────
+  try {
+    const profileCandidates = db.prepare(`
+      SELECT id, name, type FROM entities
+      WHERE mention_count >= 3
+      ORDER BY mention_count DESC
+      LIMIT 10
+    `).all() as Array<{ id: number; name: string; type: string }>;
+
+    let profilesGenerated = 0;
+    const maxProfiles = 5;
+
+    for (const entity of profileCandidates) {
+      if (profilesGenerated >= maxProfiles) break;
+
+      try {
+        const facts = await getFactsForEntity(root, entity.name, { latestOnly: true, limit: 15 });
+        if (facts.length < 3) continue;
+
+        // Check if profile exists and is still up-to-date
+        const existing = await getEntityProfile(root, entity.id);
+        if (existing && existing.fact_count === facts.length) continue;
+
+        const factList = facts.map(f => `- ${f.content}`).join('\n');
+        const client = getClaudeClient();
+        const profileText = await client.complete(
+          `Write a concise 2-sentence profile for this ${entity.type}. Be factual, third person, specific. Do not start with "Based on..." or reference data sources.\n\nEntity: ${entity.name} (${entity.type})\nFacts:\n${factList}`,
+          { model: 'haiku', maxTokens: 200, maxTurns: 1, subprocess: true }
+        );
+
+        if (profileText && profileText.length > 20) {
+          await saveEntityProfile(root, entity.id, profileText.trim(), facts.length);
+          profilesGenerated++;
+          logger.debug(`Generated profile for ${entity.name}`, { factCount: facts.length });
+        }
+      } catch (err) {
+        errors.push(`Profile generation failed for ${entity.name}: ${err}`);
+      }
+    }
+
+    if (profilesGenerated > 0) {
+      logger.info(`Generated ${profilesGenerated} entity profiles`);
+    }
+  } catch (err) {
+    // Non-critical: profile generation is best-effort
+    logger.debug('Profile generation step skipped', { error: String(err) });
   }
 
   return buildResult(artifactsCleaned, merged, pruned, assessed, errors);

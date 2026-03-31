@@ -123,5 +123,41 @@ export async function runDecayStep(
     errors.push(`Decay step failed: ${error}`);
   }
 
+  // ── Fact confidence decay (weekly) ──────────────────────────────────
+  // Reduce confidence on old, unreinforced AI/chat facts so stale data fades
+  try {
+    await ensureFactsTable(root);
+    const factsDb = await getTimelineDb(root);
+
+    // Only run weekly — check if last decay was >7 days ago
+    const lastDecay = factsDb.prepare(`
+      SELECT MAX(updated_at) as last_decay FROM facts
+      WHERE updated_at IS NOT NULL AND confidence < 0.85
+    `).get() as { last_decay: string | null } | undefined;
+
+    const shouldDecayFacts = !lastDecay?.last_decay ||
+      (Date.now() - new Date(lastDecay.last_decay).getTime()) > 7 * 24 * 60 * 60 * 1000;
+
+    if (shouldDecayFacts) {
+      const factDecay = factsDb.prepare(`
+        UPDATE facts
+        SET confidence = MAX(confidence * 0.95, 0.15),
+            updated_at = datetime('now')
+        WHERE source_type IN ('ai-extraction', 'chat')
+          AND created_at < datetime('now', '-90 days')
+          AND last_reinforced_at IS NULL
+          AND COALESCE(is_retracted, 0) = 0
+          AND confidence > 0.15
+          AND is_latest = 1
+      `).run();
+
+      if (factDecay.changes > 0) {
+        logger.info(`Decayed confidence on ${factDecay.changes} old unreinforced facts`);
+      }
+    }
+  } catch {
+    // Non-fatal: facts table may not exist yet
+  }
+
   return { count: updated, processed, errors: errors.length > 0 ? errors : undefined };
 }

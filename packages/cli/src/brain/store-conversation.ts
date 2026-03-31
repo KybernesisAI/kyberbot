@@ -20,6 +20,7 @@ import {
 } from './entity-graph.js';
 import { extractRelationships } from './relationship-extractor.js';
 import { indexDocument, isChromaAvailable } from './embeddings.js';
+import { extractFactsRealtime } from './fact-extractor.js';
 
 const logger = createLogger('brain');
 
@@ -83,11 +84,22 @@ const NOISE_ENTITY_PATTERNS: RegExp[] = [
   /^(the|this|that|it|they|we|i|you|he|she|my|our)$/i,  // pronouns
   /^[a-f0-9-]{36}$/i,  // UUIDs
   /^(http|https|localhost|127\.0\.0\.1|0\.0\.0\.0)/i,    // URLs/hosts
+  /^speaker\s*\d+$/i,  // transcription artifacts (Speaker 0, Speaker 1)
 ];
+
+/** Conversational noise words that should never become entities */
+const NOISE_WORDS = new Set([
+  'speaker', 'user', 'assistant', 'narrator', 'host',
+  'ok', 'okay', 'yes', 'no', 'yeah', 'nah', 'yep', 'nope',
+  'hey', 'hi', 'hello', 'bye', 'goodbye', 'thanks', 'thank',
+  'the', 'this', 'that', 'thing', 'stuff', 'someone', 'something',
+  'everyone', 'anybody', 'nothing', 'everything',
+  'person', 'unknown', 'other', 'another',
+]);
 
 /**
  * Filter noise entities from extraction results.
- * Uses built-in patterns plus optional agent-specific stoplist.
+ * Uses built-in patterns, noise word set, plus optional agent-specific stoplist.
  */
 export function filterNoiseEntities(
   entities: Array<{ name: string; type: string }>,
@@ -100,6 +112,7 @@ export function filterNoiseEntities(
     const lower = name.toLowerCase();
 
     if (stopSet.has(lower)) return false;
+    if (NOISE_WORDS.has(lower)) return false;
     if (NOISE_ENTITY_PATTERNS.some((p) => p.test(name))) return false;
 
     return true;
@@ -119,6 +132,31 @@ export interface ConversationInput {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SOURCE CONFIDENCE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Confidence scores by source channel — higher = more trustworthy */
+export const SOURCE_CONFIDENCE: Record<string, number> = {
+  'user-correction': 1.0,   // User explicitly correcting data
+  'user-direct':     0.95,  // User stating something in terminal
+  'chat':            0.85,  // Chat message (Telegram/WhatsApp)
+  'heartbeat':       0.80,  // Heartbeat task output
+  'ai-extraction':   0.60,  // LLM extracted from content
+};
+
+/** Map channel name to source type */
+function channelToSourceType(channel: string): string {
+  switch (channel) {
+    case 'terminal': return 'user-direct';
+    case 'heartbeat': return 'heartbeat';
+    case 'telegram':
+    case 'whatsapp':
+    case 'web':
+    default: return 'chat';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -135,6 +173,8 @@ export async function storeConversation(
   const timestamp = input.timestamp || new Date().toISOString();
   const sourcePath = `channel://${input.channel}/${conversationId}`;
   const fullText = `User: ${input.prompt}\n\nAssistant: ${input.response}`;
+  const sourceType = channelToSourceType(input.channel);
+  const sourceConfidence = SOURCE_CONFIDENCE[sourceType] ?? 0.85;
 
   logger.debug('Storing conversation', {
     channel: input.channel,
@@ -298,7 +338,9 @@ export async function storeConversation(
           conversationId,
           sourcePath,
           input.prompt.slice(0, 200),
-          timestamp
+          timestamp,
+          sourceType,
+          sourceConfidence
         );
       } catch (err) {
         logger.warn(`Failed to store entity: ${entity.name}`, { error: String(err) });
@@ -332,6 +374,15 @@ export async function storeConversation(
     });
   } catch (err) {
     logger.warn('Entity graph storage failed', { error: String(err) });
+  }
+
+  // ── Step 3b: Real-time fact extraction (best-effort) ─────────────────
+  try {
+    await extractFactsRealtime(
+      root, fullText, entityNames, sourcePath, conversationId, timestamp, sourceType
+    );
+  } catch {
+    // Fact extraction is best-effort — never blocks conversation storage
   }
 
   // ── Step 4: Embeddings (best-effort) ─────────────────────────────────

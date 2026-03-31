@@ -53,6 +53,9 @@ export interface SleepConfig {
 
   enableUserProfile: boolean;
   profileRefreshMinutes: number;
+
+  enableReasoning: boolean;
+  maxReasoningPerRun: number;
 }
 
 export const DEFAULT_CONFIG: SleepConfig = {
@@ -106,4 +109,7 @@ export const DEFAULT_CONFIG: SleepConfig = {
 
   enableUserProfile: true,
   profileRefreshMinutes: 60,
+
+  enableReasoning: true,
+  maxReasoningPerRun: 5,  // Process up to 5 entities per sleep cycle
 };

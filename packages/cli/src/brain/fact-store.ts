@@ -49,6 +49,7 @@ export interface FactInput {
   confidence: number;
   category: FactCategory;
   expires_at?: string;  // ISO 8601 — temporal facts expire automatically
+  source_type?: string; // 'user-correction' | 'user-direct' | 'chat' | 'heartbeat' | 'ai-extraction'
 }
 
 export interface StoredFact extends FactInput {
@@ -119,6 +120,18 @@ export async function ensureFactsTable(root: string): Promise<void> {
   if (!colNames.has('access_count')) {
     db.exec(`ALTER TABLE facts ADD COLUMN access_count INTEGER DEFAULT 0`);
   }
+  if (!colNames.has('source_type')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN source_type TEXT DEFAULT 'chat'`);
+  }
+  if (!colNames.has('is_retracted')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN is_retracted INTEGER DEFAULT 0`);
+  }
+  if (!colNames.has('retracted_by')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN retracted_by TEXT`);
+  }
+  if (!colNames.has('last_reinforced_at')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN last_reinforced_at TEXT`);
+  }
 
   // Create standalone FTS5 table for fact search (no content= mapping to avoid column issues)
   try {
@@ -155,8 +168,8 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
 
   const result = db.prepare(`
     INSERT OR REPLACE INTO facts
-      (content, source_path, source_conversation_id, entities_json, timestamp, confidence, category, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (content, source_path, source_conversation_id, entities_json, timestamp, confidence, category, expires_at, source_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fact.content,
     fact.source_path,
@@ -166,6 +179,7 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
     fact.confidence,
     fact.category,
     fact.expires_at || null,
+    fact.source_type || 'chat',
   );
 
   const factId = result.lastInsertRowid as number;
@@ -199,6 +213,57 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
 }
 
 /**
+ * Retract a fact (mark as no longer valid without deleting).
+ * Used when a user explicitly says something is wrong.
+ */
+export async function retractFact(
+  root: string,
+  factId: number,
+  retractedBy: string = 'user-correction'
+): Promise<void> {
+  const db = await getTimelineDb(root);
+  db.prepare(`
+    UPDATE facts SET is_retracted = 1, retracted_by = ?, is_latest = 0, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(retractedBy, factId);
+  logger.debug('Retracted fact', { factId, retractedBy });
+}
+
+/**
+ * Reinforce a fact — update last_reinforced_at when the same fact is seen again.
+ * Prevents confidence decay on facts that keep getting confirmed.
+ */
+export async function reinforceFact(
+  root: string,
+  factId: number
+): Promise<void> {
+  const db = await getTimelineDb(root);
+  db.prepare(`
+    UPDATE facts SET last_reinforced_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ?
+  `).run(factId);
+  logger.debug('Reinforced fact', { factId });
+}
+
+/**
+ * Get a single fact by ID.
+ */
+export async function getFactById(
+  root: string,
+  factId: number
+): Promise<StoredFact | null> {
+  const db = await getTimelineDb(root);
+  const row = db.prepare(`
+    SELECT id, content, source_path, source_conversation_id, entities_json,
+           timestamp, confidence, category, created_at,
+           COALESCE(is_latest, 1) as is_latest, superseded_by
+    FROM facts WHERE id = ?
+  `).get(factId) as (Omit<StoredFact, 'entities'> & { entities_json: string }) | undefined;
+  if (!row) return null;
+  return { ...row, entities: JSON.parse(row.entities_json) } as StoredFact;
+}
+
+/**
  * Retrieve facts associated with a given entity name.
  * Searches entities_json for a case-insensitive match.
  */
@@ -220,6 +285,7 @@ export async function getFactsForEntity(
            superseded_by
     FROM facts
     WHERE LOWER(entities_json) LIKE ?
+      AND COALESCE(is_retracted, 0) = 0
   `;
   const params: unknown[] = [entityPattern];
 

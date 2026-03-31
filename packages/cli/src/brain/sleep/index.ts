@@ -24,6 +24,7 @@ import { runEntityHygieneStep, EntityHygieneResult } from './steps/entity-hygien
 import { runConsolidateStep, ConsolidateResult } from './steps/consolidate.js';
 import { runObserveStep, ObserveResult } from './steps/observe.js';
 import { runProfileStep, ProfileResult } from './steps/profile.js';
+import { runReasoningStep, ReasoningResult } from './steps/reasoning.js';
 import { saveCheckpoint } from './utils/checkpoint.js';
 
 const logger = createLogger('sleep-agent');
@@ -36,6 +37,7 @@ export interface RunMetrics {
   tier: TierResult & { durationMs: number };
   summarize: SummarizeResult & { durationMs: number };
   observe?: ObserveResult & { durationMs: number };
+  reasoning?: ReasoningResult & { durationMs: number };
   profile?: ProfileResult & { durationMs: number };
   entityHygiene?: EntityHygieneResult & { durationMs: number };
   totalDurationMs: number;
@@ -137,6 +139,14 @@ export async function startSleepAgent(
       metrics.profile = { ...profileResult, durationMs: Date.now() - profileStart };
       recordTelemetry(db, runId, 'profile', metrics.profile);
       logger.info('Profile step completed', { runId, heapMB: memMB(), ...metrics.profile });
+
+      // Step 5.7: Reasoning (deduction + induction on entities with 3+ facts)
+      saveCheckpoint(db, runId, 'reasoning');
+      const reasoningStart = Date.now();
+      const reasoningResult = await runReasoningStep(root, cfg);
+      metrics.reasoning = { ...reasoningResult, durationMs: Date.now() - reasoningStart };
+      recordTelemetry(db, runId, 'reasoning', metrics.reasoning);
+      logger.info('Reasoning step completed', { runId, heapMB: memMB(), ...metrics.reasoning });
 
       // Step 6: Entity Hygiene
       saveCheckpoint(db, runId, 'entity-hygiene');

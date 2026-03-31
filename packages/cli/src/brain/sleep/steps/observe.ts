@@ -13,9 +13,10 @@
 import { createLogger } from '../../../logger.js';
 import { getTimelineDb } from '../../timeline.js';
 import { getClaudeClient } from '../../../claude.js';
-import { storeFact, ensureFactsTable, markFactSuperseded, VALID_CATEGORIES, type FactInput, type FactCategory } from '../../fact-store.js';
+import { storeFact, ensureFactsTable, markFactSuperseded, getFactById, VALID_CATEGORIES, type FactInput, type FactCategory } from '../../fact-store.js';
 import { detectContradictions } from '../../fact-contradiction.js';
 import { detectTemporalExpiry } from '../../fact-temporal.js';
+import { createContradiction, getEntityGraphDb } from '../../entity-graph.js';
 import type { SleepConfig } from '../config.js';
 
 const logger = createLogger('sleep:observe');
@@ -98,6 +99,10 @@ export async function runObserveStep(
           SELECT 1 FROM facts f
           WHERE f.source_path LIKE 'fact://' || REPLACE(te.source_path, 'channel://', '') || '/%'
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM facts f
+          WHERE f.source_path LIKE 'realtime://' || REPLACE(te.source_path, 'channel://', '') || '/%'
+        )
       ORDER BY te.timestamp DESC
       LIMIT ?
     `).all(maxPerRun) as Array<{
@@ -162,8 +167,9 @@ export async function runObserveStep(
             source_conversation_id: parentId,
             entities: fact.entities || [],
             timestamp: event.timestamp,
-            confidence: fact.confidence,
+            confidence: Math.min(fact.confidence, 0.60), // AI-extracted facts capped at 0.60
             category: fact.category as FactCategory,
+            source_type: 'ai-extraction',
           };
 
           // Detect temporal expressions and set automatic expiry
@@ -188,8 +194,42 @@ export async function runObserveStep(
 
                 for (const c of contradictionResult.contradictions) {
                   if (c.relationship === 'updates') {
-                    await markFactSuperseded(root, c.oldFactId, storedId);
-                    logger.debug(`Fact ${c.oldFactId} superseded by ${storedId}: ${c.rationale}`);
+                    // Check confidence gap — close confidence means we can't auto-resolve
+                    const oldFact = await getFactById(root, c.oldFactId);
+                    const confidenceGap = oldFact
+                      ? Math.abs(factInput.confidence - oldFact.confidence)
+                      : 1;
+
+                    if (confidenceGap > 0.3 || !oldFact) {
+                      // Large gap: auto-resolve (higher confidence wins)
+                      await markFactSuperseded(root, c.oldFactId, storedId);
+                      logger.debug(`Fact ${c.oldFactId} superseded by ${storedId}: ${c.rationale}`);
+                    } else {
+                      // Close confidence: create contradiction record, keep both
+                      try {
+                        // Find entity ID for the contradiction record
+                        const entityDb = await getEntityGraphDb(root);
+                        const entityName = (factInput.entities[0] || '').toLowerCase();
+                        const entityRow = entityDb.prepare(
+                          'SELECT id FROM entities WHERE LOWER(name) = ? OR LOWER(normalized_name) = ? LIMIT 1'
+                        ).get(entityName, entityName) as { id: number } | undefined;
+
+                        if (entityRow) {
+                          await createContradiction(
+                            root,
+                            entityRow.id,
+                            c.oldFactId,
+                            storedId,
+                            oldFact.content,
+                            factInput.content,
+                            c.rationale
+                          );
+                          logger.debug(`Contradiction recorded for entity ${entityName}: ${c.rationale}`);
+                        }
+                      } catch {
+                        // Contradiction tracking is best-effort
+                      }
+                    }
                   }
                 }
               } catch (err) {
