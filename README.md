@@ -223,6 +223,58 @@ Background operations (heartbeats, channel messages) use the Agent SDK (`@anthro
 
 ---
 
+## Migrating from OpenClaw or Hermes-Agent?
+
+Claude recently restricted OpenClaw and Hermes-Agent from running on Pro and Max subscriptions — they require infrastructure that operates outside the Claude Code harness. **KyberBot runs natively inside Claude Code and is completely unaffected.**
+
+If you were using either of those tools, you can be up and running in about 5 minutes.
+
+### Quick Migration (3 Steps)
+
+**Step 1: Install KyberBot**
+
+```bash
+git clone https://github.com/KybernesisAI/kyberbot.git
+cd kyberbot && npm install && npm run build
+cd packages/cli && npm link && cd ../..
+```
+
+**Step 2: Create your agent**
+
+```bash
+mkdir ~/my-agent && cd ~/my-agent
+kyberbot onboard
+```
+
+**Step 3: Start it**
+
+```bash
+kyberbot          # Start services (leave running)
+# Open a second terminal:
+claude            # Talk to your agent
+```
+
+No Docker. No API keys. No extra cost beyond your existing Claude subscription.
+
+### How KyberBot Compares
+
+| Feature | KyberBot | OpenClaw | Hermes-Agent |
+|---------|----------|----------|--------------|
+| **Works on Claude Pro/Max** | Yes | No (restricted) | No (restricted) |
+| **Extra cost** | $0 | API tokens ($10–100+/day) | API tokens |
+| **Setup time** | ~5 minutes | 30+ minutes | 30+ minutes |
+| **Memory** | 6-component system (entity graph, vectors, facts, reasoning, timeline, sleep agent) | Vector DB only | Vector DB only |
+| **Self-evolving** | SOUL.md, USER.md update automatically | Static config | Static config |
+| **Scheduled tasks** | HEARTBEAT.md (natural language) | None | Limited |
+| **Messaging** | Telegram, WhatsApp | API-only | API-only |
+| **Open source** | MIT | Apache 2.0 | Varies |
+
+### Need Help Migrating?
+
+Visit the [GitHub Discussion](https://github.com/KybernesisAI/kyberbot/discussions) for migration help, FAQs, and community support.
+
+---
+
 ## Documentation
 
 - [Getting Started](docs/getting-started.md) -- Installation, onboarding, first conversation, updating
