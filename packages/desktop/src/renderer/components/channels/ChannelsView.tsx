@@ -80,7 +80,7 @@ export default function ChannelsView() {
   const telegramStatus = channels.find(c => c.name === 'telegram');
 
   return (
-    <div className="scroll-panel" style={{ height: '100%', padding: '16px', background: 'var(--bg-primary)' }}>
+    <div className="view-scroll" style={{ padding: '16px', background: 'var(--bg-primary)' }}>
       <span className="section-title" style={{ color: 'var(--accent-emerald)' }}>{'// CHANNELS'}</span>
       <p className="text-[11px] mt-1 mb-4" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
         Configure messaging channels. Restart services after changes.

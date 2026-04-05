@@ -65,7 +65,18 @@ input, textarea, pre, code, [contenteditable] {
 .flex-fill {
   flex: 1 1 0% !important;
   min-height: 0 !important;
-  overflow: hidden !important;
+  position: relative !important;
+}
+
+/* View container: fills parent flex and scrolls */
+.view-scroll {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 /* Section labels */

@@ -22,7 +22,7 @@ function AppContent() {
 
   if (!isReady) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
+      <div className="h-full flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
         <span className="text-[11px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
           Loading...
         </span>
@@ -34,7 +34,7 @@ function AppContent() {
   if (!agentRoot) {
     if (showOnboarding) {
       return (
-        <div className="h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+        <div className="h-full flex flex-col" style={{ background: 'var(--bg-primary)' }}>
           <TitleBar />
           <div className="flex-1 min-h-0">
             <OnboardingWizard onComplete={() => window.location.reload()} />
@@ -44,7 +44,7 @@ function AppContent() {
     }
 
     return (
-      <div className="h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+      <div className="h-full flex flex-col" style={{ background: 'var(--bg-primary)' }}>
         <TitleBar />
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <span className="section-title mb-4" style={{ color: 'var(--accent-emerald)' }}>
@@ -88,7 +88,7 @@ function AppContent() {
   }
 
   return (
-    <div className="flex-col-layout" style={{ height: '100vh', background: 'var(--bg-primary)' }}>
+    <div className="flex-col-layout" style={{ height: '100%', background: 'var(--bg-primary)' }}>
       <TitleBar />
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="flex-fill">

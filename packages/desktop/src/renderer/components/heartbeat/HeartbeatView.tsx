@@ -115,7 +115,7 @@ export default function HeartbeatView() {
       {message && <div className="mx-4 mt-2 p-2 text-[11px] border" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--accent-emerald)', color: 'var(--accent-emerald)' }}>{message}</div>}
 
       {/* Content */}
-      <div className="flex-fill scroll-panel">
+      <div style={{ flex: '1 1 0%', minHeight: 0, overflowY: 'auto' }}>
         {tab === 'tasks' && (
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">

@@ -227,7 +227,7 @@ export default function ChatView() {
         </div>
 
         {/* Messages */}
-        <div className="flex-fill scroll-panel" style={{ padding: '16px' }}>
+        <div style={{ flex: '1 1 0%', minHeight: 0, overflowY: 'auto', padding: '16px' }}>
         {messages.length === 0 && !streaming && (
           <div className="flex flex-col items-center justify-center h-full gap-2">
             <span className="text-[20px]" style={{ fontFamily: 'var(--font-sans)', fontWeight: 300, color: 'var(--fg-primary)' }}>
@@ -338,7 +338,7 @@ export default function ChatView() {
       </div>
 
       {/* Sidebar — memory blocks, sessions, agent config */}
-      <div className="scroll-panel" style={{ width: '288px', padding: '12px', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ width: '288px', padding: '12px', background: 'var(--bg-primary)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <MemoryBlocks />
         <SessionList
           currentSessionId={sessionId}

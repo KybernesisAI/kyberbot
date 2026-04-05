@@ -187,7 +187,7 @@ export default function EntityBrowser() {
       </div>
 
       {/* Right: Entity Detail */}
-      <div className="scroll-panel" style={{ minHeight: 0 }}>
+      <div style={{ overflowY: 'auto', minHeight: 0 }}>
         {!context ? (
           <div className="h-full flex items-center justify-center">
             <span className="text-[11px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Select an entity</span>
