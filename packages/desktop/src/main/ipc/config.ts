@@ -3,7 +3,7 @@
  * Reads/writes identity.yaml and .env from the agent root.
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import * as yaml from 'js-yaml';
@@ -12,6 +12,26 @@ import { IPC, IdentityConfig, EnvConfig } from '../../types/ipc.js';
 import { AppStore } from '../store.js';
 
 export function registerConfigHandlers(store: AppStore): void {
+  // Directory picker for selecting agent root
+  ipcMain.handle('config:selectAgentRoot', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Select Agent Directory',
+      message: 'Choose the directory containing your KyberBot agent (must have identity.yaml)',
+      properties: ['openDirectory'],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const dir = result.filePaths[0];
+    const hasIdentity = existsSync(join(dir, 'identity.yaml'));
+
+    if (hasIdentity) {
+      store.setAgentRoot(dir);
+    }
+
+    return { path: dir, hasIdentity };
+  });
   ipcMain.handle(IPC.CONFIG_GET_AGENT_ROOT, () => {
     return store.getAgentRoot();
   });

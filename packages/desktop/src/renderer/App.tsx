@@ -38,11 +38,31 @@ function AppContent() {
             {'// WELCOME TO KYBERBOT'}
           </span>
           <p className="text-[13px] text-center max-w-md mb-6" style={{ color: 'var(--fg-secondary)', fontFamily: 'var(--font-sans)' }}>
-            No agent directory configured. Run the onboarding wizard or set your agent root directory.
+            Select the directory containing your KyberBot agent to get started.
           </p>
-          <span className="text-[9px] tracking-[2px] uppercase" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
-            Onboarding wizard coming in Phase B
-          </span>
+          <button
+            onClick={async () => {
+              const kb = (window as any).kyberbot;
+              const result = await kb.config.selectAgentRoot();
+              if (result?.hasIdentity) {
+                window.location.reload();
+              } else if (result) {
+                alert(`No identity.yaml found in ${result.path}. Choose a directory with a configured KyberBot agent.`);
+              }
+            }}
+            className="px-6 py-3 text-[11px] tracking-[2px] uppercase border transition-colors"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              borderColor: 'var(--accent-emerald)',
+              color: 'var(--accent-emerald)',
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(16, 185, 129, 0.1)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+          >
+            Select Agent Directory
+          </button>
         </div>
       </div>
     );

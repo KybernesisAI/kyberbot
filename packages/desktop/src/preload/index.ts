@@ -33,6 +33,8 @@ const api = {
     getAgentRoot: (): Promise<string | null> => ipcRenderer.invoke(IPC.CONFIG_GET_AGENT_ROOT),
     setAgentRoot: (path: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke(IPC.CONFIG_SET_AGENT_ROOT, path),
+    selectAgentRoot: (): Promise<{ path: string; hasIdentity: boolean } | null> =>
+      ipcRenderer.invoke('config:selectAgentRoot'),
     getApiToken: (): Promise<string | null> => ipcRenderer.invoke(IPC.CONFIG_GET_API_TOKEN),
     getServerUrl: (): Promise<string> => ipcRenderer.invoke(IPC.CONFIG_GET_SERVER_URL),
     readIdentity: (): Promise<IdentityConfig | null> => ipcRenderer.invoke(IPC.CONFIG_READ_IDENTITY),
