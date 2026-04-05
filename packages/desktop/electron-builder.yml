@@ -12,5 +12,4 @@ mac:
   target:
     - dmg
     - zip
-publish:
-  provider: github
+publish: null
