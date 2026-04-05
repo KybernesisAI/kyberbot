@@ -46,8 +46,20 @@ export function registerConfigHandlers(store: AppStore): void {
     if (!root) return null;
     const envPath = join(root, '.env');
     if (!existsSync(envPath)) return null;
-    const parsed = dotenvParse({ path: envPath });
-    return parsed.parsed?.KYBERBOT_API_TOKEN ?? process.env.KYBERBOT_API_TOKEN ?? null;
+    // Parse .env file directly instead of relying on dotenv.config()
+    const content = readFileSync(envPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('KYBERBOT_API_TOKEN=')) {
+        let value = trimmed.slice('KYBERBOT_API_TOKEN='.length).trim();
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        return value;
+      }
+    }
+    return process.env.KYBERBOT_API_TOKEN ?? null;
   });
 
   ipcMain.handle(IPC.CONFIG_GET_SERVER_URL, () => {
