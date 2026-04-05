@@ -71,8 +71,10 @@ export async function executeHandler(req: Request, res: Response) {
     return;
   }
 
-  // Track stdout for final parsing
+  // Track stdout for final parsing — cap at 5MB to prevent OOM from verbose stream-json
   let stdout = '';
+  let stdoutCapped = false;
+  const MAX_STDOUT_BYTES = 5 * 1024 * 1024;
   let killed = false;
 
   // Send prompt on stdin
@@ -84,8 +86,16 @@ export async function executeHandler(req: Request, res: Response) {
   // Stream stdout as NDJSON log lines
   proc.stdout?.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
-    stdout += text;
+    // Always stream to client (they handle their own buffering)
     sendLine(res, { type: 'log', stream: 'stdout', chunk: text });
+    // Only accumulate for final parsing up to the cap
+    if (!stdoutCapped) {
+      stdout += text;
+      if (stdout.length > MAX_STDOUT_BYTES) {
+        stdoutCapped = true;
+        logger.warn('Execute stdout exceeded 5MB, stopping accumulation for final parse');
+      }
+    }
   });
 
   // Stream stderr as NDJSON log lines

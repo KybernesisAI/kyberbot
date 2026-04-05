@@ -69,7 +69,11 @@ export function createRunCommand(): Command {
 
         const startChild = () => {
           const args = process.argv.slice(2);
-          const child = spawnChild(process.execPath, ['--max-old-space-size=8192', process.argv[1], ...args], {
+          const child = spawnChild(process.execPath, [
+            '--max-old-space-size=2048',
+            '--heapsnapshot-near-heap-limit=3',
+            process.argv[1], ...args
+          ], {
             env: { ...process.env, KYBERBOT_CHILD: '1' },
             stdio: 'inherit',
           });
