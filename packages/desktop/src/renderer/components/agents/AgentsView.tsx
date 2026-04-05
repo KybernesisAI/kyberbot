@@ -167,7 +167,7 @@ export default function AgentsView() {
   return (
     <div className="h-full overflow-y-auto p-4" style={{ background: 'var(--bg-primary)' }}>
       <div className="flex items-center justify-between mb-4">
-        <span className="section-title" style={{ color: 'var(--accent-emerald)' }}>{'// AGENTS'}</span>
+        <span className="section-title" style={{ color: 'var(--accent-emerald)' }}>{'// SUB-AGENTS'}</span>
         <button onClick={() => setCreating(!creating)} className="px-3 py-1 text-[9px] tracking-[1px] uppercase border" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--accent-emerald)', color: 'var(--accent-emerald)', background: 'transparent', cursor: 'pointer' }}>{creating ? 'Cancel' : '+ New'}</button>
       </div>
 
@@ -206,7 +206,7 @@ export default function AgentsView() {
 
       {!loading && agents.length === 0 && (
         <div className="text-center py-8">
-          <span className="text-[11px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>No agents installed</span>
+          <span className="text-[11px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>No sub-agents installed. Create one to delegate specialized tasks.</span>
         </div>
       )}
     </div>
