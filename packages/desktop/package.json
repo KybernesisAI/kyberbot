@@ -13,6 +13,7 @@
     "package:mac": "electron-vite build && electron-builder --mac"
   },
   "dependencies": {
+    "ansi-to-html": "^0.7.2",
     "clsx": "^2.1.0",
     "dotenv": "^17.2.3",
     "electron-updater": "^6.3.0",

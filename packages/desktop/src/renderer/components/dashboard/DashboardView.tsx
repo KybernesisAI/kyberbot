@@ -2,9 +2,10 @@
  * Dashboard — service status cards, start/stop controls, persistent log viewer.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getLogBuffer, subscribeToLogs } from '../../hooks/useLogs';
+import AnsiToHtml from 'ansi-to-html';
 
 
 const SERVICE_NAMES = ['ChromaDB', 'Server', 'Heartbeat', 'Sleep Agent', 'Channels', 'Tunnel'];
@@ -38,6 +39,7 @@ export default function DashboardView() {
   const isStarting = cliStatus === 'starting';
 
   const services = health?.services ?? SERVICE_NAMES.map(name => ({ name, status: isRunning ? 'unknown' : 'stopped' }));
+  const ansiConverter = useMemo(() => new AnsiToHtml({ fg: '#a1a1aa', bg: 'transparent', newline: false, escapeXML: true }), []);
 
   // Subscribe to log buffer updates (module-level, persists across tab switches)
   useEffect(() => {
@@ -137,15 +139,19 @@ export default function DashboardView() {
       {/* Log Viewer — persistent for entire session */}
       <div>
         <span className="section-title" style={{ color: 'var(--fg-tertiary)' }}>{'// LOGS'}</span>
-        <div ref={logContainerRef} className="mt-2 border" style={{ maxHeight: '250px', overflowY: 'auto', borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}>
-          <div className="p-2">
+        <div ref={logContainerRef} className="mt-2 border" style={{ maxHeight: '300px', overflowY: 'auto', overflowX: 'auto', borderColor: 'var(--border-color)', background: '#0a0a0a' }}>
+          <div style={{ padding: '8px', minWidth: '700px' }}>
             {logs.length === 0 && (
-              <span className="text-[9px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
+              <span style={{ fontSize: '9px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
                 {isRunning ? 'Waiting for log output...' : 'Start services to see logs'}
               </span>
             )}
             {logs.map((line, i) => (
-              <div key={i} className="text-[10px] leading-4 whitespace-pre-wrap break-all" style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-secondary)' }}>{line}</div>
+              <div
+                key={i}
+                style={{ fontSize: '11px', lineHeight: '16px', whiteSpace: 'pre', fontFamily: 'var(--font-mono)' }}
+                dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(line) }}
+              />
             ))}
           </div>
         </div>
