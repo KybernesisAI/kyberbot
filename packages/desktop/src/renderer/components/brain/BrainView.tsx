@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { brainFetch } from '../../utils/api';
 import MemoryCanvas from './canvas/MemoryCanvas';
+import EntityBrowser from './entities/EntityBrowser';
 import type { GraphResponse, GraphNodeDTO } from './canvas/types';
 
 type BrainSubTab = 'graph' | 'entities' | 'timeline' | 'search';
@@ -121,7 +122,7 @@ export default function BrainView() {
         )}
 
         {activeTab === 'entities' && (
-          <EntitySearchView serverUrl={serverUrl} apiToken={apiToken} />
+          <EntityBrowser />
         )}
 
         {activeTab === 'timeline' && (

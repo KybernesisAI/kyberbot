@@ -55,7 +55,7 @@ export default function SettingsView() {
   const btnStyle = (color: string) => ({ fontFamily: 'var(--font-mono)', fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, borderColor: color, color, background: 'transparent', cursor: saving ? 'default' as const : 'pointer' as const, opacity: saving ? 0.5 : 1, border: '1px solid', padding: '4px 12px' });
 
   return (
-    <div className="h-full overflow-y-auto p-4" style={{ background: 'var(--bg-primary)' }}>
+    <div className="h-full overflow-y-auto p-4" style={{ background: 'var(--bg-primary)', overflowY: 'auto' }}>
       {message && <div className="mb-3 p-2 text-[11px] border" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--accent-emerald)', color: 'var(--accent-emerald)' }}>{message}</div>}
 
       {/* Identity */}
@@ -112,6 +112,20 @@ export default function SettingsView() {
         </div>
       </div>
 
+      {/* Tunnel / ngrok */}
+      <span className="section-title" style={{ color: 'var(--accent-teal, var(--accent-cyan))' }}>{'// TUNNEL'}</span>
+      <div className="grid gap-3 mt-3 mb-6">
+        <div><label style={labelStyle}>ngrok Auth Token</label><input type="password" value={env['NGROK_AUTHTOKEN'] || ''} onChange={(e) => setEnv({ ...env, NGROK_AUTHTOKEN: e.target.value })} style={inputStyle} placeholder="Paste your ngrok auth token" /></div>
+        {identity.tunnel?.enabled && env['NGROK_AUTHTOKEN'] && (
+          <div className="p-2 border" style={{ borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}>
+            <div className="text-[9px] tracking-[1px] uppercase mb-1" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Tunnel Status</div>
+            <div className="text-[11px]" style={{ color: 'var(--accent-emerald)', fontFamily: 'var(--font-mono)' }}>
+              Tunnel will start when services are running. Check dashboard for URL.
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Backup Config */}
       <span className="section-title" style={{ color: 'var(--accent-violet)' }}>{'// BACKUP'}</span>
       <div className="grid gap-3 mt-3 mb-6">
@@ -133,9 +147,35 @@ export default function SettingsView() {
       {/* API Keys */}
       <span className="section-title" style={{ color: 'var(--accent-amber)' }}>{'// API KEYS'}</span>
       <div className="grid gap-3 mt-3 mb-6">
-        {['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'KYBERNESIS_API_KEY', 'KYBERBOT_API_TOKEN'].map(key => (
+        {['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'KYBERNESIS_API_KEY'].map(key => (
           <div key={key}><label style={labelStyle}>{key}</label><input type="password" value={env[key] || ''} onChange={(e) => setEnv({ ...env, [key]: e.target.value })} style={inputStyle} placeholder="Not set" /></div>
         ))}
+        {/* API Token — visible and copyable */}
+        <div>
+          <label style={labelStyle}>KYBERBOT_API_TOKEN</label>
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={env['KYBERBOT_API_TOKEN'] || ''}
+              onChange={(e) => setEnv({ ...env, KYBERBOT_API_TOKEN: e.target.value })}
+              style={{ ...inputStyle, userSelect: 'text', WebkitUserSelect: 'text' } as any}
+              readOnly={!!env['KYBERBOT_API_TOKEN']}
+            />
+            <button
+              onClick={() => {
+                if (env['KYBERBOT_API_TOKEN']) {
+                  navigator.clipboard.writeText(env['KYBERBOT_API_TOKEN']);
+                  setMessage('Token copied to clipboard');
+                  setTimeout(() => setMessage(''), 2000);
+                }
+              }}
+              className="px-2 text-[9px] tracking-[1px] uppercase border whitespace-nowrap"
+              style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--accent-cyan)', color: 'var(--accent-cyan)', background: 'transparent', cursor: 'pointer' }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
         <button onClick={() => save('.env', () => kb.config.writeEnv(env))} disabled={saving} style={btnStyle('var(--accent-amber)')}>
           {saving ? 'Saving...' : 'Save .env'}
         </button>

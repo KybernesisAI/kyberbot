@@ -21,6 +21,10 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* Ensure flex children can scroll */
+.min-h-0 { min-height: 0; }
+.overflow-y-auto { overflow-y: auto !important; }
+
 body {
   font-family: var(--font-mono);
   font-size: var(--text-base);
