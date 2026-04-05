@@ -46,6 +46,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      webSecurity: false, // Allow renderer to fetch from localhost:3456 (local server)
     },
   });
 

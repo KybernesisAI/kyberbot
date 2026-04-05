@@ -28,6 +28,7 @@ export default function DashboardView() {
   const { health, cliStatus } = useApp();
   const kb = (window as any).kyberbot;
 
+  const isRunning = health !== null && health.status !== 'offline';
   const services = health?.services ?? SERVICE_NAMES.map(name => ({ name, status: 'stopped' }));
 
   return (
@@ -40,26 +41,30 @@ export default function DashboardView() {
         <div className="flex gap-2">
           <button
             onClick={() => kb?.services.start()}
+            disabled={isRunning}
             className="px-3 py-1 text-[9px] tracking-[1px] uppercase border transition-colors"
             style={{
               fontFamily: 'var(--font-mono)',
-              borderColor: 'var(--accent-emerald)',
-              color: 'var(--accent-emerald)',
+              borderColor: isRunning ? 'var(--fg-muted)' : 'var(--accent-emerald)',
+              color: isRunning ? 'var(--fg-muted)' : 'var(--accent-emerald)',
               background: 'transparent',
-              cursor: 'pointer',
+              cursor: isRunning ? 'default' : 'pointer',
+              opacity: isRunning ? 0.4 : 1,
             }}
           >
             Start
           </button>
           <button
             onClick={() => kb?.services.stop()}
+            disabled={!isRunning}
             className="px-3 py-1 text-[9px] tracking-[1px] uppercase border transition-colors"
             style={{
               fontFamily: 'var(--font-mono)',
-              borderColor: 'var(--fg-muted)',
-              color: 'var(--fg-muted)',
+              borderColor: isRunning ? 'var(--status-error)' : 'var(--fg-muted)',
+              color: isRunning ? 'var(--status-error)' : 'var(--fg-muted)',
               background: 'transparent',
-              cursor: 'pointer',
+              cursor: isRunning ? 'pointer' : 'default',
+              opacity: isRunning ? 1 : 0.4,
             }}
           >
             Stop
