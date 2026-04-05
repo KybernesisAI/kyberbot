@@ -26,6 +26,7 @@ export class LifecycleManager extends EventEmitter {
   private readonly MAX_BUFFER_LINES = 1000;
   private restartCount = 0;
   private readonly MAX_RESTARTS = 10;
+  private attached = false; // true if we attached to an external server (don't kill on quit)
 
   constructor(store: AppStore) {
     super();
@@ -59,6 +60,7 @@ export class LifecycleManager extends EventEmitter {
         // Server already running (started externally or from a previous session)
         console.log('[lifecycle] Server already running on port', port, '— attaching');
         this._status = 'running';
+        this.attached = true;
         this.emit('status-change', this._status);
         this.startHealthPolling();
         return;
@@ -72,10 +74,21 @@ export class LifecycleManager extends EventEmitter {
   }
 
   async stopCli(): Promise<void> {
-    if (!this.process) return;
+    this.stopHealthPolling();
+
+    if (!this.process) {
+      // We were attached to an external server — don't kill it
+      if (this.attached) {
+        console.log('[lifecycle] Detaching from external server (not killing)');
+        this._status = 'stopped';
+        this.attached = false;
+        this.emit('status-change', this._status);
+      }
+      return;
+    }
     this._status = 'stopping';
     this.emit('status-change', this._status);
-    this.stopHealthPolling();
+    console.log('[lifecycle] Sending SIGTERM to CLI process...');
 
     this.process.kill('SIGTERM');
 

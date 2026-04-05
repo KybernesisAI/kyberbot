@@ -145,11 +145,20 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    app.isQuitting = true;
     lifecycle.stopCli().then(() => app.quit());
   }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', async (e) => {
+  if (app.isQuitting) return; // Already shutting down
   app.isQuitting = true;
-  lifecycle.stopCli();
+
+  if (lifecycle.isRunning()) {
+    e.preventDefault(); // Prevent immediate quit
+    console.log('[app] Shutting down CLI services...');
+    await lifecycle.stopCli();
+    console.log('[app] CLI stopped, quitting');
+    app.quit();
+  }
 });
