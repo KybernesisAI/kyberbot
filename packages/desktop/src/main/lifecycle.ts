@@ -97,15 +97,18 @@ export class LifecycleManager extends EventEmitter {
     const logPath = join(logDir, 'desktop-cli.log');
     this.logStream = createWriteStream(logPath, { flags: 'a' });
 
-    this.process = spawn('node', ['--max-old-space-size=8192', cliPath, 'run'], {
+    // Spawn kyberbot directly (it has its own shebang with node + max-old-space-size)
+    this.process = spawn(cliPath, ['run'], {
       cwd: agentRoot,
       env: {
         ...process.env,
         KYBERBOT_ROOT: agentRoot,
         KYBERBOT_CHILD: '1', // Disables CLI's built-in watchdog (run.ts:64)
         NODE_ENV: 'production',
+        PATH: process.env.PATH, // Ensure node is on PATH for the shebang
       },
       stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
     });
 
     this.process.stdout?.on('data', (data: Buffer) => {

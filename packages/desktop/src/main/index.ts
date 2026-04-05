@@ -106,6 +106,15 @@ app.whenReady().then(async () => {
   createWindow();
   createTray(lifecycle, () => mainWindow);
 
+  // Handle lifecycle errors gracefully (prevent ERR_UNHANDLED_ERROR crash)
+  lifecycle.on('error', (message: string) => {
+    console.error('[lifecycle] Error:', message);
+  });
+
+  lifecycle.on('status-change', (status: string) => {
+    console.log('[lifecycle] Status:', status);
+  });
+
   // Push health updates to renderer
   lifecycle.on('health-update', (health) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
