@@ -26,6 +26,7 @@ html, body {
   width: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 body {
@@ -39,8 +40,32 @@ body {
 
 /* Allow text selection in inputs and textareas */
 input, textarea, pre, code, [contenteditable] {
-  user-select: text;
-  -webkit-user-select: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+/*
+ * SCROLLING FIX
+ * The core problem: in a flex column layout, children with overflow-y:auto
+ * won't scroll unless every ancestor between them and the flex container
+ * has min-height:0. These classes enforce this.
+ */
+.scroll-panel {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  min-height: 0 !important;
+}
+
+.flex-col-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+.flex-fill {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
 }
 
 /* Section labels */
@@ -111,13 +136,4 @@ button, input, select, textarea, a, [role="button"] {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-/*
- * Flex scrolling fix: in a flex column, children with overflow-y-auto
- * only scroll if they have min-height: 0 on themselves or their parent.
- * These utilities ensure scrolling works inside flex layouts.
- */
-.flex-1 {
-  min-height: 0;
 }

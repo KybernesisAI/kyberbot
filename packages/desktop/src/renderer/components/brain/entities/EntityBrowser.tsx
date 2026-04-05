@@ -109,7 +109,7 @@ export default function EntityBrowser() {
   };
 
   return (
-    <div className="h-full" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', overflow: 'hidden' }}>
+    <div style={{ height: '100%', display: 'grid', gridTemplateColumns: '260px 1fr', overflow: 'hidden', minHeight: 0 }}>
       {/* Left: Entity List */}
       <div className="flex flex-col border-r" style={{ borderColor: 'var(--border-color)', minHeight: 0 }}>
         {/* Search */}
@@ -187,7 +187,7 @@ export default function EntityBrowser() {
       </div>
 
       {/* Right: Entity Detail */}
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+      <div className="scroll-panel" style={{ minHeight: 0 }}>
         {!context ? (
           <div className="h-full flex items-center justify-center">
             <span className="text-[11px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Select an entity</span>

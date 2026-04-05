@@ -88,10 +88,10 @@ function AppContent() {
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+    <div className="flex-col-layout" style={{ height: '100vh', background: 'var(--bg-primary)' }}>
       <TitleBar />
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div className="flex-fill">
         {activeTab === 'dashboard' && <DashboardView />}
         {activeTab === 'chat' && <ChatView />}
         {activeTab === 'skills' && <SkillsView />}

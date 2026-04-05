@@ -37,7 +37,7 @@ export default function BrainView() {
   useEffect(() => { loadGraph(); }, [loadGraph]);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+    <div className="flex-col-layout" style={{ height: '100%', background: 'var(--bg-primary)' }}>
       {/* Sub-tab bar */}
       <div className="flex items-center gap-0 px-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
         {(['graph', 'entities', 'timeline', 'search'] as const).map(tab => (
@@ -83,7 +83,7 @@ export default function BrainView() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+      <div className="flex-fill" style={{ position: 'relative' }}>
         {error && (
           <div className="absolute top-2 left-2 right-2 p-2 text-[11px] border z-10" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--status-error)', color: 'var(--status-error)', background: 'var(--bg-primary)' }}>
             {error}

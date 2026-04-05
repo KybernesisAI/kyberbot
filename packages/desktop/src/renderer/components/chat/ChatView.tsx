@@ -210,9 +210,9 @@ export default function ChatView() {
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', background: 'var(--bg-primary)' }}>
+    <div style={{ height: '100%', display: 'flex', background: 'var(--bg-primary)', minHeight: 0 }}>
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col border-r" style={{ borderColor: 'var(--border-color)' }}>
+      <div className="flex-col-layout" style={{ flex: 1, borderRight: '1px solid var(--border-color)' }}>
         {/* Chat header */}
         <div className="border-b p-3 flex items-center gap-3" style={{ borderColor: 'var(--border-color)' }}>
           <div className="w-8 h-8 border flex items-center justify-center" style={{ borderColor: 'rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.1)' }}>
@@ -227,7 +227,7 @@ export default function ChatView() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-fill scroll-panel" style={{ padding: '16px' }}>
         {messages.length === 0 && !streaming && (
           <div className="flex flex-col items-center justify-center h-full gap-2">
             <span className="text-[20px]" style={{ fontFamily: 'var(--font-sans)', fontWeight: 300, color: 'var(--fg-primary)' }}>
@@ -338,7 +338,7 @@ export default function ChatView() {
       </div>
 
       {/* Sidebar — memory blocks, sessions, agent config */}
-      <div className="w-72 overflow-y-auto p-3 space-y-3" style={{ background: 'var(--bg-primary)' }}>
+      <div className="scroll-panel" style={{ width: '288px', padding: '12px', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <MemoryBlocks />
         <SessionList
           currentSessionId={sessionId}

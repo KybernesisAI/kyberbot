@@ -91,7 +91,7 @@ export default function HeartbeatView() {
   const labelStyle = { color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase' as const, display: 'block', marginBottom: '2px' };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+    <div className="flex-col-layout" style={{ height: '100%', background: 'var(--bg-primary)' }}>
       {/* Header with tabs + actions */}
       <div className="flex items-center px-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
         <div className="flex items-center gap-0 flex-1">
@@ -115,7 +115,7 @@ export default function HeartbeatView() {
       {message && <div className="mx-4 mt-2 p-2 text-[11px] border" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--accent-emerald)', color: 'var(--accent-emerald)' }}>{message}</div>}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-fill scroll-panel">
         {tab === 'tasks' && (
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">

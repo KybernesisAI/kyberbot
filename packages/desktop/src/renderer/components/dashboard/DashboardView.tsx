@@ -68,7 +68,7 @@ export default function DashboardView() {
   const services = health?.services ?? SERVICE_NAMES.map(name => ({ name, status: 'stopped' }));
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '16px', background: 'var(--bg-primary)' }}>
+    <div className="scroll-panel" style={{ height: '100%', padding: '16px', background: 'var(--bg-primary)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <span className="section-title" style={{ color: 'var(--accent-emerald)' }}>
