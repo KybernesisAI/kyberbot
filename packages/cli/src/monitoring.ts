@@ -194,49 +194,14 @@ export function errorMiddleware(err: Error, req: Request, res: Response, _next: 
 
 // ─── Init ───────────────────────────────────────────────────────────
 
-// ─── Heap Monitor ──────────────────────────────────────────────────
-
-let heapMonitorInterval: ReturnType<typeof setInterval> | null = null;
-
-function startHeapMonitor(): void {
-  let lastHeapMB = 0;
-
-  heapMonitorInterval = setInterval(() => {
-    const mem = process.memoryUsage();
-    const heapMB = Math.round(mem.heapUsed / 1024 / 1024);
-    const rssMB = Math.round(mem.rss / 1024 / 1024);
-    const delta = heapMB - lastHeapMB;
-
-    // Log every 60s so we can see the growth pattern
-    logger.info('Heap monitor', {
-      heapMB,
-      rssMB,
-      deltaMB: delta,
-      heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
-    });
-
-    // Warn if heap is growing fast (>100MB/min) or is above 4GB
-    if (delta > 100) {
-      logger.warn('Rapid heap growth detected', { deltaMB: delta, heapMB });
-    }
-    if (heapMB > 4096) {
-      logger.warn('Heap exceeds 4GB', { heapMB, rssMB });
-    }
-
-    lastHeapMB = heapMB;
-  }, 60_000);
-}
-
 /**
  * Initialize all monitoring. Call once at startup, before services start.
  */
 export async function initMonitoring(): Promise<void> {
   installProcessHandlers();
   await initSentry();
-  startHeapMonitor();
   logger.info('Monitoring initialized', {
     sentry: sentryInitialized ? 'enabled' : 'disabled',
     pid: process.pid,
-    heapLimitMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
   });
 }
