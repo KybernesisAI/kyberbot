@@ -212,7 +212,7 @@ export default function ChatView() {
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', background: 'var(--bg-primary)' }}>
       {/* Main chat area */}
-      <div className="flex-col-layout" style={{ flex: 1, borderRight: '1px solid var(--border-color)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: '1px solid var(--border-color)' }}>
         {/* Chat header */}
         <div className="border-b p-3 flex items-center gap-3" style={{ borderColor: 'var(--border-color)' }}>
           <div className="w-8 h-8 border flex items-center justify-center" style={{ borderColor: 'rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.1)' }}>

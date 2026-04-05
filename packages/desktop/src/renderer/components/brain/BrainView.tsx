@@ -83,7 +83,7 @@ export default function BrainView() {
       </div>
 
       {/* Content */}
-      <div className="flex-fill" style={{ position: 'relative' }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         {error && (
           <div className="absolute top-2 left-2 right-2 p-2 text-[11px] border z-10" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--status-error)', color: 'var(--status-error)', background: 'var(--bg-primary)' }}>
             {error}
