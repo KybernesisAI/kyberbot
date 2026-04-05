@@ -1,0 +1,16 @@
+appId: com.kyberbot.desktop
+productName: KyberBot
+directories:
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - resources/**/*
+mac:
+  category: public.app-category.developer-tools
+  icon: resources/icon.icns
+  target:
+    - dmg
+    - zip
+publish:
+  provider: github

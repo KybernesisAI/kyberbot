@@ -1,0 +1,101 @@
+@import './variables.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  background: var(--bg-primary);
+  color: var(--fg-primary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Section labels */
+.section-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Status dots */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.status-dot--online {
+  background-color: var(--status-success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.status-dot--offline {
+  background-color: var(--fg-muted);
+}
+
+.status-dot--error {
+  background-color: var(--status-error);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+/* Interactive elements - no drag */
+button, input, select, textarea, a, [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--fg-muted);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-tertiary);
+}
+
+/* Animations */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

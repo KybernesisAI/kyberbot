@@ -1,0 +1,100 @@
+/**
+ * Configuration IPC handlers.
+ * Reads/writes identity.yaml and .env from the agent root.
+ */
+
+import { ipcMain } from 'electron';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import * as yaml from 'js-yaml';
+import { config as dotenvParse } from 'dotenv';
+import { IPC, IdentityConfig, EnvConfig } from '../../types/ipc.js';
+import { AppStore } from '../store.js';
+
+export function registerConfigHandlers(store: AppStore): void {
+  ipcMain.handle(IPC.CONFIG_GET_AGENT_ROOT, () => {
+    return store.getAgentRoot();
+  });
+
+  ipcMain.handle(IPC.CONFIG_SET_AGENT_ROOT, (_event, path: string) => {
+    store.setAgentRoot(path);
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.CONFIG_GET_API_TOKEN, () => {
+    const root = store.getAgentRoot();
+    if (!root) return null;
+    const envPath = join(root, '.env');
+    if (!existsSync(envPath)) return null;
+    const parsed = dotenvParse({ path: envPath });
+    return parsed.parsed?.KYBERBOT_API_TOKEN ?? process.env.KYBERBOT_API_TOKEN ?? null;
+  });
+
+  ipcMain.handle(IPC.CONFIG_GET_SERVER_URL, () => {
+    const root = store.getAgentRoot();
+    let port = 3456;
+    if (root) {
+      try {
+        const identityPath = join(root, 'identity.yaml');
+        const identity = yaml.load(readFileSync(identityPath, 'utf-8')) as Record<string, any>;
+        port = identity?.server?.port ?? 3456;
+      } catch { /* use default */ }
+    }
+    return `http://localhost:${port}`;
+  });
+
+  ipcMain.handle(IPC.CONFIG_READ_IDENTITY, () => {
+    const root = store.getAgentRoot();
+    if (!root) return null;
+    try {
+      const identityPath = join(root, 'identity.yaml');
+      return yaml.load(readFileSync(identityPath, 'utf-8')) as IdentityConfig;
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC.CONFIG_WRITE_IDENTITY, (_event, changes: Partial<IdentityConfig>) => {
+    const root = store.getAgentRoot();
+    if (!root) throw new Error('Agent root not configured');
+    const identityPath = join(root, 'identity.yaml');
+    const current = yaml.load(readFileSync(identityPath, 'utf-8')) as Record<string, unknown>;
+    Object.assign(current, changes);
+    writeFileSync(identityPath, yaml.dump(current, { lineWidth: 120 }), 'utf-8');
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.CONFIG_READ_ENV, () => {
+    const root = store.getAgentRoot();
+    if (!root) return {};
+    const envPath = join(root, '.env');
+    if (!existsSync(envPath)) return {};
+    const content = readFileSync(envPath, 'utf-8');
+    const result: EnvConfig = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx > 0) {
+        const key = trimmed.slice(0, eqIdx).trim();
+        let value = trimmed.slice(eqIdx + 1).trim();
+        // Strip surrounding quotes
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        result[key] = value;
+      }
+    }
+    return result;
+  });
+
+  ipcMain.handle(IPC.CONFIG_WRITE_ENV, (_event, env: EnvConfig) => {
+    const root = store.getAgentRoot();
+    if (!root) throw new Error('Agent root not configured');
+    const envPath = join(root, '.env');
+    const lines = Object.entries(env).map(([k, v]) => `${k}=${v}`);
+    writeFileSync(envPath, lines.join('\n') + '\n', 'utf-8');
+    return { ok: true };
+  });
+}

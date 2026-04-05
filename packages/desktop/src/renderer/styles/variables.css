@@ -1,0 +1,74 @@
+/**
+ * KyberBot Desktop Design Tokens
+ * Ported from Samantha desktop design language
+ */
+
+:root {
+  /* Backgrounds */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1a1a1a;
+  --bg-elevated: #222222;
+
+  /* Foreground */
+  --fg-primary: #fafafa;
+  --fg-secondary: #a1a1aa;
+  --fg-tertiary: #71717a;
+  --fg-muted: #52525b;
+
+  /* Accents */
+  --accent-emerald: #10b981;
+  --accent-emerald-dim: #059669;
+  --accent-emerald-muted: rgba(16, 185, 129, 0.15);
+  --accent-cyan: #22d3ee;
+  --accent-cyan-dim: #0891b2;
+  --accent-cyan-muted: rgba(34, 211, 238, 0.15);
+  --accent-violet: #8b5cf6;
+  --accent-amber: #f59e0b;
+
+  /* Status */
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-error: #ef4444;
+  --status-info: #3b82f6;
+
+  /* Stoplight */
+  --stoplight-close: #ff5f57;
+  --stoplight-minimize: #febc2e;
+  --stoplight-maximize: #28c840;
+  --stoplight-inactive: #3a3a3a;
+
+  /* Typography */
+  --font-mono: 'Space Mono', 'SF Mono', 'Monaco', 'Menlo', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --text-xs: 9px;
+  --text-sm: 11px;
+  --text-base: 13px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Borders */
+  --radius: 0px;
+  --radius-full: 9999px;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color-hover: rgba(255, 255, 255, 0.15);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.5);
+
+  /* Transitions */
+  --transition-fast: 100ms ease-out;
+  --transition-normal: 150ms ease;
+
+  /* Layout */
+  --header-height: 36px;
+}
