@@ -6,7 +6,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { readFileSync, writeFileSync, statSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, statSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { spawn } from 'node:child_process';
 import yaml from 'js-yaml';
@@ -604,6 +604,51 @@ export function createManagementRouter(channels: Channel[]): Router {
       res.json({ url: ngrokUrl, running: !!ngrokUrl });
     } catch (err) {
       res.json({ url: null, running: false });
+    }
+  });
+
+  // GET /brain-notes — List all brain note files
+  router.get('/brain-notes', (_req, res) => {
+    try {
+      const root = getRoot();
+      const brainDir = join(root, 'brain');
+      if (!existsSync(brainDir)) {
+        res.json({ notes: [] });
+        return;
+      }
+      const files = readdirSync(brainDir).filter(f => f.endsWith('.md'));
+      const notes = files.map(f => {
+        const filePath = join(brainDir, f);
+        const stat = statSync(filePath);
+        return {
+          name: f,
+          path: filePath,
+          size: stat.size,
+          lastModified: stat.mtime.toISOString(),
+        };
+      });
+      res.json({ notes });
+    } catch (err) {
+      logger.error('Failed to list brain notes', { error: String(err) });
+      res.status(500).json({ error: 'Failed to list brain notes' });
+    }
+  });
+
+  // GET /brain-notes/:name — Read a brain note file
+  router.get('/brain-notes/:name', (req, res) => {
+    try {
+      const root = getRoot();
+      const filePath = join(root, 'brain', req.params.name as string);
+      if (!existsSync(filePath)) {
+        res.status(404).json({ error: 'Note not found' });
+        return;
+      }
+      const content = readFileSync(filePath, 'utf-8');
+      const stat = statSync(filePath);
+      res.json({ name: req.params.name, content, lastModified: stat.mtime.toISOString() });
+    } catch (err) {
+      logger.error('Failed to read brain note', { error: String(err) });
+      res.status(500).json({ error: 'Failed to read brain note' });
     }
   });
 

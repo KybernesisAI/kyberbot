@@ -1,15 +1,16 @@
 /**
- * Brain tab — sub-tab container with Graph, Entities, Timeline, Search views.
+ * Brain tab — 5 sub-tabs: Graph, Entities, Notes, Timeline, Search.
+ * All memories are expandable to show full content.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
-import { brainFetch } from '../../utils/api';
+import { brainFetch, manageFetch } from '../../utils/api';
 import MemoryCanvas from './canvas/MemoryCanvas';
 import EntityBrowser from './entities/EntityBrowser';
 import type { GraphResponse, GraphNodeDTO } from './canvas/types';
 
-type BrainSubTab = 'graph' | 'entities' | 'timeline' | 'search';
+type BrainSubTab = 'graph' | 'entities' | 'notes' | 'timeline' | 'search';
 
 export default function BrainView() {
   const { serverUrl, apiToken } = useApp();
@@ -40,43 +41,28 @@ export default function BrainView() {
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       {/* Sub-tab bar */}
       <div className="flex items-center gap-0 px-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
-        {(['graph', 'entities', 'timeline', 'search'] as const).map(tab => (
+        {(['graph', 'entities', 'notes', 'timeline', 'search'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className="px-3 py-2 relative"
             style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '9px',
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
+              fontFamily: 'var(--font-mono)', fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase',
               color: activeTab === tab ? 'var(--accent-violet)' : 'var(--fg-muted)',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
+              background: 'transparent', border: 'none', cursor: 'pointer',
             }}
           >
             {tab}
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{ background: 'var(--accent-violet)' }} />
-            )}
+            {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{ background: 'var(--accent-violet)' }} />}
           </button>
         ))}
-        <div className="flex-1" />
-        <button
-          onClick={() => (window as any).kyberbot?.brain?.popout()}
-          className="px-2 py-1 text-[9px] tracking-[1px] uppercase"
-          style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-violet)', background: 'transparent', border: 'none', cursor: 'pointer' }}
-        >
-          Pop Out
-        </button>
-        <button
-          onClick={loadGraph}
-          className="px-2 py-1 text-[9px] tracking-[1px] uppercase"
-          style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
-        >
-          Refresh
-        </button>
+        <div style={{ flex: 1 }} />
+        {activeTab === 'graph' && (
+          <>
+            <button onClick={() => (window as any).kyberbot?.brain?.popout()} className="px-2 py-1 text-[9px] tracking-[1px] uppercase" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-violet)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Pop Out</button>
+            <button onClick={loadGraph} className="px-2 py-1 text-[9px] tracking-[1px] uppercase" style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Refresh</button>
+          </>
+        )}
         <span className="text-[9px] ml-2" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
           {graphData.nodes.length} nodes / {graphData.edges.length} edges
         </span>
@@ -92,27 +78,23 @@ export default function BrainView() {
 
         {activeTab === 'graph' && (
           loading ? (
-            <div className="h-full flex items-center justify-center">
-              <span className="text-[11px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Loading graph...</span>
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Loading graph...</span>
             </div>
           ) : (
-            <div className="h-full flex">
-              <div className="flex-1">
-                <MemoryCanvas
-                  nodes={graphData.nodes}
-                  edges={graphData.edges}
-                  onNodeSelect={setSelectedNode}
-                />
+            <div style={{ height: '100%', display: 'flex' }}>
+              <div style={{ flex: 1 }}>
+                <MemoryCanvas nodes={graphData.nodes} edges={graphData.edges} onNodeSelect={setSelectedNode} />
               </div>
               {selectedNode && (
-                <div className="w-[280px] border-l p-3 overflow-y-auto" style={{ borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}>
+                <div style={{ width: '280px', borderLeft: '1px solid var(--border-color)', padding: '12px', overflowY: 'auto', background: 'var(--bg-secondary)' }}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="section-title" style={{ color: 'var(--accent-violet)' }}>{'// ENTITY'}</span>
-                    <button onClick={() => setSelectedNode(null)} className="text-[9px]" style={{ color: 'var(--fg-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Close</button>
+                    <button onClick={() => setSelectedNode(null)} style={{ fontSize: '9px', color: 'var(--fg-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Close</button>
                   </div>
-                  <div className="text-[13px] font-medium mb-1" style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-primary)' }}>{selectedNode.name}</div>
-                  <div className="text-[9px] tracking-[1px] uppercase mb-3" style={{ color: 'var(--accent-cyan)' }}>{selectedNode.type}</div>
-                  <div className="grid gap-2 text-[11px]" style={{ color: 'var(--fg-secondary)' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', fontFamily: 'var(--font-mono)', color: 'var(--fg-primary)', marginBottom: '4px' }}>{selectedNode.name}</div>
+                  <div style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--accent-cyan)', marginBottom: '12px' }}>{selectedNode.type}</div>
+                  <div className="grid gap-2" style={{ fontSize: '11px', color: 'var(--fg-secondary)' }}>
                     <div><span style={{ color: 'var(--fg-muted)' }}>Mentions:</span> {selectedNode.mention_count}</div>
                     <div><span style={{ color: 'var(--fg-muted)' }}>Priority:</span> {(selectedNode.priority * 100).toFixed(0)}%</div>
                     <div><span style={{ color: 'var(--fg-muted)' }}>Tier:</span> {selectedNode.tier}</div>
@@ -124,53 +106,68 @@ export default function BrainView() {
           )
         )}
 
-        {activeTab === 'entities' && (
-          <EntityBrowser />
-        )}
-
-        {activeTab === 'timeline' && (
-          <TimelineSearchView serverUrl={serverUrl} apiToken={apiToken} />
-        )}
-
-        {activeTab === 'search' && (
-          <HybridSearchView serverUrl={serverUrl} apiToken={apiToken} />
-        )}
+        {activeTab === 'entities' && <EntityBrowser />}
+        {activeTab === 'notes' && <BrainNotesView serverUrl={serverUrl} apiToken={apiToken} />}
+        {activeTab === 'timeline' && <TimelineView serverUrl={serverUrl} apiToken={apiToken} />}
+        {activeTab === 'search' && <SearchView serverUrl={serverUrl} apiToken={apiToken} />}
       </div>
     </div>
   );
 }
 
-// ── Entity Search Sub-View ──
+// ── Brain Notes ──
 
-function EntitySearchView({ serverUrl, apiToken }: { serverUrl: string; apiToken: string | null }) {
-  const [query, setQuery] = useState('');
-  const [entities, setEntities] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+function BrainNotesView({ serverUrl, apiToken }: { serverUrl: string; apiToken: string | null }) {
+  const [notes, setNotes] = useState<any[]>([]);
+  const [selectedNote, setSelectedNote] = useState<{ name: string; content: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const search = async () => {
-    setLoading(true);
+  useEffect(() => {
+    manageFetch<{ notes: any[] }>(serverUrl, apiToken, '/brain-notes')
+      .then(d => setNotes(d.notes))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [serverUrl, apiToken]);
+
+  const openNote = async (name: string) => {
     try {
-      const data = await brainFetch<{ results: any[] }>(serverUrl, apiToken, `/entities?q=${encodeURIComponent(query)}&limit=50`);
-      setEntities(data.results);
-    } catch { /* offline */ }
-    setLoading(false);
+      const data = await manageFetch<{ name: string; content: string }>(serverUrl, apiToken, `/brain-notes/${encodeURIComponent(name)}`);
+      setSelectedNote(data);
+    } catch {}
   };
 
-  useEffect(() => { search(); }, []);
+  if (selectedNote) {
+    return (
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--accent-emerald)' }}>{selectedNote.name}</span>
+          <button onClick={() => setSelectedNote(null)} style={{ fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--fg-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Back</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+          <pre style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--fg-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{selectedNote.content}</pre>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <div className="flex gap-2 mb-3">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && search()} placeholder="Search entities..." className="flex-1 px-2 py-1 text-[11px] outline-none" style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-secondary)', color: 'var(--fg-primary)', border: '1px solid var(--border-color)' }} />
-        <button onClick={search} className="px-3 py-1 text-[9px] tracking-[1px] uppercase border" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--accent-emerald)', color: 'var(--accent-emerald)', background: 'transparent', cursor: 'pointer' }}>Search</button>
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        {loading && <span className="text-[11px]" style={{ color: 'var(--fg-muted)' }}>Searching...</span>}
-        {entities.map((e: any) => (
-          <div key={e.id || e.name} className="p-2 border-b flex items-center gap-2" style={{ borderColor: 'var(--border-color)' }}>
-            <span className="text-[9px] px-1 uppercase" style={{ color: 'var(--accent-cyan)', background: 'rgba(34,211,238,0.1)' }}>{e.type}</span>
-            <span className="text-[12px]" style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-primary)' }}>{e.name}</span>
-            <span className="text-[9px] ml-auto" style={{ color: 'var(--fg-muted)' }}>{e.mention_count} mentions</span>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflowY: 'auto', padding: '16px' }}>
+      <span className="section-title" style={{ color: 'var(--accent-emerald)' }}>{'// BRAIN NOTES'}</span>
+      <p style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', marginTop: '4px', marginBottom: '16px' }}>
+        Long-form knowledge, research findings, and reference material stored in brain/
+      </p>
+      {loading && <span style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Loading...</span>}
+      {notes.length === 0 && !loading && <span style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>No brain notes yet</span>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {notes.map(note => (
+          <div key={note.name} onClick={() => openNote(note.name)} style={{ padding: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--fg-primary)' }}>{note.name}</span>
+              <span style={{ fontSize: '9px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>{(note.size / 1024).toFixed(1)}KB</span>
+            </div>
+            <span style={{ fontSize: '9px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
+              Modified: {new Date(note.lastModified).toLocaleString()}
+            </span>
           </div>
         ))}
       </div>
@@ -178,71 +175,135 @@ function EntitySearchView({ serverUrl, apiToken }: { serverUrl: string; apiToken
   );
 }
 
-// ── Timeline Sub-View ──
+// ── Timeline (expandable) ──
 
-function TimelineSearchView({ serverUrl, apiToken }: { serverUrl: string; apiToken: string | null }) {
+function TimelineView({ serverUrl, apiToken }: { serverUrl: string; apiToken: string | null }) {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    brainFetch<{ events: any[] }>(serverUrl, apiToken, '/timeline?limit=50')
+    brainFetch<{ events: any[] }>(serverUrl, apiToken, '/timeline?limit=100')
       .then(data => setEvents(data.events))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [serverUrl, apiToken]);
 
+  const toggle = (i: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
   return (
-    <div className="h-full overflow-y-auto p-4">
-      {loading && <span className="text-[11px]" style={{ color: 'var(--fg-muted)' }}>Loading timeline...</span>}
-      {events.map((ev: any, i: number) => (
-        <div key={i} className="p-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[9px]" style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>{new Date(ev.timestamp || ev.created_at).toLocaleString()}</span>
-            {ev.event_type && <span className="text-[9px] px-1 uppercase" style={{ color: 'var(--accent-emerald)', background: 'rgba(16,185,129,0.1)' }}>{ev.event_type}</span>}
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflowY: 'auto', padding: '16px' }}>
+      <span className="section-title" style={{ color: 'var(--accent-emerald)' }}>{'// TIMELINE'}</span>
+      <p style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', marginTop: '4px', marginBottom: '16px' }}>
+        Temporal events — click to expand full content
+      </p>
+      {loading && <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>Loading...</span>}
+      {events.map((ev, i) => {
+        const isExpanded = expanded.has(i);
+        const content = ev.summary || ev.content || JSON.stringify(ev);
+        return (
+          <div key={i} onClick={() => toggle(i)} style={{ padding: '8px', borderBottom: '1px solid var(--border-color)', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '9px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>{new Date(ev.timestamp || ev.created_at).toLocaleString()}</span>
+              {ev.event_type && <span style={{ fontSize: '9px', padding: '1px 4px', textTransform: 'uppercase', color: 'var(--accent-emerald)', background: 'rgba(16,185,129,0.1)', fontFamily: 'var(--font-mono)' }}>{ev.event_type}</span>}
+              {ev.channel && <span style={{ fontSize: '9px', padding: '1px 4px', textTransform: 'uppercase', color: 'var(--accent-cyan)', background: 'rgba(34,211,238,0.1)', fontFamily: 'var(--font-mono)' }}>{ev.channel}</span>}
+              <span style={{ fontSize: '8px', color: 'var(--fg-muted)', marginLeft: 'auto' }}>{isExpanded ? '\u25BE' : '\u25B8'}</span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--fg-secondary)', whiteSpace: isExpanded ? 'pre-wrap' : 'nowrap', overflow: isExpanded ? 'visible' : 'hidden', textOverflow: isExpanded ? 'unset' : 'ellipsis', wordBreak: isExpanded ? 'break-word' : 'normal' }}>
+              {isExpanded ? content : content.slice(0, 200)}
+            </div>
           </div>
-          <div className="text-[11px]" style={{ color: 'var(--fg-secondary)' }}>{ev.summary || ev.content || JSON.stringify(ev).slice(0, 200)}</div>
-        </div>
-      ))}
-      {!loading && events.length === 0 && <span className="text-[11px]" style={{ color: 'var(--fg-muted)' }}>No timeline events</span>}
+        );
+      })}
+      {!loading && events.length === 0 && <span style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>No timeline events</span>}
     </div>
   );
 }
 
-// ── Hybrid Search Sub-View ──
+// ── Search (expandable results) ──
 
-function HybridSearchView({ serverUrl, apiToken }: { serverUrl: string; apiToken: string | null }) {
+function SearchView({ serverUrl, apiToken }: { serverUrl: string; apiToken: string | null }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   const search = async () => {
     if (!query.trim()) return;
     setLoading(true);
+    setExpanded(new Set());
     try {
       const data = await brainFetch<{ results: any[] }>(serverUrl, apiToken, '/search', {
         method: 'POST',
-        body: JSON.stringify({ query, limit: 30 }),
+        body: JSON.stringify({ query, limit: 50 }),
       });
       setResults(data.results);
-    } catch { /* offline */ }
+    } catch {}
     setLoading(false);
   };
 
+  const toggle = (i: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
   return (
-    <div className="h-full flex flex-col p-4">
-      <div className="flex gap-2 mb-3">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && search()} placeholder="Semantic + keyword search..." className="flex-1 px-2 py-1 text-[11px] outline-none" style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-secondary)', color: 'var(--fg-primary)', border: '1px solid var(--border-color)' }} />
-        <button onClick={search} className="px-3 py-1 text-[9px] tracking-[1px] uppercase border" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--accent-emerald)', color: 'var(--accent-emerald)', background: 'transparent', cursor: 'pointer' }}>Search</button>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: '8px' }}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && search()}
+          placeholder="Search all memories (semantic + keyword)..."
+          style={{ flex: 1, padding: '6px 8px', fontSize: '11px', fontFamily: 'var(--font-mono)', background: 'var(--bg-secondary)', color: 'var(--fg-primary)', border: '1px solid var(--border-color)', outline: 'none' }}
+        />
+        <button onClick={search} style={{ padding: '4px 12px', fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', border: '1px solid var(--accent-emerald)', color: 'var(--accent-emerald)', background: 'transparent', cursor: 'pointer' }}>Search</button>
       </div>
-      <div className="flex-1 overflow-y-auto">
-        {loading && <span className="text-[11px]" style={{ color: 'var(--fg-muted)' }}>Searching...</span>}
-        {results.map((r: any, i: number) => (
-          <div key={i} className="p-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
-            <div className="text-[11px] mb-1" style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-primary)' }}>{r.title || r.content?.slice(0, 100) || 'Untitled'}</div>
-            {r.score && <span className="text-[9px]" style={{ color: 'var(--fg-muted)' }}>Score: {r.score.toFixed(3)}</span>}
-          </div>
-        ))}
-        {!loading && results.length === 0 && query && <span className="text-[11px]" style={{ color: 'var(--fg-muted)' }}>No results</span>}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        {loading && <span style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Searching...</span>}
+        {results.map((r, i) => {
+          const isExpanded = expanded.has(i);
+          const content = r.content || '';
+          const title = r.title || content.slice(0, 80) || 'Untitled';
+          return (
+            <div key={i} onClick={() => toggle(i)} style={{ padding: '10px', borderBottom: '1px solid var(--border-color)', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                {r.type && <span style={{ fontSize: '8px', padding: '1px 4px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: r.type === 'conversation' ? 'var(--accent-cyan)' : r.type === 'note' ? 'var(--accent-emerald)' : 'var(--accent-violet)', background: r.type === 'conversation' ? 'rgba(34,211,238,0.1)' : r.type === 'note' ? 'rgba(16,185,129,0.1)' : 'rgba(139,92,246,0.1)' }}>{r.type}</span>}
+                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--fg-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+                {r.score != null && <span style={{ fontSize: '8px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>{(r.score * 100).toFixed(0)}%</span>}
+                <span style={{ fontSize: '8px', color: 'var(--fg-muted)' }}>{isExpanded ? '\u25BE' : '\u25B8'}</span>
+              </div>
+              {r.entities && r.entities.length > 0 && (
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                  {r.entities.slice(0, 5).map((e: string, j: number) => (
+                    <span key={j} style={{ fontSize: '8px', padding: '1px 4px', color: 'var(--accent-amber)', background: 'rgba(245,158,11,0.1)', fontFamily: 'var(--font-mono)' }}>{e}</span>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: '11px', color: 'var(--fg-secondary)', fontFamily: 'var(--font-mono)', whiteSpace: isExpanded ? 'pre-wrap' : 'nowrap', overflow: isExpanded ? 'visible' : 'hidden', textOverflow: isExpanded ? 'unset' : 'ellipsis', wordBreak: isExpanded ? 'break-word' : 'normal' }}>
+                {isExpanded ? content : content.slice(0, 200)}
+              </div>
+              {isExpanded && r.created_at && (
+                <div style={{ fontSize: '8px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', marginTop: '8px' }}>
+                  Stored: {new Date(r.created_at).toLocaleString()}
+                  {r.tier && ` | Tier: ${r.tier}`}
+                  {r.priority != null && ` | Priority: ${(r.priority * 100).toFixed(0)}%`}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {!loading && results.length === 0 && query && <span style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>No results found</span>}
+        {!query && <span style={{ fontSize: '11px', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>Enter a query to search across all memories — conversations, notes, entity facts, and brain documents</span>}
       </div>
     </div>
   );
