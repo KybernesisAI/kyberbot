@@ -59,7 +59,7 @@ export async function spawnAgent(name: string, prompt: string): Promise<AgentSpa
  * Build the full system prompt for a sub-agent.
  * Structure: preamble + agent body + abbreviated identity context.
  */
-function buildSystemPrompt(agent: InstalledAgent): string {
+export function buildSystemPrompt(agent: InstalledAgent): string {
   const parts: string[] = [];
   const root = getRoot();
 

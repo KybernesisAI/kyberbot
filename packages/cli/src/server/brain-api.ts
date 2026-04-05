@@ -6,7 +6,7 @@
 
 import { Router, Request, Response } from 'express';
 import { getRoot } from '../config.js';
-import { searchEntities, getEntityContext, getEntityGraphStats } from '../brain/entity-graph.js';
+import { searchEntities, getEntityContext, getEntityGraphStats, getEntityGraphDb } from '../brain/entity-graph.js';
 import { queryTimeline, getTimelineStats } from '../brain/timeline.js';
 import { hybridSearch } from '../brain/hybrid-search.js';
 import { createLogger } from '../logger.js';
@@ -98,6 +98,77 @@ export function createBrainRouter(): Router {
     } catch (error) {
       logger.error('Timeline stats failed', { error: String(error) });
       res.status(500).json({ error: 'Stats failed' });
+    }
+  });
+
+  // Entity graph for visualization (p5.js canvas)
+  router.get('/graph', async (req: Request, res: Response) => {
+    try {
+      const root = getRoot();
+      const limit = Math.min(parseInt(req.query.limit as string || '100') || 100, 500);
+      const entityId = req.query.entityId ? parseInt(req.query.entityId as string) : undefined;
+      const types = req.query.types ? (req.query.types as string).split(',') : undefined;
+
+      const db = await getEntityGraphDb(root);
+
+      let nodes: unknown[];
+      let nodeIds: Set<number>;
+
+      if (entityId) {
+        // 2-hop neighborhood around a specific entity
+        const rows = db.prepare(`
+          WITH hop1 AS (
+            SELECT CASE WHEN source_id = ? THEN target_id ELSE source_id END AS id
+            FROM entity_relations WHERE source_id = ? OR target_id = ?
+          ),
+          hop2 AS (
+            SELECT CASE WHEN r.source_id = h.id THEN r.target_id ELSE r.source_id END AS id
+            FROM entity_relations r JOIN hop1 h ON r.source_id = h.id OR r.target_id = h.id
+          ),
+          all_ids AS (
+            SELECT ? AS id UNION SELECT id FROM hop1 UNION SELECT id FROM hop2
+          )
+          SELECT DISTINCT e.id, e.name, e.type, e.mention_count, COALESCE(e.priority, 0.5) AS priority,
+                 COALESCE(e.decay_score, 0) AS decay_score, COALESCE(e.tier, 'warm') AS tier, e.last_seen
+          FROM entities e JOIN all_ids a ON e.id = a.id
+        `).all(entityId, entityId, entityId, entityId);
+        nodes = rows;
+      } else {
+        // Top entities by mention count
+        let sql = `SELECT id, name, type, mention_count, COALESCE(priority, 0.5) AS priority,
+                   COALESCE(decay_score, 0) AS decay_score, COALESCE(tier, 'warm') AS tier, last_seen
+                   FROM entities`;
+        const params: unknown[] = [];
+
+        if (types && types.length > 0) {
+          sql += ` WHERE type IN (${types.map(() => '?').join(',')})`;
+          params.push(...types);
+        }
+
+        sql += ' ORDER BY mention_count DESC LIMIT ?';
+        params.push(limit);
+
+        nodes = db.prepare(sql).all(...params);
+      }
+
+      nodeIds = new Set((nodes as any[]).map(n => n.id));
+
+      // Get edges between the selected nodes
+      let edges: unknown[] = [];
+      if (nodeIds.size > 0) {
+        const idList = [...nodeIds].join(',');
+        edges = db.prepare(`
+          SELECT source_id AS source, target_id AS target, relationship,
+                 strength, COALESCE(confidence, 0.5) AS confidence
+          FROM entity_relations
+          WHERE source_id IN (${idList}) AND target_id IN (${idList})
+        `).all();
+      }
+
+      res.json({ nodes, edges });
+    } catch (error) {
+      logger.error('Graph data fetch failed', { error: String(error) });
+      res.status(500).json({ error: 'Graph fetch failed' });
     }
   });
 

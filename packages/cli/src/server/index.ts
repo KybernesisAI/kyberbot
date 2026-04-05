@@ -14,6 +14,7 @@ import { authMiddleware, getApiToken } from '../middleware/auth.js';
 import { createBrainRouter } from './brain-api.js';
 import { executeHandler } from './execute-api.js';
 import { createWebApiRouter } from './web-api.js';
+import { createManagementRouter } from './management-api.js';
 import { chatSseHandler } from './chat-sse.js';
 import { ServiceHandle } from '../types.js';
 import { TelegramChannel } from './channels/telegram.js';
@@ -68,6 +69,9 @@ export async function startServer(options: {
 
   // Web API (authenticated)
   app.use('/api/web', authMiddleware, createWebApiRouter());
+
+  // Management API (authenticated) — skill/agent/channel/heartbeat CRUD
+  app.use('/api/web/manage', authMiddleware, createManagementRouter(channels));
 
   // Serve web UI static files
   try {
