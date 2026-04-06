@@ -121,21 +121,28 @@ export class AgentRuntime {
     // Register on the agent bus for inter-agent messaging
     if (this.bus) {
       this.bus.registerAgent(this.name, async (msg) => {
-        // For now, just acknowledge — full Claude Code response is a future enhancement
         logger.info(`[bus] ${this.name} received from ${msg.from}: ${msg.payload.slice(0, 100)}`);
 
-        // Store the inter-agent message in memory
+        let response: string;
+        try {
+          response = await this.handleBusMessage(msg);
+        } catch (error) {
+          logger.error(`[bus] ${this.name} failed to process message`, { error: String(error) });
+          response = `[${this.name}] I received your message but encountered an error processing it.`;
+        }
+
+        // Store the inter-agent conversation in memory
         try {
           const { storeConversation } = await import('../brain/store-conversation.js');
           await storeConversation(this.root, {
             prompt: `[From ${msg.from}]: ${msg.payload}`,
-            response: `[Acknowledged by ${this.name}]`,
+            response,
             channel: 'agent-bus',
             metadata: { from: msg.from, type: msg.type, topic: msg.topic },
           });
         } catch { /* best effort */ }
 
-        return `[${this.name}] Message received.`;
+        return response;
       });
     }
 
@@ -145,6 +152,61 @@ export class AgentRuntime {
       channels: this.channels.map(c => c.name),
       embeddings: this.embeddingsReady,
     });
+  }
+
+  /**
+   * Handle an incoming bus message using Claude with brain context.
+   */
+  private async handleBusMessage(msg: import('./agent-bus.js').AgentMessage): Promise<string> {
+    const { getClaudeClient } = await import('../claude.js');
+    const { hybridSearch } = await import('../brain/hybrid-search.js');
+
+    // Retrieve relevant context from this agent's brain
+    let context = '';
+    try {
+      const results = await hybridSearch(msg.payload, this.root, { limit: 5 });
+      if (results.length > 0) {
+        context = results
+          .map((r, i) => `[${i + 1}] ${r.title}: ${r.content.slice(0, 300)}`)
+          .join('\n\n');
+      }
+    } catch {
+      // Brain search failed — respond without context
+    }
+
+    // Read SOUL.md for personality
+    let soul = '';
+    try {
+      const { readFileSync } = await import('fs');
+      const { join } = await import('path');
+      const soulPath = join(this.root, 'SOUL.md');
+      soul = readFileSync(soulPath, 'utf-8').slice(0, 500);
+    } catch { /* no soul file */ }
+
+    const systemPrompt = [
+      `You are ${this.name}.`,
+      soul ? `Your identity:\n${soul}` : '',
+      `You received a message from another AI agent named ${msg.from}.`,
+      msg.topic ? `Topic: ${msg.topic}` : '',
+      'Respond helpfully and concisely based on your knowledge and the context below.',
+      'Keep your response under 500 words.',
+      context ? `\nRelevant context from your memory:\n\n${context}` : '',
+    ].filter(Boolean).join('\n');
+
+    const prompt = msg.payload;
+
+    try {
+      const client = getClaudeClient();
+      const response = await client.complete(prompt, {
+        system: systemPrompt,
+        model: (this.identity.claude?.model as 'haiku' | 'sonnet' | 'opus') || 'sonnet',
+        maxTokens: 1024,
+      });
+      return response;
+    } catch (error) {
+      logger.error(`[bus] Claude call failed for ${this.name}`, { error: String(error) });
+      return `[${this.name}] I received your message but couldn't generate a full response right now.`;
+    }
   }
 
   /**
