@@ -66,7 +66,7 @@ export class AgentBus extends EventEmitter {
     if (msg.to === '*') {
       // Broadcast — notify all agents except sender
       for (const [name, handler] of this.handlers) {
-        if (name !== msg.from) {
+        if (name !== msg.from && name !== msg.from.toLowerCase()) {
           handler(msg).catch((err) =>
             logger.error(`Bus delivery to ${name} failed`, { error: String(err) })
           );
@@ -75,10 +75,10 @@ export class AgentBus extends EventEmitter {
       return null;
     }
 
-    // Direct message
-    const handler = this.handlers.get(msg.to);
+    // Direct message (case-insensitive lookup)
+    const handler = this.handlers.get(msg.to) || this.handlers.get(msg.to.toLowerCase());
     if (!handler) {
-      logger.warn(`Agent "${msg.to}" not found on bus`);
+      logger.warn(`Agent "${msg.to}" not found on bus`, { registered: [...this.handlers.keys()] });
       return null;
     }
 
