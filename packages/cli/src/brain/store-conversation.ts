@@ -19,7 +19,7 @@ import {
   linkEntitiesWithType,
 } from './entity-graph.js';
 import { extractRelationships } from './relationship-extractor.js';
-import { indexDocument, isChromaAvailable } from './embeddings.js';
+// ChromaDB imports removed — embeddings handled exclusively by sleep agent to prevent OOM
 import { extractFactsRealtime } from './fact-extractor.js';
 
 const logger = createLogger('brain');
@@ -275,13 +275,11 @@ export async function storeConversation(
   }
 
   logger.info('storeConversation:segments:before', { heapMB: heapMB() });
-  // ── Step 2b: Segment-level indexing for fine-grained retrieval ────
-  // Skip ALL ChromaDB operations if skipEmbeddings is set or heap is high.
-  // The sleep agent handles embeddings separately during maintenance cycles.
-  const skipChroma = options.skipEmbeddings || heapMB() > 2048;
-  if (skipChroma) {
-    logger.info('Skipping ChromaDB indexing', { reason: options.skipEmbeddings ? 'skipEmbeddings flag' : 'heap high', heapMB: heapMB() });
-  }
+  // ── Step 2b: Segment-level timeline indexing ─────────────────────────
+  // NOTE: ChromaDB indexing is DISABLED in storeConversation to prevent OOM.
+  // The sleep agent handles ChromaDB embeddings during its maintenance cycle.
+  // The OOM was caused by the chromadb npm package's internal memory usage
+  // spiking to 8GB+ during concurrent operations (even with skipEmbeddings).
   {
     try {
       const segments = segmentText(fullText, 250, 50);
@@ -300,22 +298,7 @@ export async function storeConversation(
             // Segment storage is best-effort
           }
 
-          // Store segment in ChromaDB (for semantic search)
-          if (isChromaAvailable() && !skipChroma) {
-            try {
-              await indexDocument(segId, seg.text, {
-                type: 'conversation',
-                source_path: segPath,
-                title: fullTitle,
-                timestamp,
-                entities: entityNames,
-                topics: topicNames,
-                summary: seg.text,
-              });
-            } catch {
-              // Segment embedding is best-effort
-            }
-          }
+          // ChromaDB indexing handled by sleep agent — skipped here to prevent OOM
         }
         logger.debug('Stored conversation segments', {
           conversationId,
@@ -397,27 +380,9 @@ export async function storeConversation(
     // Fact extraction is best-effort — never blocks conversation storage
   }
 
-  logger.info('storeConversation:embeddings:before', { heapMB: heapMB() });
-  // ── Step 4: Embeddings (best-effort) ─────────────────────────────────
-  // Skip parent-level ChromaDB indexing if segments were created (Step 2b).
-  // Also skip if heap is above 6GB to prevent OOM crash.
-  const hasSegments = fullText.length > 250;
-  try {
-    if (isChromaAvailable() && !hasSegments && !skipChroma) {
-      await indexDocument(conversationId, fullText, {
-        type: 'conversation',
-        source_path: sourcePath,
-        title: `[${input.channel}] ${input.prompt.slice(0, 80)}`,
-        timestamp,
-        entities: entityNames,
-        topics: topicNames,
-        summary: input.response.slice(0, 300),
-      });
-      logger.debug('Indexed conversation in embeddings', { conversationId });
-    }
-  } catch (err) {
-    logger.warn('Embedding indexing failed', { error: String(err) });
-  }
+  // Step 4: Embeddings — DISABLED in storeConversation to prevent OOM.
+  // ChromaDB embeddings are handled exclusively by the sleep agent.
+  logger.info('storeConversation:embeddings:skipped (sleep agent handles)', { heapMB: heapMB() });
 
   logger.info('Conversation stored', {
     conversationId,
