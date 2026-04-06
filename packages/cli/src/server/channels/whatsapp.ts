@@ -100,12 +100,13 @@ export class WhatsAppChannel implements Channel {
             await this.send(msg.key.remoteJid!, reply);
 
             // Fire-and-forget: store conversation in memory
+            // skipEmbeddings: true — sleep agent handles ChromaDB indexing to avoid OOM
             storeConversation(getRoot(), {
               prompt: text,
               response: reply,
               channel: 'whatsapp',
               metadata: { remoteJid: msg.key.remoteJid, pushName: msg.pushName },
-            }).catch((err) => logger.warn('Memory storage failed', { error: String(err) }));
+            }, { skipEmbeddings: true }).catch((err) => logger.warn('Memory storage failed', { error: String(err) }));
           } catch (error) {
             logger.error('Failed to process WhatsApp message', { error: String(error) });
           }

@@ -150,12 +150,13 @@ export class TelegramChannel implements Channel {
           }
 
           // Fire-and-forget: store conversation in memory
+          // skipEmbeddings: true — sleep agent handles ChromaDB indexing to avoid OOM
           storeConversation(getRoot(), {
             prompt: text,
             response: reply,
             channel: 'telegram',
             metadata: { chatId, userId },
-          }).catch((err) => logger.warn('Memory storage failed', { error: String(err) }));
+          }, { skipEmbeddings: true }).catch((err) => logger.warn('Memory storage failed', { error: String(err) }));
         } catch (error) {
           logger.error('Failed to process Telegram message', { error: String(error) });
           await ctx.reply('Sorry, I encountered an error processing your message.');

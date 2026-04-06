@@ -167,7 +167,7 @@ function channelToSourceType(channel: string): string {
 export async function storeConversation(
   root: string,
   input: ConversationInput,
-  options: { entityStoplist?: string[] } = {}
+  options: { entityStoplist?: string[]; skipEmbeddings?: boolean } = {}
 ): Promise<void> {
   const conversationId = randomUUID();
   const timestamp = input.timestamp || new Date().toISOString();
@@ -276,11 +276,13 @@ export async function storeConversation(
 
   logger.info('storeConversation:segments:before', { heapMB: heapMB() });
   // ── Step 2b: Segment-level indexing for fine-grained retrieval ────
-  // Guard: skip if heap is already above 4GB to prevent OOM crash
-  const currentHeap = heapMB();
-  if (currentHeap > 4096) {
-    logger.warn('Skipping segment indexing — heap too high', { heapMB: currentHeap });
-  } else {
+  // Skip ALL ChromaDB operations if skipEmbeddings is set or heap is high.
+  // The sleep agent handles embeddings separately during maintenance cycles.
+  const skipChroma = options.skipEmbeddings || heapMB() > 2048;
+  if (skipChroma) {
+    logger.info('Skipping ChromaDB indexing', { reason: options.skipEmbeddings ? 'skipEmbeddings flag' : 'heap high', heapMB: heapMB() });
+  }
+  {
     try {
       const segments = segmentText(fullText, 250, 50);
       if (segments.length > 1) {
@@ -298,8 +300,8 @@ export async function storeConversation(
             // Segment storage is best-effort
           }
 
-          // Store segment in ChromaDB (for semantic search) — skip if heap is climbing
-          if (isChromaAvailable() && heapMB() < 6144) {
+          // Store segment in ChromaDB (for semantic search)
+          if (isChromaAvailable() && !skipChroma) {
             try {
               await indexDocument(segId, seg.text, {
                 type: 'conversation',
@@ -401,7 +403,7 @@ export async function storeConversation(
   // Also skip if heap is above 6GB to prevent OOM crash.
   const hasSegments = fullText.length > 250;
   try {
-    if (isChromaAvailable() && !hasSegments && heapMB() < 6144) {
+    if (isChromaAvailable() && !hasSegments && !skipChroma) {
       await indexDocument(conversationId, fullText, {
         type: 'conversation',
         source_path: sourcePath,
