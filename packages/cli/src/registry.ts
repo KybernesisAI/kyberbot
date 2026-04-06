@@ -140,6 +140,35 @@ export function isRegistered(name: string): boolean {
 }
 
 /**
+ * Find the next available port for a new agent.
+ * Scans all registered agents' ports and returns the next unused one.
+ * Starts from 3456 and increments.
+ */
+export function getNextAvailablePort(): number {
+  const registry = loadRegistry();
+  const usedPorts = new Set<number>();
+
+  for (const [, entry] of Object.entries(registry.agents)) {
+    try {
+      const identityPath = join(entry.root, 'identity.yaml');
+      if (existsSync(identityPath)) {
+        const raw = readFileSync(identityPath, 'utf-8');
+        const identity = yaml.load(raw) as Record<string, unknown>;
+        const server = identity?.server as Record<string, unknown> | undefined;
+        const port = (server?.port as number) || 3456;
+        usedPorts.add(port);
+      }
+    } catch { /* skip */ }
+  }
+
+  let port = 3456;
+  while (usedPorts.has(port)) {
+    port++;
+  }
+  return port;
+}
+
+/**
  * Get the agent name from identity.yaml at the given root.
  */
 export function getAgentNameFromRoot(root: string): string {

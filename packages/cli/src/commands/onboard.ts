@@ -200,7 +200,13 @@ export function createOnboardCommand(): Command {
       }
       console.log(chalk.green('  + .claude/ (CLAUDE.md, settings, commands, skills)'));
 
-      // Write identity.yaml
+      // Write identity.yaml — auto-detect port to avoid conflicts with other agents
+      let serverPort = 3456;
+      try {
+        const { getNextAvailablePort } = await import('../registry.js');
+        serverPort = getNextAvailablePort();
+      } catch { /* registry not available, use default */ }
+
       const identity: Record<string, unknown> = {
         agent_name: agentName,
         agent_description: agentDescription,
@@ -211,7 +217,7 @@ export function createOnboardCommand(): Command {
           end: '22:00',
           timezone,
         },
-        server: { port: 3456 },
+        server: { port: serverPort },
         claude: { mode: claudeMode },
       };
 
