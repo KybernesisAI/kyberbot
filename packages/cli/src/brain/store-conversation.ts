@@ -85,8 +85,17 @@ function segmentText(text: string, segmentSize: number = 250, overlap: number = 
 
     segments.push({ text: text.slice(start, end).trim(), index });
     index++;
-    start = end - overlap;
+    // Ensure forward progress — never go backwards
+    const nextStart = end - overlap;
+    if (nextStart <= start) {
+      // Overlap would cause infinite loop — advance past end instead
+      start = end;
+    } else {
+      start = nextStart;
+    }
     if (start >= text.length) break;
+    // Safety: cap at 100 segments max
+    if (index > 100) break;
   }
 
   return segments;
