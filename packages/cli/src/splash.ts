@@ -17,20 +17,25 @@ const BORDER = chalk.hex('#50C878');   // Border color
 
 const WIDTH = 76;
 
-export function displayBanner(): void {
-  const B = BORDER;
-  const INNER = 74; // inner width between ║ chars
+export function displayBanner(mode: 'single' | 'fleet' = 'single'): void {
+  const isFleet = mode === 'fleet';
+  const B = isFleet ? chalk.hex('#22d3ee') : BORDER; // cyan border for fleet
+  const INNER = 74;
 
-  // Art lines (raw, no leading spaces — we center them)
-  const artLines: [string, string][] = [
-    ['#A8F0C8', '██╗  ██╗██╗   ██╗██████╗ ███████╗██████╗ ██████╗  ██████╗ ████████╗'],
-    ['#82E8A8', '██║ ██╔╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔═══██╗╚══██╔══╝'],
-    ['#5CDC88', '█████╔╝  ╚████╔╝ ██████╔╝█████╗  ██████╔╝██████╔╝██║   ██║   ██║'],
-    ['#3CCF6E', '██╔═██╗   ╚██╔╝  ██╔══██╗██╔══╝  ██╔══██╗██╔══██╗██║   ██║   ██║'],
-    ['#24C05A', '██║  ██╗   ██║   ██████╔╝███████╗██║  ██║██████╔╝╚██████╔╝   ██║'],
-    ['#10B048', '╚═╝  ╚═╝   ╚═╝   ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═════╝  ╚═════╝    ╚═╝'],
+  // Emerald gradient for single, cyan gradient for fleet
+  const artColors = isFleet
+    ? ['#A8E8F0', '#82D8E8', '#5CC8DC', '#3CB8CF', '#24A8C0', '#10B0C8']
+    : ['#A8F0C8', '#82E8A8', '#5CDC88', '#3CCF6E', '#24C05A', '#10B048'];
+
+  const artLines: string[] = [
+    '██╗  ██╗██╗   ██╗██████╗ ███████╗██████╗ ██████╗  ██████╗ ████████╗',
+    '██║ ██╔╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔═══██╗╚══██╔══╝',
+    '█████╔╝  ╚████╔╝ ██████╔╝█████╗  ██████╔╝██████╔╝██║   ██║   ██║',
+    '██╔═██╗   ╚██╔╝  ██╔══██╗██╔══╝  ██╔══██╗██╔══██╗██║   ██║   ██║',
+    '██║  ██╗   ██║   ██████╔╝███████╗██║  ██║██████╔╝╚██████╔╝   ██║',
+    '╚═╝  ╚═╝   ╚═╝   ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═════╝  ╚═════╝    ╚═╝',
   ];
-  const maxArtWidth = Math.max(...artLines.map(([, raw]) => raw.length));
+  const maxArtWidth = Math.max(...artLines.map(raw => raw.length));
   const artPadLeft = Math.floor((INNER - maxArtWidth) / 2);
 
   const artLine = (color: string, raw: string) => {
@@ -40,18 +45,27 @@ export function displayBanner(): void {
 
   console.log(B('╔' + '═'.repeat(INNER) + '╗'));
   console.log(B('║') + ' '.repeat(INNER) + B('║'));
-  for (const [color, raw] of artLines) {
-    console.log(artLine(color, raw));
+  for (let i = 0; i < artLines.length; i++) {
+    console.log(artLine(artColors[i], artLines[i]));
   }
   console.log(B('║') + ' '.repeat(INNER) + B('║'));
 
-  // Tagline — centered
-  const tagPart1 = 'Personal AI Operating System. ';
-  const tagPart2 = 'Powered by Claude Code.';
-  const tagLen = tagPart1.length + tagPart2.length;
-  const tagPadLeft = Math.floor((INNER - tagLen) / 2);
-  const tagPadRight = INNER - tagLen - tagPadLeft;
-  console.log(B('║') + ' '.repeat(tagPadLeft) + DIM(tagPart1) + EMERALD(tagPart2) + ' '.repeat(tagPadRight) + B('║'));
+  // Tagline
+  if (isFleet) {
+    const tagPart1 = 'Personal AI Operating System. ';
+    const tagPart2 = 'FLEET MODE';
+    const tagLen = tagPart1.length + tagPart2.length;
+    const tagPadLeft = Math.floor((INNER - tagLen) / 2);
+    const tagPadRight = INNER - tagLen - tagPadLeft;
+    console.log(B('║') + ' '.repeat(tagPadLeft) + DIM(tagPart1) + chalk.hex('#22d3ee').bold(tagPart2) + ' '.repeat(tagPadRight) + B('║'));
+  } else {
+    const tagPart1 = 'Personal AI Operating System. ';
+    const tagPart2 = 'Powered by Claude Code.';
+    const tagLen = tagPart1.length + tagPart2.length;
+    const tagPadLeft = Math.floor((INNER - tagLen) / 2);
+    const tagPadRight = INNER - tagLen - tagPadLeft;
+    console.log(B('║') + ' '.repeat(tagPadLeft) + DIM(tagPart1) + EMERALD(tagPart2) + ' '.repeat(tagPadRight) + B('║'));
+  }
 
   console.log(B('║') + ' '.repeat(INNER) + B('║'));
   console.log(B('╚' + '═'.repeat(INNER) + '╝'));

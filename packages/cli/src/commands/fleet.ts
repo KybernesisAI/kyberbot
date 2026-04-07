@@ -215,7 +215,7 @@ export function createFleetCommand(): Command {
 
       console.clear();
       console.log();
-      displayBanner();
+      displayBanner('fleet');
 
       // Fleet metadata
       const agentNames = names || Object.keys((await import('../registry.js')).loadRegistry().agents);
