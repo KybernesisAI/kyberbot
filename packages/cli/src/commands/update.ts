@@ -89,6 +89,45 @@ function getCliVersion(repoPath: string): string {
   }
 }
 
+/**
+ * Get the installed CLI version from this package's package.json.
+ * Works regardless of git repo availability.
+ */
+function getInstalledVersion(): string {
+  try {
+    // dist/commands/update.js → ../../package.json
+    const pkgPath = join(__dirname, '..', '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+/**
+ * Check for updates via the GitHub API (fallback when no git repo).
+ * Compares installed version against the latest GitHub release tag.
+ */
+async function checkGitHubRelease(): Promise<{ hasUpdate: boolean; installed: string; latest: string }> {
+  const installed = getInstalledVersion();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const res = await fetch('https://api.github.com/repos/KybernesisAI/kyberbot/releases/latest', {
+      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'kyberbot-cli' },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return { hasUpdate: false, installed, latest: installed };
+    const data = await res.json() as { tag_name?: string };
+    const latest = (data.tag_name || '').replace(/^v/, '');
+    if (!latest) return { hasUpdate: false, installed, latest: installed };
+    return { hasUpdate: latest !== installed, installed, latest };
+  } catch {
+    return { hasUpdate: false, installed, latest: installed };
+  }
+}
+
 interface UpdateCheckResult {
   hasUpdates: boolean;
   commits: string[];
@@ -314,8 +353,15 @@ export function createUpdateCommand(): Command {
         console.log(chalk.bold('Update Check\n'));
 
         if (!repoPath) {
-          console.log(chalk.yellow('  Could not find KyberBot source repository.'));
-          console.log(chalk.dim('  Update manually: cd /path/to/kyberbot && git pull && npm run build\n'));
+          // No git repo — check GitHub releases instead
+          const gh = await checkGitHubRelease();
+          console.log(chalk.dim(`  CLI version:  ${gh.installed}`));
+          console.log(chalk.dim(`  Source:       GitHub releases (no local git repo)`));
+          if (gh.hasUpdate) {
+            console.log(EMERALD(`\n  new version available: ${gh.latest}`));
+          } else {
+            console.log(chalk.green('\n  CLI is up to date.'));
+          }
         } else {
           const { hasUpdates, commits, currentVersion } = checkForUpdates(repoPath);
           console.log(chalk.dim(`  CLI version:  ${currentVersion}`));
