@@ -1,6 +1,6 @@
 {
   "name": "@kyberbot/cli",
-  "version": "1.2.4",
+  "version": "1.2.7",
   "description": "KyberBot CLI — personal AI agent powered by Claude Code",
   "type": "module",
   "main": "dist/index.js",
