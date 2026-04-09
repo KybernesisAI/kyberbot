@@ -8,7 +8,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import Database from 'better-sqlite3';
+import { Database } from '../database.js';
 import { createLogger } from '../logger.js';
 import { getTimelineDb } from './timeline.js';
 import { ensureFactsTable } from './fact-store.js';
@@ -80,7 +80,7 @@ export async function generateUserProfile(root: string): Promise<UserProfile> {
  * Query facts by category, ordered by confidence and access count.
  * Excludes expired facts and facts that are no longer current.
  */
-function queryFacts(db: Database.Database, category: string, limit: number): string[] {
+function queryFacts(db: Database, category: string, limit: number): string[] {
   try {
     const rows = db.prepare(`
       SELECT content FROM facts
@@ -114,7 +114,7 @@ function queryFacts(db: Database.Database, category: string, limit: number): str
 /**
  * Query recent facts by category, ordered by timestamp descending.
  */
-function queryRecentFacts(db: Database.Database, category: string, limit: number): string[] {
+function queryRecentFacts(db: Database, category: string, limit: number): string[] {
   try {
     const rows = db.prepare(`
       SELECT content FROM facts
@@ -142,7 +142,7 @@ function queryTopEntities(root: string): Array<{ name: string; type: string; men
     return [];
   }
 
-  let entityDb: Database.Database | null = null;
+  let entityDb: Database | null = null;
   try {
     entityDb = new Database(entityDbPath, { readonly: true });
     const rows = entityDb.prepare(

@@ -7,7 +7,7 @@
  * Uses SQLite with FTS5 for full-text search.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../database.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import { createLogger } from '../logger.js';
@@ -56,7 +56,7 @@ export interface TimelineStats {
 // DATABASE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const databases = new Map<string, Database.Database>();
+const databases = new Map<string, Database>();
 
 /**
  * Reset the timeline DB connection(s). If root is given, closes only that
@@ -77,7 +77,7 @@ export function resetTimelineDb(root?: string): void {
   }
 }
 
-async function ensureDatabase(root: string): Promise<Database.Database> {
+async function ensureDatabase(root: string): Promise<Database> {
   const existing = databases.get(root);
   if (existing) return existing;
 
@@ -140,7 +140,7 @@ async function ensureDatabase(root: string): Promise<Database.Database> {
   return newDb;
 }
 
-function runMigrations(database: Database.Database): void {
+function runMigrations(database: Database): void {
   const columns = database.prepare(`PRAGMA table_info(timeline_events)`).all() as Array<{ name: string }>;
   const columnNames = new Set(columns.map(c => c.name));
 
@@ -176,7 +176,7 @@ function runMigrations(database: Database.Database): void {
   `);
 }
 
-export async function getTimelineDb(root: string): Promise<Database.Database> {
+export async function getTimelineDb(root: string): Promise<Database> {
   return ensureDatabase(root);
 }
 

@@ -269,7 +269,7 @@ Content:
 ${content}`;
 }
 
-function markProcessed(db: import('better-sqlite3').Database, queueId: number): void {
+function markProcessed(db: import('../../../database.js').Database, queueId: number): void {
   db.prepare(`
     UPDATE maintenance_queue SET processed_at = datetime('now') WHERE id = ?
   `).run(queueId);

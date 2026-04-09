@@ -6,14 +6,14 @@
  * ordered user and assistant messages.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../database.js';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('messages');
 
-const databases = new Map<string, Database.Database>();
+const databases = new Map<string, Database>();
 
 /**
  * Reset the messages DB connection(s). If root is given, closes only that
@@ -34,7 +34,7 @@ export function resetMessagesDb(root?: string): void {
   }
 }
 
-function ensureDatabase(root: string): Database.Database {
+function ensureDatabase(root: string): Database {
   const existing = databases.get(root);
   if (existing) return existing;
 

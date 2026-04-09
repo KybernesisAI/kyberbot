@@ -4,10 +4,10 @@
  * Tracks sleep agent progress through steps for crash recovery awareness.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../../../database.js';
 
 export function saveCheckpoint(
-  db: Database.Database,
+  db: Database,
   runId: number,
   step: string,
   data?: Record<string, unknown>
@@ -21,7 +21,7 @@ export function saveCheckpoint(
 }
 
 export function getLastCheckpoint(
-  db: Database.Database,
+  db: Database,
   runId: number
 ): { step: string; data: Record<string, unknown> } | null {
   const row = db.prepare(`

@@ -28,6 +28,7 @@ import { Command } from 'commander';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { initSqlite } from './database.js';
 
 // Load .env from KYBERBOT_ROOT or cwd before anything else
 const envRoot = process.env.KYBERBOT_ROOT || process.cwd();
@@ -123,7 +124,10 @@ program.addCommand(createBusCommand());
 // PARSE & RUN
 // ═══════════════════════════════════════════════════════════════════════════════
 
-program.parseAsync(process.argv).catch((error) => {
-  console.error(`Error: ${error.message || error}`);
-  process.exit(1);
-});
+// Initialize sql.js WASM before any command can use SQLite
+initSqlite()
+  .then(() => program.parseAsync(process.argv))
+  .catch((error) => {
+    console.error(`Error: ${error.message || error}`);
+    process.exit(1);
+  });

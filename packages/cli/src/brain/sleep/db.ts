@@ -5,14 +5,14 @@
  * maintenance queue, memory edges, and telemetry.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../../database.js';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
 import { createLogger } from '../../logger.js';
 
 const logger = createLogger('sleep-db');
 
-const databases = new Map<string, Database.Database>();
+const databases = new Map<string, Database>();
 
 /**
  * Reset the sleep DB connection(s). If root is given, closes only that
@@ -33,7 +33,7 @@ export function resetSleepDb(root?: string): void {
   }
 }
 
-export function getSleepDb(root: string): Database.Database {
+export function getSleepDb(root: string): Database {
   const existing = databases.get(root);
   if (existing) return existing;
 
@@ -123,7 +123,7 @@ export function getSleepDb(root: string): Database.Database {
  * Migrate CHECK constraints to allow new relation types and task types.
  * SQLite doesn't support ALTER CHECK, so we recreate tables if needed.
  */
-function runSleepDbMigrations(database: Database.Database): void {
+function runSleepDbMigrations(database: Database): void {
   // Test if new relation types are accepted by the current CHECK constraint
   try {
     database.exec("INSERT INTO memory_edges (from_path, to_path, relation) VALUES ('__migration_test__', '__migration_test__', 'consolidation')");

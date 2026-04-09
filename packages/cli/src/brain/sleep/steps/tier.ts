@@ -9,7 +9,7 @@
  * Queues tier-changed items for re-summarization.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../../../database.js';
 import { createLogger } from '../../../logger.js';
 import { getTimelineDb } from '../../timeline.js';
 import { getSleepDb } from '../db.js';
@@ -125,8 +125,8 @@ export async function runTierStep(
 }
 
 function updateTier(
-  timeline: Database.Database,
-  sleep: Database.Database,
+  timeline: Database,
+  sleep: Database,
   itemId: number,
   newTier: Tier,
   oldTier: Tier | null,

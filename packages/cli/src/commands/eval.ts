@@ -12,7 +12,7 @@
  */
 
 import { Command } from 'commander';
-import Database from 'better-sqlite3';
+import { Database } from '../database.js';
 import { join, resolve } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { getRoot } from '../config.js';
@@ -171,7 +171,7 @@ function grade(score: number, max: number): string {
 // EVAL 1: ENTITY GRAPH QUALITY
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function evalEntityQuality(entityDb: Database.Database): EvalResult {
+function evalEntityQuality(entityDb: Database): EvalResult {
   const result: EvalResult = {
     name: 'Entity Graph Quality',
     score: 0,
@@ -263,7 +263,7 @@ function evalEntityQuality(entityDb: Database.Database): EvalResult {
 // EVAL 2: CO-OCCURRENCE POLLUTION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function evalCooccurrencePollution(entityDb: Database.Database): EvalResult {
+function evalCooccurrencePollution(entityDb: Database): EvalResult {
   const result: EvalResult = {
     name: 'Co-occurrence Pollution',
     score: 0,
@@ -332,7 +332,7 @@ function evalCooccurrencePollution(entityDb: Database.Database): EvalResult {
 // EVAL 3: TIMELINE SIGNAL/NOISE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function evalTimelineQuality(timelineDb: Database.Database): EvalResult {
+function evalTimelineQuality(timelineDb: Database): EvalResult {
   const result: EvalResult = {
     name: 'Timeline Signal/Noise',
     score: 0,
@@ -416,7 +416,7 @@ function evalTimelineQuality(timelineDb: Database.Database): EvalResult {
 // EVAL 4: MEMORY EDGE QUALITY
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function evalEdgeQuality(sleepDb: Database.Database): EvalResult {
+function evalEdgeQuality(sleepDb: Database): EvalResult {
   const result: EvalResult = {
     name: 'Memory Edge Quality',
     score: 0,
@@ -509,7 +509,7 @@ function evalEdgeQuality(sleepDb: Database.Database): EvalResult {
 // EVAL 5: TIER & DECAY EFFECTIVENESS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function evalTierDecay(timelineDb: Database.Database): EvalResult {
+function evalTierDecay(timelineDb: Database): EvalResult {
   const result: EvalResult = {
     name: 'Tier & Decay Effectiveness',
     score: 0,
@@ -580,7 +580,7 @@ function evalTierDecay(timelineDb: Database.Database): EvalResult {
 // EVAL 6: SLEEP AGENT HEALTH
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function evalSleepAgent(sleepDb: Database.Database): EvalResult {
+function evalSleepAgent(sleepDb: Database): EvalResult {
   const result: EvalResult = {
     name: 'Sleep Agent Health',
     score: 0,
@@ -680,7 +680,7 @@ function evalSleepAgent(sleepDb: Database.Database): EvalResult {
 // EVAL 7: FACT STORE QUALITY
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function evalFactStore(timelineDb: Database.Database): EvalResult {
+function evalFactStore(timelineDb: Database): EvalResult {
   const result: EvalResult = {
     name: 'Fact Store Quality',
     score: 0,

@@ -5,7 +5,7 @@
  * Stores messages and topic subscriptions with WAL-mode journaling.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../database.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdirSync, existsSync } from 'fs';
@@ -13,7 +13,7 @@ import { createLogger } from '../logger.js';
 import type { AgentMessage } from './agent-bus.js';
 
 const logger = createLogger('bus-db');
-let db: Database.Database | null = null;
+let db: Database | null = null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -31,7 +31,7 @@ export interface Subscription {
 // CONNECTION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function getBusDb(): Database.Database {
+export function getBusDb(): Database {
   if (db) return db;
 
   const dir = join(homedir(), '.kyberbot');

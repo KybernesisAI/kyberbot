@@ -10,7 +10,7 @@
  * Uses SQLite for persistence.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../database.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import { createLogger } from '../logger.js';
@@ -84,7 +84,7 @@ export interface EntityContext {
 // DATABASE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const databases = new Map<string, Database.Database>();
+const databases = new Map<string, Database>();
 
 /**
  * Reset the entity graph DB connection(s). If root is given, closes only that
@@ -105,7 +105,7 @@ export function resetEntityGraphDb(root?: string): void {
   }
 }
 
-async function ensureDatabase(root: string): Promise<Database.Database> {
+async function ensureDatabase(root: string): Promise<Database> {
   const existing = databases.get(root);
   if (existing) return existing;
 
@@ -168,7 +168,7 @@ async function ensureDatabase(root: string): Promise<Database.Database> {
   return newDb;
 }
 
-function runEntityMigrations(database: Database.Database): void {
+function runEntityMigrations(database: Database): void {
   const entityCols = database.prepare(`PRAGMA table_info(entities)`).all() as Array<{ name: string }>;
   const entityColNames = new Set(entityCols.map(c => c.name));
 
@@ -293,7 +293,7 @@ function runEntityMigrations(database: Database.Database): void {
   `);
 }
 
-export async function getEntityGraphDb(root: string): Promise<Database.Database> {
+export async function getEntityGraphDb(root: string): Promise<Database> {
   return ensureDatabase(root);
 }
 
