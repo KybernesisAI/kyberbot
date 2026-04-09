@@ -294,22 +294,13 @@ async function storeConversationImpl(
     : `[${input.channel}] ${title}`;
 
   try {
-
-    // Deduplicate heartbeat/repetitive content
-    if (input.channel === 'heartbeat') {
-      const existing = await findRecentDuplicate(root, fullTitle, 24);
-      if (existing) {
-        await incrementTimelineEventCount(root, existing.id);
-        logger.debug('Deduplicated heartbeat timeline entry', { title: fullTitle });
-        // Skip creating new timeline entry but continue to entity graph + embeddings
-      } else {
-        await addConversationToTimeline(
-          root, conversationId, sourcePath, timestamp, undefined,
-          fullTitle,
-          timelineSummary,
-          entityNames, topicNames
-        );
-      }
+    // Deduplicate: skip if same title was stored in the last 2 minutes (any channel)
+    const recentHours = input.channel === 'heartbeat' ? 24 : 0.033; // 2 minutes for non-heartbeat
+    const existing = await findRecentDuplicate(root, fullTitle, recentHours);
+    if (existing) {
+      await incrementTimelineEventCount(root, existing.id);
+      logger.debug('Deduplicated timeline entry', { title: fullTitle, channel: input.channel });
+      // Skip creating new timeline entry but continue to entity graph + embeddings
     } else {
       await addConversationToTimeline(
         root, conversationId, sourcePath, timestamp, undefined,
