@@ -208,9 +208,20 @@ export async function startChromaDB(rootDir: string): Promise<ServiceHandle> {
       }
     } else {
       // Create and start new container
-      logger.info('Creating ChromaDB container (this may take a moment to pull the image)...');
       const dataDir = join(rootDir, 'data', 'chromadb');
 
+      // Pull image first (can take minutes on first run) — don't let docker run block
+      logger.info('Pulling ChromaDB image (first time may take a few minutes)...');
+      try {
+        execFileSync('docker', ['pull', 'chromadb/chroma:latest'], {
+          stdio: 'pipe',
+          timeout: 300_000, // 5 minutes for image pull
+        });
+      } catch {
+        logger.warn('Docker pull failed or timed out — trying docker run anyway');
+      }
+
+      logger.info('Starting ChromaDB container...');
       execFileSync('docker', [
         'run', '-d',
         '--name', CONTAINER_NAME,
@@ -221,7 +232,7 @@ export async function startChromaDB(rootDir: string): Promise<ServiceHandle> {
         'chromadb/chroma:latest',
       ], { stdio: 'pipe' });
 
-      // Wait for ChromaDB to be healthy (longer timeout for first pull)
+      // Wait for ChromaDB to be healthy
       logger.info('Waiting for ChromaDB to be ready...');
       const healthy = await waitForChromaDB(60000);
 

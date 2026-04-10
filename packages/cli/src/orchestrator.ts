@@ -40,10 +40,12 @@ export async function startService(name: string): Promise<boolean> {
 
   try {
     service.logger.info('Starting...');
-    // Timeout after 30 seconds to catch hung startups (e.g., port in use with no error handler)
+    // ChromaDB needs longer timeout (Docker image pull can take minutes on first run)
+    // Other services get 30 seconds to catch hung startups
+    const timeoutMs = name === 'ChromaDB' ? 300_000 : 30_000; // 5 min for ChromaDB, 30s for others
     const startPromise = service.config.start();
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${name} startup timed out after 30 seconds`)), 30_000)
+      setTimeout(() => reject(new Error(`${name} startup timed out after ${timeoutMs / 1000} seconds`)), timeoutMs)
     );
     service.handle = await Promise.race([startPromise, timeoutPromise]);
     service.logger.info('Started successfully');
