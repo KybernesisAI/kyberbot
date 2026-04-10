@@ -335,6 +335,72 @@ function stampVersion(root: string, version: string): void {
   writeFileSync(identityPath, yaml.dump(identity, { lineWidth: 120 }));
 }
 
+/**
+ * Refresh the ~/.kyberbot/bin/kyberbot wrapper script.
+ * Ensures it uses `exec` for direct output streaming (not output capture).
+ * Called during `kyberbot update` so existing users get the fix automatically.
+ */
+function refreshWrapper(repoPath: string | null): void {
+  const home = process.env.HOME || '';
+  const binDir = join(home, '.kyberbot', 'bin');
+  const binPath = join(binDir, 'kyberbot');
+
+  // Determine the CLI entry point
+  const sourceEntry = join(home, '.kyberbot', 'source', 'packages', 'cli', 'dist', 'index.js');
+  const repoEntry = repoPath ? join(repoPath, 'packages', 'cli', 'dist', 'index.js') : null;
+  const cliEntry = existsSync(sourceEntry) ? sourceEntry : (repoEntry && existsSync(repoEntry) ? repoEntry : null);
+
+  if (!cliEntry) {
+    // No entry point found — don't create/overwrite wrapper
+    return;
+  }
+
+  const sourceDir = existsSync(sourceEntry)
+    ? join(home, '.kyberbot', 'source')
+    : (repoPath || join(home, '.kyberbot', 'source'));
+
+  try {
+    mkdirSync(binDir, { recursive: true });
+
+    const wrapper = `#!/bin/bash
+# KyberBot CLI — auto-refreshed by kyberbot update
+LOCK_FILE="$HOME/.kyberbot/node_path"
+CLI_ENTRY="${cliEntry}"
+SOURCE_DIR="${sourceDir}"
+if [ -f "$LOCK_FILE" ]; then NODE=$(cat "$LOCK_FILE"); fi
+if [ -z "$NODE" ] || [ ! -x "$NODE" ]; then
+  [ -d "$HOME/.nvm/versions/node" ] && NODE=$(ls -d "$HOME/.nvm/versions/node"/v*/bin/node 2>/dev/null | sort -V | tail -1)
+  [ -z "$NODE" ] && [ -x /usr/local/bin/node ] && NODE=/usr/local/bin/node
+  [ -z "$NODE" ] && [ -x /opt/homebrew/bin/node ] && NODE=/opt/homebrew/bin/node
+  [ -z "$NODE" ] && NODE=$(which node 2>/dev/null)
+  [ -z "$NODE" ] && echo "Error: Node.js not found" && exit 1
+fi
+CHECK=$("$NODE" "$CLI_ENTRY" --version 2>&1)
+if echo "$CHECK" | grep -q "NODE_MODULE_VERSION"; then
+  echo "Rebuilding better-sqlite3 for current Node version..."
+  cd "$SOURCE_DIR" && pnpm rebuild better-sqlite3 2>/dev/null
+  echo "$NODE" > "$LOCK_FILE"
+fi
+exec "$NODE" "$CLI_ENTRY" "$@"
+`;
+
+    writeFileSync(binPath, wrapper, 'utf-8');
+    // chmod +x
+    const { chmodSync } = require('fs');
+    chmodSync(binPath, '755');
+
+    // Also save the current node path as the locked binary
+    const nodePath = process.execPath;
+    if (nodePath && !nodePath.includes('electron')) {
+      writeFileSync(join(home, '.kyberbot', 'node_path'), nodePath, 'utf-8');
+    }
+
+    console.log(chalk.dim(`\n  Refreshed CLI wrapper: ${binPath}`));
+  } catch (err) {
+    console.log(chalk.dim(`\n  Could not refresh CLI wrapper: ${err}`));
+  }
+}
+
 export function createUpdateCommand(): Command {
   return new Command('update')
     .description('Update KyberBot CLI and refresh agent template files')
@@ -498,6 +564,12 @@ export function createUpdateCommand(): Command {
         stampVersion(root, newVersion);
         console.log(chalk.dim(`\n  Stamped kyberbot_version: ${newVersion} in identity.yaml`));
       }
+
+      // ─────────────────────────────────────────────────────────────────
+      // Refresh CLI wrapper (~/.kyberbot/bin/kyberbot)
+      // ─────────────────────────────────────────────────────────────────
+
+      refreshWrapper(repoPath);
 
       // ─────────────────────────────────────────────────────────────────
       // Summary
