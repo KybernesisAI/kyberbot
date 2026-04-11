@@ -4,7 +4,7 @@
  * Token-based authentication for the brain API and channel endpoints.
  */
 
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Request, Response, NextFunction } from 'express';
@@ -35,7 +35,18 @@ export function getApiToken(): string {
 
 export function validateToken(token: string): boolean {
   const expected = getApiToken();
-  return token === expected;
+  return safeCompare(token, expected);
+}
+
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    // Compare against bufB to avoid short-circuit timing leak on length mismatch
+    timingSafeEqual(bufB, bufB);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
 }
 
 export function authMiddleware(
@@ -136,7 +147,7 @@ export function loadTokenForRoot(root: string): string | null {
  */
 export function validateTokenForRoot(token: string, root: string): boolean {
   const expected = loadTokenForRoot(root);
-  return expected ? token === expected : false;
+  return expected ? safeCompare(token, expected) : false;
 }
 
 /**

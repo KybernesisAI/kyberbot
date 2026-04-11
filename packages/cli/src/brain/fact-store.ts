@@ -276,7 +276,9 @@ export async function getFactsForEntity(
   const db = await getTimelineDb(root);
 
   // SQLite JSON: search entities_json for the entity name (case-insensitive)
-  const entityPattern = `%${entity.toLowerCase()}%`;
+  // Escape LIKE metacharacters in user input
+  const escapedEntity = entity.toLowerCase().replace(/[%_\\]/g, ch => `\\${ch}`);
+  const entityPattern = `%${escapedEntity}%`;
 
   let sql = `
     SELECT id, content, source_path, source_conversation_id, entities_json,
@@ -284,7 +286,7 @@ export async function getFactsForEntity(
            COALESCE(is_latest, 1) as is_latest,
            superseded_by
     FROM facts
-    WHERE LOWER(entities_json) LIKE ?
+    WHERE LOWER(entities_json) LIKE ? ESCAPE '\\'
       AND COALESCE(is_retracted, 0) = 0
   `;
   const params: unknown[] = [entityPattern];

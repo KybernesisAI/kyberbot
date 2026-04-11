@@ -149,13 +149,14 @@ export function createBrainRouter(root: string): Router {
       // Get edges between the selected nodes
       let edges: unknown[] = [];
       if (nodeIds.size > 0) {
-        const idList = [...nodeIds].join(',');
+        const ids = [...nodeIds];
+        const placeholders = ids.map(() => '?').join(',');
         edges = db.prepare(`
           SELECT source_id AS source, target_id AS target, relationship,
                  strength, COALESCE(confidence, 0.5) AS confidence
           FROM entity_relations
-          WHERE source_id IN (${idList}) AND target_id IN (${idList})
-        `).all();
+          WHERE source_id IN (${placeholders}) AND target_id IN (${placeholders})
+        `).all(...ids, ...ids);
       }
 
       res.json({ nodes, edges });

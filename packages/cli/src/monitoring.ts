@@ -138,15 +138,17 @@ function captureException(error: unknown): void {
 
 function installProcessHandlers(): void {
   process.on('uncaughtException', (error: Error) => {
-    logger.error('Uncaught exception', {
+    logger.error('Uncaught exception — process will exit', {
       error: error.message,
       stack: error.stack,
     });
     recordError(`uncaughtException: ${error.message}`);
     captureException(error);
 
-    // Don't exit — KyberBot should stay alive. But log prominently.
-    logger.error('Process will continue despite uncaught exception');
+    // Node.js docs: after an uncaught exception the process is in an undefined
+    // state. Continuing risks silent data corruption. Exit with a non-zero code
+    // so a process manager (systemd, pm2, etc.) can restart us cleanly.
+    setTimeout(() => process.exit(1), 1000);
   });
 
   process.on('unhandledRejection', (reason: unknown) => {

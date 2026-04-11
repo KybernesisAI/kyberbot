@@ -210,9 +210,12 @@ export function createWebApiRouter(root: string): Router {
   return router;
 }
 
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>, depth = 0): void {
   if (depth > 10) return;
   for (const key of Object.keys(source)) {
+    if (DANGEROUS_KEYS.has(key)) continue;
     const srcVal = source[key];
     const tgtVal = target[key];
     if (srcVal && typeof srcVal === 'object' && !Array.isArray(srcVal) &&

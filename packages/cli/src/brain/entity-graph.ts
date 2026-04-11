@@ -463,6 +463,11 @@ function normalizeEntityName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
+/** Escape LIKE metacharacters (%, _) for safe use in parameterized LIKE queries. */
+function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, ch => `\\${ch}`);
+}
+
 export async function findOrCreateEntity(
   root: string,
   name: string,
@@ -479,8 +484,8 @@ export async function findOrCreateEntity(
   // Fallback: check if this name is stored as an alias of an existing entity
   if (!existing) {
     existing = database
-      .prepare('SELECT * FROM entities WHERE type = ? AND LOWER(aliases) LIKE ?')
-      .get(type, `%"${normalizedName}"%`) as Entity | undefined;
+      .prepare(`SELECT * FROM entities WHERE type = ? AND LOWER(aliases) LIKE ? ESCAPE '\\'`)
+      .get(type, `%"${escapeLike(normalizedName)}"%`) as Entity | undefined;
     if (existing) {
       logger.debug(`Matched entity via alias: "${name}" → "${existing.name}"`);
     }
@@ -763,9 +768,9 @@ export async function getEntityContext(
       .prepare(
         `SELECT * FROM entities
          WHERE normalized_name = ?
-         OR aliases LIKE ?`
+         OR aliases LIKE ? ESCAPE '\\'`
       )
-      .get(normalized, `%"${normalized}"%`) as Entity | undefined;
+      .get(normalized, `%"${escapeLike(normalized)}"%`) as Entity | undefined;
   }
 
   if (!entity) return null;
@@ -831,11 +836,12 @@ export async function searchEntities(
   const normalized = normalizeEntityName(query);
   const limit = options.limit || 20;
 
+  const escaped = escapeLike(normalized);
   let sql = `
     SELECT * FROM entities
-    WHERE (normalized_name LIKE ? OR aliases LIKE ?)
+    WHERE (normalized_name LIKE ? ESCAPE '\\' OR aliases LIKE ? ESCAPE '\\')
   `;
-  const params: (string | number)[] = [`%${normalized}%`, `%${normalized}%`];
+  const params: (string | number)[] = [`%${escaped}%`, `%${escaped}%`];
 
   if (options.type) {
     sql += ` AND type = ?`;

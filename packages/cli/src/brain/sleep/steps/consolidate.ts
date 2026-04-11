@@ -75,10 +75,11 @@ export async function runConsolidateStep(
         const removeIds = ids.slice(0, -1);
 
         // Sum access counts from all entries
+        const removePlaceholders = removeIds.map(() => '?').join(',');
         const totalAccess = db.prepare(`
           SELECT COALESCE(SUM(COALESCE(access_count, 0)), 0) as total
-          FROM timeline_events WHERE id IN (${removeIds.join(',')})
-        `).get() as { total: number };
+          FROM timeline_events WHERE id IN (${removePlaceholders})
+        `).get(...removeIds) as { total: number };
 
         // Update the kept entry
         db.prepare(`
@@ -90,8 +91,8 @@ export async function runConsolidateStep(
 
         // Delete duplicates
         db.prepare(`
-          DELETE FROM timeline_events WHERE id IN (${removeIds.join(',')})
-        `).run();
+          DELETE FROM timeline_events WHERE id IN (${removePlaceholders})
+        `).run(...removeIds);
 
         consolidated += removeIds.length;
 
