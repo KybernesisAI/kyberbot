@@ -722,6 +722,16 @@ export function createManagementRouter(channels: Channel[], root: string): Route
     }
   });
 
+  // GET /watched-folders/status — Sync status for all watched folders
+  router.get('/watched-folders/status', (_req, res) => {
+    try {
+      const { getWatchedFoldersStatus } = require('../services/watched-folders.js');
+      res.json({ folders: getWatchedFoldersStatus(root) });
+    } catch (err) {
+      res.json({ folders: [] });
+    }
+  });
+
   return router;
 }
 

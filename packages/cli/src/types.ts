@@ -69,4 +69,10 @@ export interface IdentityConfig {
     from: string;
     topic: string;
   }>;
+  watched_folders?: Array<{
+    path: string;
+    label?: string;
+    enabled?: boolean;
+    extensions?: string[];
+  }>;
 }

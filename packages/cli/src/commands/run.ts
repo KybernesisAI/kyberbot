@@ -188,7 +188,21 @@ export function createRunCommand(): Command {
         });
 
         // ─────────────────────────────────────────────────────────────
-        // Service 5: Channels
+        // Service 5: Watched Folders
+        // ─────────────────────────────────────────────────────────────
+
+        const watchedFoldersIdentity = getIdentity();
+        registerService({
+          name: 'Watched Folders',
+          enabled: !!watchedFoldersIdentity.watched_folders?.some(f => f.enabled !== false),
+          start: async () => {
+            const { startWatchedFolders } = await import('../services/watched-folders.js');
+            return startWatchedFolders(root);
+          },
+        });
+
+        // ─────────────────────────────────────────────────────────────
+        // Service 6: Channels
         // ─────────────────────────────────────────────────────────────
 
         // Only show Channels as enabled if channels are actually configured
