@@ -25,6 +25,8 @@ export interface CompleteOptions {
   system?: string;
   maxTokens?: number;
   maxTurns?: number;
+  /** Callback for stdout chunks as they arrive (streaming). */
+  onChunk?: (chunk: string) => void;
   /**
    * Force subprocess mode for this call. Each invocation runs in an
    * isolated child process whose memory is reclaimed on exit.
@@ -182,6 +184,10 @@ export class ClaudeClient {
         stdoutBytes += data.length;
         if (stdoutBytes <= MAX_STDOUT) {
           chunks.push(data);
+          // Stream callback for live log capture
+          if (opts.onChunk) {
+            try { opts.onChunk(data.toString()); } catch { /* ignore */ }
+          }
         } else if (!stdoutDestroyed) {
           // Destroy the read stream to stop reading entirely.
           // Without this, rapid data arrival floods GC with temporary Buffers.

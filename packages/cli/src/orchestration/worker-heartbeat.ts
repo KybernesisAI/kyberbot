@@ -15,7 +15,7 @@ import { createLogger } from '../logger.js';
 import {
   listIssues, getComments, checkoutIssue, transitionIssue, addComment,
 } from './index.js';
-import { createRun, completeRun, failRun } from './runs.js';
+import { createRun, completeRun, failRun, appendRunLog } from './runs.js';
 import { getClaudeClient } from '../claude.js';
 import type { Issue } from './types.js';
 
@@ -131,11 +131,12 @@ export async function runWorkerHeartbeat(
       '- STATUS: IN_PROGRESS — if you made progress but need another pass to finish',
     ].join('\n');
 
-    // Step 3: Run Claude to do the actual work
+    // Step 3: Run Claude to do the actual work (stream output to log file)
     const client = getClaudeClient();
     const result = await client.complete(prompt, {
       maxTurns: 25,
       subprocess: true,
+      onChunk: (chunk) => appendRunLog(runId, chunk),
     });
 
     // Step 4: Parse the status from the result

@@ -34,6 +34,7 @@ export function getOrchDb(): Database.Database {
 
   // Migrations for existing databases
   try { db.exec('ALTER TABLE heartbeat_runs ADD COLUMN log_output TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE heartbeat_runs ADD COLUMN log_ref TEXT'); } catch { /* already exists */ }
 
   logger.info('Orchestration database initialized', { path: dbPath });
   return db;

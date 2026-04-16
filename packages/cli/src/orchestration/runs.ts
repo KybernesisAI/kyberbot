@@ -8,6 +8,9 @@
  */
 
 import { getOrchDb } from './db.js';
+import { join } from 'path';
+import { homedir } from 'os';
+import { mkdirSync, existsSync, appendFileSync, readFileSync, statSync } from 'fs';
 import type { HeartbeatRun, HeartbeatRunType } from './types.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -15,16 +18,60 @@ import type { HeartbeatRun, HeartbeatRunType } from './types.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Record the start of a heartbeat run. Returns the new run ID.
+ * Get the log directory for run output files.
+ */
+function getLogDir(): string {
+  const dir = join(homedir(), '.kyberbot', 'run-logs');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Record the start of a heartbeat run. Creates a log file for streaming output.
+ * Returns the new run ID.
  */
 export function createRun(agentName: string, type: HeartbeatRunType): number {
   const db = getOrchDb();
+  const logRef = join(getLogDir(), `run-${Date.now()}-${agentName}.log`);
   const result = db.prepare(`
-    INSERT INTO heartbeat_runs (agent_name, type, status)
-    VALUES (?, ?, 'running')
-  `).run(agentName, type);
+    INSERT INTO heartbeat_runs (agent_name, type, status, log_ref)
+    VALUES (?, ?, 'running', ?)
+  `).run(agentName, type, logRef);
+
+  // Create empty log file
+  appendFileSync(logRef, '');
 
   return Number(result.lastInsertRowid);
+}
+
+/**
+ * Append text to a run's log file for live streaming.
+ */
+export function appendRunLog(id: number, text: string): void {
+  const run = getRun(id);
+  if (!run?.log_ref) return;
+  try {
+    appendFileSync(run.log_ref, text);
+  } catch { /* ignore */ }
+}
+
+/**
+ * Read a run's log file with optional offset for incremental reading.
+ */
+export function readRunLog(id: number, offset: number = 0): { content: string; totalBytes: number } {
+  const run = getRun(id);
+  if (!run?.log_ref || !existsSync(run.log_ref)) {
+    return { content: run?.log_output || '', totalBytes: 0 };
+  }
+  try {
+    const stats = statSync(run.log_ref);
+    const totalBytes = stats.size;
+    if (offset >= totalBytes) return { content: '', totalBytes };
+    const buf = readFileSync(run.log_ref, 'utf-8');
+    return { content: buf.slice(offset), totalBytes };
+  } catch {
+    return { content: '', totalBytes: 0 };
+  }
 }
 
 /**

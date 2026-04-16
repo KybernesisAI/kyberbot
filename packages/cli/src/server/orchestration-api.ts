@@ -25,7 +25,7 @@ import {
   addComment, getComments,
   listInbox, getInboxItem, createInboxItem, acknowledgeInboxItem, resolveInboxItem, getPendingInboxCount,
   getActivityLog,
-  listRuns, getRun,
+  listRuns, getRun, readRunLog,
   getOrchestrationSettings, updateOrchestrationSettings,
   recoverStuckIssues, recoverStuckRuns,
   queueWorkerHeartbeat, queueCeoHeartbeat,
@@ -525,6 +525,13 @@ export function createOrchestrationRouter(
     const run = getRun(Number(param(req, 'id')));
     if (!run) return res.status(404).json({ error: 'Run not found' });
     res.json({ run });
+  });
+
+  // Stream run log with offset support for live viewing
+  router.get('/runs/:id/log', (req, res) => {
+    const offset = parseInt(req.query.offset as string) || 0;
+    const { content, totalBytes } = readRunLog(Number(param(req, 'id')), offset);
+    res.json({ content, totalBytes, offset });
   });
 
   // ─────────────────────────────────────────────────────────────────

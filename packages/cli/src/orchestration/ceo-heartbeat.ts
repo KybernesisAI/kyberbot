@@ -21,7 +21,7 @@ import {
   getActivityLog,
   listRuns,
 } from './index.js';
-import { createRun, completeRun, failRun } from './runs.js';
+import { createRun, completeRun, failRun, appendRunLog } from './runs.js';
 import { getCeoToolDefs, formatToolsForPrompt, parseToolCalls, executeTool } from './tools.js';
 
 const logger = createLogger('ceo-heartbeat');
@@ -200,6 +200,12 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
   sections.push('');
   sections.push('You manage this company like a real CEO with real employees. Review the company state and take thoughtful action.');
   sections.push('');
+  sections.push('### Communication rules');
+  sections.push('- **ALWAYS use @agentname** when addressing an agent in comments. Example: "@atlas please review this". The @ triggers the agent to read and act. Without it, the agent will never see your message.');
+  sections.push('- **Do NOT repeat yourself**. If you already commented on an issue and the status hasn\'t changed, do not comment again. Check the comment history before adding a new comment.');
+  sections.push('- **Blocked issues**: If an issue is blocked and already escalated to the human inbox, leave it alone. Do not keep commenting on it. The human will respond when ready.');
+  sections.push('- **Be concise**. Agents read your comments as instructions. Short, actionable directives — not essays.');
+  sections.push('');
   sections.push('### Work management principles');
   sections.push('- **Backlog first**: New issues go to BACKLOG, not TODO. Only move the highest-priority, immediately-actionable items to TODO.');
   sections.push('- **Limit work in progress**: Each agent should have at most 1-2 items in TODO at a time. Do not flood agents with work.');
@@ -210,10 +216,10 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
   sections.push('');
   sections.push('### Each heartbeat');
   sections.push('1. **Assess progress** — Which issues moved? What\'s blocked? What completed?');
-  sections.push('2. **Unblock** — Comment on blocked issues, reassign if needed, escalate to human if truly stuck.');
+  sections.push('2. **Unblock** — If an issue is blocked and NOT already escalated, escalate to human. If already escalated, skip it.');
   sections.push('3. **Promote work** — Move the next highest-priority backlog items to TODO for agents that have capacity.');
   sections.push('4. **Create new work** — Only if there\'s a clear gap between goals and existing issues. Start in backlog.');
-  sections.push('5. **Communicate** — Comment on in-progress issues with direction or feedback.');
+  sections.push('5. **Communicate** — Only comment if you have NEW information or direction. Do not nag agents who are already working.');
   sections.push('6. **Escalate** — Use escalate_to_human for decisions you cannot make.');
   sections.push('');
   sections.push('Use the tools above to take actions. You can make multiple tool calls.');
@@ -240,6 +246,7 @@ export async function runCeoHeartbeat(root: string, agentName: string): Promise<
     const result = await client.complete(prompt, {
       maxTurns: 15,
       subprocess: true,
+      onChunk: (chunk) => appendRunLog(runId, chunk),
       system: [
         `You are ${agentName}, the CEO orchestrator for a KyberBot company.`,
         'You coordinate a team of AI agents to achieve company goals.',

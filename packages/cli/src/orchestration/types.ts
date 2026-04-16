@@ -169,6 +169,7 @@ export interface HeartbeatRun {
   tool_calls_json: string | null;
   error: string | null;
   log_output: string | null;
+  log_ref: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
