@@ -74,11 +74,13 @@ async function tick(root: string): Promise<void> {
   }
 
   // ── Orchestration heartbeat ─────────────────────────────────────
-  // If this agent is the CEO in the orchestration layer, run the
-  // CEO heartbeat instead of (or in addition to) the standard tick.
+  // Every agent checks for orchestration work on every tick:
+  // - CEO: runs the full orchestration loop (review state, assign work, etc.)
+  // - Workers: check for assigned todo/in_progress issues and execute them
   try {
-    const { getCeoAgent, getOrchestrationSettings } = await import('../orchestration/index.js');
+    const { getCeoAgent, getOrgNode, getOrchestrationSettings, listIssues } = await import('../orchestration/index.js');
     const { runCeoHeartbeat } = await import('../orchestration/ceo-heartbeat.js');
+    const { runWorkerHeartbeat } = await import('../orchestration/worker-heartbeat.js');
     const settings = getOrchestrationSettings();
 
     if (settings.orchestration_enabled) {
@@ -87,9 +89,19 @@ async function tick(root: string): Promise<void> {
       const ceo = getCeoAgent();
 
       if (ceo && ceo.agent_name === agentName) {
+        // CEO: run orchestration loop
         logger.info('Running CEO orchestration heartbeat');
         await runCeoHeartbeat(root, agentName);
-        // CEO still runs normal heartbeat tasks too (fall through)
+      } else {
+        // Worker: check for assigned work and execute
+        const orgNode = getOrgNode(agentName);
+        if (orgNode) {
+          const todoIssues = listIssues({ assigned_to: agentName, status: ['todo', 'in_progress'] });
+          if (todoIssues.length > 0) {
+            logger.info(`Worker ${agentName} has ${todoIssues.length} assigned issue(s), running heartbeat`);
+            await runWorkerHeartbeat(root, agentName, orgNode.role, orgNode.title || agentName);
+          }
+        }
       }
     }
   } catch {
