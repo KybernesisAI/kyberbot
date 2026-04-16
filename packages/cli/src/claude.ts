@@ -149,9 +149,9 @@ export class ClaudeClient {
       // Use stream-json format when onChunk is provided for live output
       const useStreamJson = !!opts.onChunk;
       const args = ['--print', '-'];
+      args.push('--dangerously-skip-permissions'); // Always skip — subprocesses are headless, no human to prompt
       if (useStreamJson) {
         args.push('--output-format', 'stream-json', '--verbose');
-        args.push('--dangerously-skip-permissions');
       }
       if (opts.system) {
         args.push('--system-prompt', opts.system);
