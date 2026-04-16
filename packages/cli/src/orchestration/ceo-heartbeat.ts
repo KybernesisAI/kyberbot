@@ -274,6 +274,7 @@ export async function runCeoHeartbeat(root: string, agentName: string): Promise<
     completeRun(runId, {
       result_summary: summary.slice(0, 2000),
       tool_calls_json: toolCalls.length > 0 ? JSON.stringify(toolCalls) : undefined,
+      log_output: result,
     });
 
     const heartbeatLog = join(root, 'logs', 'heartbeat.log');

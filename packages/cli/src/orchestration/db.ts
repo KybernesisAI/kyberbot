@@ -32,6 +32,9 @@ export function getOrchDb(): Database.Database {
 
   db.exec(SCHEMA);
 
+  // Migrations for existing databases
+  try { db.exec('ALTER TABLE heartbeat_runs ADD COLUMN log_output TEXT'); } catch { /* already exists */ }
+
   logger.info('Orchestration database initialized', { path: dbPath });
   return db;
 }
@@ -199,7 +202,8 @@ const SCHEMA = `
     prompt_summary TEXT,
     result_summary TEXT,
     tool_calls_json TEXT,
-    error TEXT
+    error TEXT,
+    log_output TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_runs_agent ON heartbeat_runs(agent_name);
   CREATE INDEX IF NOT EXISTS idx_runs_time ON heartbeat_runs(started_at DESC);

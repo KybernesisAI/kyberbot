@@ -27,6 +27,8 @@ import {
   getActivityLog,
   listRuns, getRun,
   getOrchestrationSettings, updateOrchestrationSettings,
+  recoverStuckIssues, recoverStuckRuns,
+  queueWorkerHeartbeat, queueCeoHeartbeat,
 } from '../orchestration/index.js';
 import { runCeoHeartbeat } from '../orchestration/ceo-heartbeat.js';
 import { runWorkerHeartbeat } from '../orchestration/worker-heartbeat.js';
@@ -49,6 +51,15 @@ export function createOrchestrationRouter(
   agentIdentities?: Map<string, AgentIdentity>,
 ): Router {
   const router = Router();
+
+  // Recover from crashes on startup
+  try {
+    const stuckIssues = recoverStuckIssues();
+    const stuckRuns = recoverStuckRuns();
+    if (stuckIssues > 0 || stuckRuns > 0) {
+      logger.info('Startup recovery', { stuckIssues, stuckRuns });
+    }
+  } catch { /* DB might not be initialized yet */ }
 
   // ─────────────────────────────────────────────────────────────────
   // Dashboard (aggregate)
@@ -354,24 +365,18 @@ export function createOrchestrationRouter(
           const assigneeName = issue.assigned_to;
           logger.info(`Issue #${issue.id} moved to ${status}, triggering assignee: ${assigneeName}`);
 
-          // Fire-and-forget: run the worker's heartbeat
-          (async () => {
-            try {
-              const orgNode = getOrgChart().find(n => n.agent_name.toLowerCase() === assigneeLower);
-              if (orgNode?.is_ceo) {
-                await runCeoHeartbeat(assigneeRoot, orgNode.agent_name);
-              } else if (orgNode) {
-                await runWorkerHeartbeat(
-                  assigneeRoot,
-                  orgNode.agent_name,
-                  orgNode.role,
-                  orgNode.title || orgNode.agent_name,
-                );
-              }
-            } catch (err) {
-              logger.warn('Assignment-triggered heartbeat failed', { agent: assigneeName, error: String(err) });
-            }
-          })();
+          // Fire-and-forget via serial queue (prevents parallel subprocess crashes)
+          const orgNode = getOrgChart().find(n => n.agent_name.toLowerCase() === assigneeLower);
+          if (orgNode?.is_ceo) {
+            queueCeoHeartbeat(assigneeRoot, orgNode.agent_name, runCeoHeartbeat);
+          } else if (orgNode) {
+            queueWorkerHeartbeat(
+              assigneeRoot,
+              orgNode.agent_name,
+              orgNode.role,
+              orgNode.title || orgNode.agent_name,
+            );
+          }
         }
       }
 
@@ -431,9 +436,15 @@ export function createOrchestrationRouter(
             try {
               const orgNode = getOrgChart().find(n => n.agent_name.toLowerCase() === mentionedName);
               if (orgNode?.is_ceo) {
-                await runCeoHeartbeat(mentionedIdentity!.root, orgNode.agent_name);
+                queueCeoHeartbeat(mentionedIdentity!.root, orgNode.agent_name, runCeoHeartbeat);
+              } else if (orgNode) {
+                queueWorkerHeartbeat(
+                  mentionedIdentity!.root,
+                  orgNode.agent_name,
+                  orgNode.role,
+                  orgNode.title || orgNode.agent_name,
+                );
               }
-              // Worker trigger handled separately via assignment
             } catch (err) { logger.warn('Mention-triggered heartbeat failed', { error: String(err) }); }
           })();
         }

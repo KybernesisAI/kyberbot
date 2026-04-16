@@ -301,3 +301,36 @@ export function getComments(issueId: number): IssueComment[] {
     'SELECT * FROM issue_comments WHERE issue_id = ? ORDER BY created_at ASC'
   ).all(issueId) as IssueComment[];
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RECOVERY — startup crash recovery
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Recover issues stuck in in_progress with a checkout after a fleet restart.
+ * Moves them back to todo so they can be retried.
+ */
+export function recoverStuckIssues(): number {
+  const db = getOrchDb();
+  const stuck = db.prepare(
+    "SELECT id FROM issues WHERE status='in_progress' AND checkout_by IS NOT NULL"
+  ).all();
+
+  if (stuck.length === 0) return 0;
+
+  db.prepare(
+    "UPDATE issues SET status='todo', checkout_by=NULL, checkout_at=NULL, updated_at=datetime('now') WHERE status='in_progress' AND checkout_by IS NOT NULL"
+  ).run();
+
+  for (const row of stuck) {
+    logActivity({
+      actor: 'system',
+      action: 'issue.recovered',
+      entity_type: 'issue',
+      entity_id: String((row as any).id),
+      details: 'Moved back to todo after fleet restart',
+    });
+  }
+
+  return stuck.length;
+}

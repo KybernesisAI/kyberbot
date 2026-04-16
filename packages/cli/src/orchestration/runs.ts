@@ -32,7 +32,7 @@ export function createRun(agentName: string, type: HeartbeatRunType): number {
  */
 export function completeRun(
   id: number,
-  data: { result_summary?: string; tool_calls_json?: string },
+  data: { result_summary?: string; tool_calls_json?: string; log_output?: string },
 ): void {
   const db = getOrchDb();
   db.prepare(`
@@ -40,11 +40,13 @@ export function completeRun(
     SET status = 'completed',
         finished_at = datetime('now'),
         result_summary = ?,
-        tool_calls_json = ?
+        tool_calls_json = ?,
+        log_output = ?
     WHERE id = ?
   `).run(
     data.result_summary ?? null,
     data.tool_calls_json ?? null,
+    data.log_output ?? null,
     id,
   );
 }
@@ -94,7 +96,7 @@ export function listRuns(filters: RunFilters = {}): HeartbeatRun[] {
   const limit = filters.limit || 50;
 
   return db.prepare(
-    `SELECT * FROM heartbeat_runs ${where} ORDER BY started_at DESC LIMIT ?`
+    `SELECT id, agent_name, type, status, started_at, finished_at, prompt_summary, result_summary, tool_calls_json, error FROM heartbeat_runs ${where} ORDER BY started_at DESC LIMIT ?`
   ).all(...params, limit) as HeartbeatRun[];
 }
 
@@ -104,4 +106,19 @@ export function listRuns(filters: RunFilters = {}): HeartbeatRun[] {
 export function getRun(id: number): HeartbeatRun | null {
   const db = getOrchDb();
   return db.prepare('SELECT * FROM heartbeat_runs WHERE id = ?').get(id) as HeartbeatRun | null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RECOVERY — startup crash recovery
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Mark any runs stuck in 'running' status as failed after a fleet restart.
+ */
+export function recoverStuckRuns(): number {
+  const db = getOrchDb();
+  const result = db.prepare(
+    "UPDATE heartbeat_runs SET status='failed', error='Fleet restarted during execution', finished_at=datetime('now') WHERE status='running'"
+  ).run();
+  return result.changes;
 }

@@ -21,6 +21,50 @@ import type { Issue } from './types.js';
 
 const logger = createLogger('worker-heartbeat');
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SERIAL QUEUE — only one heartbeat runs at a time
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const heartbeatQueue: Array<() => Promise<void>> = [];
+let isProcessing = false;
+
+async function processQueue(): Promise<void> {
+  if (isProcessing) return;
+  isProcessing = true;
+  while (heartbeatQueue.length > 0) {
+    const task = heartbeatQueue.shift()!;
+    try { await task(); } catch { /* errors logged inside each task */ }
+  }
+  isProcessing = false;
+}
+
+/**
+ * Queue a worker heartbeat for serial execution. If another heartbeat is
+ * already running, the new one waits until the current one finishes.
+ * Fire-and-forget — does not return a result.
+ */
+export function queueWorkerHeartbeat(
+  root: string,
+  agentName: string,
+  agentRole: string,
+  agentTitle: string,
+): void {
+  heartbeatQueue.push(() => runWorkerHeartbeat(root, agentName, agentRole, agentTitle).then(() => {}));
+  processQueue();
+}
+
+/**
+ * Queue a CEO heartbeat for serial execution (same queue as workers).
+ */
+export function queueCeoHeartbeat(
+  root: string,
+  agentName: string,
+  runCeoFn: (root: string, agentName: string) => Promise<string>,
+): void {
+  heartbeatQueue.push(() => runCeoFn(root, agentName).then(() => {}));
+  processQueue();
+}
+
 /**
  * Run a full worker heartbeat for the given agent.
  * Picks their highest-priority todo/in_progress issue, does the work,
@@ -123,7 +167,7 @@ export async function runWorkerHeartbeat(
     }
 
     const summary = `Issue KYB-${targetIssue.id}: ${newStatus}. ${summaryText.slice(0, 300)}`;
-    completeRun(runId, { result_summary: summary });
+    completeRun(runId, { result_summary: summary, log_output: result });
     return summary;
 
   } catch (err) {

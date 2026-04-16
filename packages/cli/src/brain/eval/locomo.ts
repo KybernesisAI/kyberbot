@@ -1050,60 +1050,455 @@ async function runObservations(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PHASE 2: QUERY (ChromaDB REST API + timeline FTS)
+// PHASE 2: RETRIEVAL ENGINE (production-parity, no chromadb npm dependency)
+//
+// Ports the full production retrieval pipeline from fact-retrieval.ts and
+// hybrid-search.ts into the eval harness using the ChromaDB REST API.
+// Includes: entity query expansion, 3-hop graph traversal, scene expansion,
+// bridge discovery, RRF-like scoring, and IRCoT iterative retrieval.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Answer a single QA item using ChromaDB semantic search + timeline FTS.
- */
-async function answerQuestion(
-  root: string,
-  qa: QAItem,
-  speakerA: string,
-  speakerB: string,
-  chromaCollectionId: string
-): Promise<string> {
-  const timeline = await getTimelineDb(root);
-  ensureFactsTableInline(timeline);
-  const factParts: string[] = [];
-  const supportParts: string[] = [];
-  const seenContent = new Set<string>();
+// ── Shared retrieval types ───────────────────────────────────────────
 
-  const stopwords = new Set(['the', 'and', 'for', 'was', 'are', 'what', 'who', 'how',
-    'did', 'does', 'has', 'have', 'when', 'where', 'which', 'that', 'this', 'with']);
-  const ftsQuery = qa.question
+interface ScoredFact {
+  id: number;
+  content: string;
+  category: string;
+  confidence: number;
+  timestamp: string;
+  entities: string[];
+  score: number;
+  source: 'direct' | 'entity_expansion' | 'graph_expansion' | 'scene_expansion' | 'bridge';
+  source_conversation_id?: string;
+}
+
+const STOPWORDS = new Set(['the', 'and', 'for', 'was', 'are', 'what', 'who', 'how',
+  'did', 'does', 'has', 'have', 'when', 'where', 'which', 'that', 'this', 'with',
+  'is', 'in', 'of', 'to', 'a', 'an', 'on', 'at', 'by', 'or', 'not', 'do', 'be']);
+
+function buildFtsQuery(text: string): string {
+  return text
     .replace(/[^\w\s]/g, '')
     .split(/\s+/)
-    .filter((w) => w.length > 2 && !stopwords.has(w.toLowerCase()))
-    .slice(0, 5)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w.toLowerCase()))
+    .slice(0, 8)
     .join(' OR ');
+}
 
-  // ── Layer 1: Search facts (FTS + semantic) ──────────────────────────
+function wordOverlapRatio(a: string, b: string): number {
+  const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(w => w.length >= 2));
+  const wordsB = new Set(b.toLowerCase().split(/\s+/).filter(w => w.length >= 2));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  let intersection = 0;
+  for (const w of wordsA) { if (wordsB.has(w)) intersection++; }
+  return intersection / Math.min(wordsA.size, wordsB.size);
+}
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+// ── Rec #3: Entity-aware query expansion ─────────────────────────────
+
+/**
+ * Expand a query with entity metadata from the SQLite entity graph.
+ * Adds relationship context and profile snippets so the embedding
+ * captures bridge entities not mentioned in the original query.
+ */
+function expandQueryWithEntities(
+  query: string,
+  entityDb: InstanceType<typeof Database>
+): string {
+  const queryLower = query.toLowerCase();
+  const entities = entityDb.prepare(
+    'SELECT id, name, type FROM entities ORDER BY mention_count DESC LIMIT 200'
+  ).all() as Array<{ id: number; name: string; type: string }>;
+
+  const matched = entities.filter(e =>
+    e.name.length >= 3 && queryLower.includes(e.name.toLowerCase())
+  );
+
+  if (matched.length === 0) return query;
+
+  const expansions: string[] = [];
+  for (const entity of matched.slice(0, 3)) {
+    // Get related entities and relationships
+    const relations = entityDb.prepare(`
+      SELECT e2.name, er.relationship
+      FROM entity_relations er
+      JOIN entities e2 ON (
+        CASE WHEN er.source_id = ? THEN er.target_id ELSE er.source_id END = e2.id
+      )
+      WHERE (er.source_id = ? OR er.target_id = ?)
+      ORDER BY er.strength DESC, er.confidence DESC
+      LIMIT 5
+    `).all(entity.id, entity.id, entity.id) as Array<{ name: string; relationship: string }>;
+
+    // Get entity profile if available
+    let profile: string | undefined;
+    try {
+      const profileRow = entityDb.prepare(
+        'SELECT profile FROM entity_profiles WHERE entity_id = ?'
+      ).get(entity.id) as { profile: string } | undefined;
+      if (profileRow) profile = profileRow.profile;
+    } catch { /* table may not exist */ }
+
+    const relStr = relations.map(r => `${r.relationship} ${r.name}`).join(', ');
+    if (relStr) expansions.push(`[${entity.name}: ${relStr}]`);
+    if (profile) expansions.push(`[Context: ${profile.slice(0, 200)}]`);
+  }
+
+  return expansions.length > 0 ? `${query} ${expansions.join(' ')}` : query;
+}
+
+// ── Rec #2: Graph-based retrieval (production parity) ────────────────
+
+/**
+ * Traverse the entity graph up to maxHops hops from seed entities via BFS.
+ * Returns entities annotated with their hop distance from the seeds.
+ */
+function traverseEntityGraph(
+  entityDb: InstanceType<typeof Database>,
+  seedEntityIds: number[],
+  maxHops: number = 3,
+  maxEntities: number = 20
+): Array<{ id: number; hopDistance: number }> {
+  const visited = new Map<number, number>();
+  for (const id of seedEntityIds) visited.set(id, 0);
+  let frontier = [...seedEntityIds];
+
+  for (let hop = 0; hop < maxHops && frontier.length > 0; hop++) {
+    const nextFrontier: number[] = [];
+    for (const entityId of frontier) {
+      try {
+        const connected = entityDb.prepare(`
+          SELECT CASE WHEN source_id = ? THEN target_id ELSE source_id END as connected_id
+          FROM entity_relations
+          WHERE source_id = ? OR target_id = ?
+          ORDER BY strength DESC
+          LIMIT 10
+        `).all(entityId, entityId, entityId) as Array<{ connected_id: number }>;
+
+        for (const c of connected) {
+          if (!visited.has(c.connected_id) && visited.size < maxEntities) {
+            visited.set(c.connected_id, hop + 1);
+            nextFrontier.push(c.connected_id);
+          }
+        }
+      } catch { /* skip */ }
+    }
+    frontier = nextFrontier;
+  }
+
+  return Array.from(visited.entries()).map(([id, hopDistance]) => ({ id, hopDistance }));
+}
+
+const HOP_DISTANCE_PENALTY: Record<number, number> = { 0: 1.0, 1: 0.7, 2: 0.5, 3: 0.3 };
+
+/**
+ * Full production-parity retrieval pipeline using ChromaDB REST API.
+ *
+ * Layer 1:   FTS5 keyword search + ChromaDB semantic search on facts
+ * Layer 2:   Entity expansion via 3-hop BFS graph traversal
+ * Layer 2.5: Scene expansion + bridge discovery
+ * Layer 3:   Supporting conversation context (FTS)
+ * Layer 4:   Context optimization with token budget
+ */
+async function retrieveContext(
+  root: string,
+  query: string,
+  chromaCollectionId: string,
+  options: {
+    maxFacts?: number;
+    maxSupporting?: number;
+    tokenBudget?: number;
+    graphHops?: number;
+  } = {}
+): Promise<{ factParts: string[]; supportParts: string[] }> {
+  const {
+    maxFacts = 20,
+    maxSupporting = 10,
+    tokenBudget = 6000,
+    graphHops = 2,
+  } = options;
+
+  const timeline = await getTimelineDb(root);
+  ensureFactsTableInline(timeline);
+
+  const allFacts: ScoredFact[] = [];
+  const seenFactContent = new Set<string>();
+
+  function addFact(fact: ScoredFact): boolean {
+    const key = fact.content.slice(0, 80);
+    // Deduplicate by content overlap
+    for (const existing of allFacts) {
+      if (wordOverlapRatio(existing.content, fact.content) > 0.8) {
+        if (fact.score > existing.score) Object.assign(existing, fact);
+        return false;
+      }
+    }
+    if (seenFactContent.has(key)) return false;
+    seenFactContent.add(key);
+    allFacts.push(fact);
+    return true;
+  }
+
+  const ftsQuery = buildFtsQuery(query);
+
+  // ── Layer 1a: FTS5 keyword search on facts ─────────────────────────
   try {
     if (ftsQuery) {
+      const ftsWords = query.replace(/[^\w\s]/g, '').split(/\s+/)
+        .filter(w => w.length > 2 && !STOPWORDS.has(w.toLowerCase()));
       const ftsFactResults = timeline.prepare(`
-        SELECT f.content, f.category, f.confidence, f.timestamp, f.entities_json
+        SELECT f.id, f.content, f.category, f.confidence, f.timestamp,
+               f.entities_json, f.source_conversation_id
         FROM facts f
         WHERE f.id IN (SELECT rowid FROM facts_fts WHERE facts_fts MATCH ?)
         AND f.is_latest = 1
         AND (f.expires_at IS NULL OR f.expires_at > datetime('now'))
         ORDER BY f.confidence DESC
-        LIMIT 15
-      `).all(ftsQuery) as Array<{ content: string; category: string; confidence: number; timestamp: string }>;
+        LIMIT 30
+      `).all(ftsQuery) as Array<{
+        id: number; content: string; category: string; confidence: number;
+        timestamp: string; entities_json: string; source_conversation_id: string;
+      }>;
 
-      for (const f of ftsFactResults) {
-        const key = f.content.slice(0, 80);
-        if (!seenContent.has(key)) {
-          seenContent.add(key);
-          factParts.push(`- [${f.category}] ${f.content}`);
-        }
+      for (const row of ftsFactResults) {
+        const contentLower = row.content.toLowerCase();
+        const matchedWords = ftsWords.filter(w => contentLower.includes(w.toLowerCase()));
+        const wordMatchRatio = ftsWords.length > 0 ? matchedWords.length / ftsWords.length : 0;
+        addFact({
+          id: row.id,
+          content: row.content,
+          category: row.category || 'general',
+          confidence: row.confidence || 0.7,
+          timestamp: row.timestamp,
+          entities: JSON.parse(row.entities_json || '[]'),
+          score: 0.5 + (wordMatchRatio * 0.5),
+          source: 'direct',
+          source_conversation_id: row.source_conversation_id,
+        });
       }
     }
   } catch { /* FTS best-effort */ }
 
-  // Semantic search over ChromaDB
+  // ── Layer 1b: ChromaDB semantic search ─────────────────────────────
+  // Use entity-expanded query for better semantic matching
+  let expandedQuery = query;
+  let entityDb: InstanceType<typeof Database> | null = null;
   try {
-    const queryEmbeddings = await embed([qa.question]);
+    entityDb = new Database(join(root, 'data', 'entity-graph.db'), { readonly: true });
+    expandedQuery = expandQueryWithEntities(query, entityDb);
+  } catch { /* entity expansion best-effort */ }
+
+  try {
+    const queryEmbeddings = await embed([expandedQuery]);
+    const chromaResults = await chromaQuery(chromaCollectionId, queryEmbeddings[0], 30);
+
+    if (chromaResults.documents?.[0]) {
+      for (let i = 0; i < chromaResults.documents[0].length; i++) {
+        const doc = chromaResults.documents[0][i];
+        const meta = chromaResults.metadatas?.[0]?.[i] || {};
+        const dist = chromaResults.distances?.[0]?.[i] ?? 1.0;
+        const sourcePath = (meta.source_path as string) || '';
+
+        if (!doc || doc.length < 10) continue;
+        const semanticScore = 1 - dist;
+
+        if (sourcePath.startsWith('fact://')) {
+          addFact({
+            id: 0,
+            content: doc,
+            category: (meta.title as string)?.match(/^\[(\w+)\]/)?.[1] || 'general',
+            confidence: 0.7,
+            timestamp: (meta.timestamp as string) || '',
+            entities: [],
+            score: semanticScore,
+            source: 'direct',
+          });
+        }
+      }
+    }
+  } catch { /* semantic best-effort */ }
+
+  // ── Layer 2: Entity expansion with graph traversal ─────────────────
+  if (entityDb) {
+    try {
+      const queryLower = query.toLowerCase();
+      const allEntities = entityDb.prepare(
+        'SELECT id, name FROM entities ORDER BY mention_count DESC LIMIT 200'
+      ).all() as Array<{ id: number; name: string }>;
+
+      const matchedEntities = allEntities.filter(
+        e => e.name.length >= 3 && queryLower.includes(e.name.toLowerCase())
+      );
+
+      if (matchedEntities.length > 0) {
+        const seedIds = matchedEntities.slice(0, 5).map(e => e.id);
+        const reachedEntities = traverseEntityGraph(entityDb, seedIds, graphHops, 15);
+
+        const entityNameMap = new Map<number, string>();
+        for (const e of allEntities) entityNameMap.set(e.id, e.name);
+        for (const reached of reachedEntities) {
+          if (!entityNameMap.has(reached.id)) {
+            try {
+              const row = entityDb.prepare('SELECT name FROM entities WHERE id = ?')
+                .get(reached.id) as { name: string } | undefined;
+              if (row) entityNameMap.set(reached.id, row.name);
+            } catch { /* skip */ }
+          }
+        }
+
+        for (const reached of reachedEntities) {
+          const entityName = entityNameMap.get(reached.id);
+          if (!entityName) continue;
+
+          const distancePenalty = HOP_DISTANCE_PENALTY[reached.hopDistance] ?? 0.3;
+
+          // Fetch facts for this entity
+          try {
+            const entityFacts = timeline.prepare(`
+              SELECT id, content, category, confidence, timestamp, entities_json, source_conversation_id
+              FROM facts
+              WHERE LOWER(entities_json) LIKE ? AND is_latest = 1
+              AND (expires_at IS NULL OR expires_at > datetime('now'))
+              ORDER BY confidence DESC LIMIT 10
+            `).all(`%${entityName.toLowerCase()}%`) as Array<{
+              id: number; content: string; category: string; confidence: number;
+              timestamp: string; entities_json: string; source_conversation_id: string;
+            }>;
+
+            for (const ef of entityFacts) {
+              // For non-seed entities (hop > 0), only include query-relevant facts
+              if (reached.hopDistance > 0) {
+                const relevance = wordOverlapRatio(queryLower, ef.content.toLowerCase());
+                if (relevance < 0.1) continue;
+              }
+
+              const baseScore = reached.hopDistance === 0 ? 1.0 : (ef.confidence || 0.7);
+              addFact({
+                id: ef.id,
+                content: ef.content,
+                category: ef.category || 'general',
+                confidence: ef.confidence || 0.7,
+                timestamp: ef.timestamp,
+                entities: JSON.parse(ef.entities_json || '[]'),
+                score: baseScore * distancePenalty,
+                source: reached.hopDistance === 0 ? 'entity_expansion' : 'graph_expansion',
+                source_conversation_id: ef.source_conversation_id,
+              });
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch { /* entity expansion best-effort */ }
+  }
+
+  // ── Layer 2.5: Scene expansion + bridge discovery ──────────────────
+  const seenFactIds = new Set(allFacts.map(f => f.id).filter(id => id > 0));
+  const topFacts = [...allFacts].sort((a, b) => b.score - a.score);
+
+  // Scene expansion: find facts from the same conversation as top results
+  for (const topFact of topFacts.slice(0, 5)) {
+    let convId = topFact.source_conversation_id;
+    if (!convId && topFact.id > 0) {
+      try {
+        const row = timeline.prepare(
+          'SELECT source_conversation_id FROM facts WHERE id = ?'
+        ).get(topFact.id) as { source_conversation_id: string } | undefined;
+        if (row) convId = row.source_conversation_id;
+      } catch { /* best-effort */ }
+    }
+    if (!convId) continue;
+
+    try {
+      const nearbyFacts = timeline.prepare(`
+        SELECT id, content, category, confidence, timestamp, entities_json, source_conversation_id
+        FROM facts
+        WHERE source_conversation_id = ?
+        AND id != ?
+        AND COALESCE(is_latest, 1) = 1
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+        ORDER BY ABS(id - ?) ASC
+        LIMIT 3
+      `).all(convId, topFact.id, topFact.id) as Array<{
+        id: number; content: string; category: string; confidence: number;
+        timestamp: string; entities_json: string; source_conversation_id: string;
+      }>;
+
+      for (const nearby of nearbyFacts) {
+        if (!seenFactIds.has(nearby.id)) {
+          seenFactIds.add(nearby.id);
+          addFact({
+            id: nearby.id,
+            content: nearby.content,
+            category: nearby.category || 'general',
+            confidence: nearby.confidence || 0.7,
+            timestamp: nearby.timestamp,
+            entities: JSON.parse(nearby.entities_json || '[]'),
+            score: topFact.score * 0.6,
+            source: 'scene_expansion',
+            source_conversation_id: nearby.source_conversation_id,
+          });
+        }
+      }
+    } catch { /* best-effort */ }
+  }
+
+  // Bridge discovery: find facts mentioning entities from multiple top results
+  if (topFacts.length >= 2) {
+    const entities1 = new Set((topFacts[0].entities || []).map((e: string) => e.toLowerCase()));
+    const entities2 = new Set((topFacts[1].entities || []).map((e: string) => e.toLowerCase()));
+
+    if (entities1.size > 0 && entities2.size > 0) {
+      try {
+        const candidateFacts = timeline.prepare(`
+          SELECT id, content, category, confidence, timestamp, entities_json, source_conversation_id
+          FROM facts
+          WHERE COALESCE(is_latest, 1) = 1
+          AND (expires_at IS NULL OR expires_at > datetime('now'))
+          LIMIT 100
+        `).all() as Array<{
+          id: number; content: string; category: string; confidence: number;
+          timestamp: string; entities_json: string; source_conversation_id: string;
+        }>;
+
+        for (const f of candidateFacts) {
+          const factEntities = JSON.parse(f.entities_json || '[]').map((e: string) => e.toLowerCase());
+          const matchesFirst = factEntities.some((e: string) => entities1.has(e));
+          const matchesSecond = factEntities.some((e: string) => entities2.has(e));
+
+          if (matchesFirst && matchesSecond && !seenFactIds.has(f.id)) {
+            seenFactIds.add(f.id);
+            addFact({
+              id: f.id,
+              content: f.content,
+              category: f.category || 'general',
+              confidence: f.confidence || 0.7,
+              timestamp: f.timestamp,
+              entities: JSON.parse(f.entities_json || '[]'),
+              score: 0.4,
+              source: 'bridge',
+              source_conversation_id: f.source_conversation_id,
+            });
+          }
+        }
+      } catch { /* best-effort */ }
+    }
+  }
+
+  if (entityDb) {
+    try { entityDb.close(); } catch { /* ignore */ }
+  }
+
+  // ── Layer 3: Supporting conversation context ───────────────────────
+  const supportParts: string[] = [];
+  const seenSupportContent = new Set<string>();
+
+  // Supporting context from ChromaDB (non-fact results)
+  try {
+    const queryEmbeddings = await embed([expandedQuery]);
     const chromaResults = await chromaQuery(chromaCollectionId, queryEmbeddings[0], 20);
 
     if (chromaResults.documents?.[0]) {
@@ -1111,55 +1506,22 @@ async function answerQuestion(
         const doc = chromaResults.documents[0][i];
         const meta = chromaResults.metadatas?.[0]?.[i] || {};
         const sourcePath = (meta.source_path as string) || '';
-        const key = doc?.slice(0, 80) || '';
-        if (!key || seenContent.has(key)) continue;
-        seenContent.add(key);
+        if (!doc || sourcePath.startsWith('fact://')) continue;
 
-        if (sourcePath.startsWith('fact://')) {
-          const category = (meta.title as string)?.match(/^\[(\w+)\]/)?.[1] || 'general';
-          factParts.push(`- [${category}] ${doc}`);
-        } else {
-          const ts = (meta.timestamp as string) || '';
-          const dateLabel = ts ? new Date(ts).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-          supportParts.push(`[${dateLabel}] ${doc}`);
-        }
+        const key = doc.slice(0, 80);
+        if (seenSupportContent.has(key)) continue;
+        seenSupportContent.add(key);
+
+        const ts = (meta.timestamp as string) || '';
+        const dateLabel = ts ? new Date(ts).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+        supportParts.push(`[${dateLabel}] ${doc}`);
       }
     }
   } catch { /* semantic best-effort */ }
 
-  // ── Layer 2: Entity expansion ───────────────────────────────────────
+  // FTS conversation context
   try {
-    const entityDb = new Database(join(root, 'data', 'entity-graph.db'), { readonly: true });
-    const queryLower = qa.question.toLowerCase();
-    const allEntities = entityDb.prepare(
-      'SELECT id, name FROM entities ORDER BY mention_count DESC LIMIT 100'
-    ).all() as Array<{ id: number; name: string }>;
-
-    const matched = allEntities.filter(e => e.name.length >= 3 && queryLower.includes(e.name.toLowerCase())).slice(0, 3);
-    for (const entity of matched) {
-      try {
-        const entityFacts = timeline.prepare(`
-          SELECT content, category FROM facts
-          WHERE LOWER(entities_json) LIKE ? AND is_latest = 1
-          AND (expires_at IS NULL OR expires_at > datetime('now'))
-          ORDER BY confidence DESC LIMIT 10
-        `).all(`%${entity.name.toLowerCase()}%`) as Array<{ content: string; category: string }>;
-
-        for (const f of entityFacts) {
-          const key = f.content.slice(0, 80);
-          if (!seenContent.has(key)) {
-            seenContent.add(key);
-            factParts.push(`- [${f.category}] ${f.content}`);
-          }
-        }
-      } catch { /* skip */ }
-    }
-    entityDb.close();
-  } catch { /* entity expansion best-effort */ }
-
-  // ── Layer 3: Supporting conversation context ────────────────────────
-  try {
-    if (ftsQuery && supportParts.length < 10) {
+    if (ftsQuery && supportParts.length < maxSupporting) {
       const ftsResults = timeline.prepare(`
         SELECT te.summary, te.timestamp FROM timeline_events te
         WHERE te.id IN (SELECT rowid FROM timeline_fts WHERE timeline_fts MATCH ?)
@@ -1169,8 +1531,8 @@ async function answerQuestion(
 
       for (const r of ftsResults) {
         const key = r.summary?.slice(0, 80) || '';
-        if (key && !seenContent.has(key)) {
-          seenContent.add(key);
+        if (key && !seenSupportContent.has(key)) {
+          seenSupportContent.add(key);
           const dateLabel = r.timestamp ? new Date(r.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
           supportParts.push(`[${dateLabel}] ${r.summary}`);
         }
@@ -1178,10 +1540,156 @@ async function answerQuestion(
     }
   } catch { /* FTS best-effort */ }
 
-  // ── Layer 4: Assemble context ───────────────────────────────────────
+  // ── Layer 4: Assemble + optimize to token budget ───────────────────
+  allFacts.sort((a, b) => b.score - a.score);
+  const keptFacts = allFacts.slice(0, maxFacts);
+
+  const factParts = keptFacts.map(f => `- [${f.category}] ${f.content}`);
+  const keptSupport = supportParts.slice(0, maxSupporting);
+
+  // Prune to token budget
+  let totalTokens = estimateTokens(factParts.join('\n') + keptSupport.join('\n'));
+  while (totalTokens > tokenBudget && keptSupport.length > 0) {
+    keptSupport.pop();
+    totalTokens = estimateTokens(factParts.join('\n') + keptSupport.join('\n'));
+  }
+  while (totalTokens > tokenBudget && factParts.length > 3) {
+    factParts.pop();
+    totalTokens = estimateTokens(factParts.join('\n') + keptSupport.join('\n'));
+  }
+
+  return { factParts, supportParts: keptSupport };
+}
+
+// ── Rec #1: IRCoT iterative retrieval for multi-hop ──────────────────
+
+/**
+ * IRCoT-style iterative retrieval with chain-of-thought for multi-hop
+ * questions (Category 1). Each step: retrieve → reason → refine query.
+ * The model decides when it has enough evidence or what to search next.
+ */
+async function answerMultiHopIRCoT(
+  root: string,
+  qa: QAItem,
+  speakerA: string,
+  speakerB: string,
+  chromaCollectionId: string,
+  maxSteps: number = 3
+): Promise<string> {
+  const client = getClaudeClient();
+  const accumulatedFacts: string[] = [];
+  const accumulatedSupport: string[] = [];
+  const seenFacts = new Set<string>();
+  let currentQuery = qa.question;
+
+  for (let step = 0; step < maxSteps; step++) {
+    // Retrieve with current query (use more graph hops on later steps)
+    const { factParts, supportParts } = await retrieveContext(
+      root, currentQuery, chromaCollectionId,
+      { maxFacts: 15, maxSupporting: 5, tokenBudget: 4000, graphHops: step === 0 ? 2 : 3 }
+    );
+
+    // Add new facts (deduplicate across steps)
+    for (const f of factParts) {
+      const key = f.slice(0, 80);
+      if (!seenFacts.has(key)) {
+        seenFacts.add(key);
+        accumulatedFacts.push(f);
+      }
+    }
+    for (const s of supportParts) {
+      const key = s.slice(0, 80);
+      if (!seenFacts.has(key)) {
+        seenFacts.add(key);
+        accumulatedSupport.push(s);
+      }
+    }
+
+    // Reason: ask Haiku to generate next retrieval query or final answer
+    let evidenceBlock = '';
+    if (accumulatedFacts.length > 0) evidenceBlock += '## Known Facts\n' + accumulatedFacts.slice(0, 20).join('\n') + '\n\n';
+    if (accumulatedSupport.length > 0) evidenceBlock += '## Supporting Context\n' + accumulatedSupport.slice(0, 8).join('\n---\n');
+
+    const reasoningPrompt = `You are answering a multi-hop question about past conversations between ${speakerA} and ${speakerB}.
+
+Question: ${qa.question}
+
+Evidence gathered so far:
+${evidenceBlock || '(No relevant evidence found yet)'}
+
+Instructions:
+- If you have enough information to answer the question definitively, respond with EXACTLY:
+  ANSWER: <your short answer — use exact words from evidence, digits for numbers, no explanation>
+
+- If you need more information to connect the dots, identify what's missing and respond with EXACTLY:
+  SEARCH: <specific entity name, relationship, or topic to look up next>
+
+Think step by step about what information you have and what you still need.`;
+
+    const reasoning = await client.complete(reasoningPrompt, {
+      model: 'haiku', maxTokens: 200, maxTurns: 1,
+    });
+
+    if (reasoning.includes('ANSWER:')) {
+      return cleanAnswer(reasoning.split('ANSWER:')[1].trim());
+    }
+
+    // Extract next search query
+    const searchMatch = reasoning.match(/SEARCH:\s*(.+)/);
+    if (searchMatch) {
+      currentQuery = searchMatch[1].trim();
+    } else {
+      break; // Model didn't follow format, use what we have
+    }
+  }
+
+  // Fallback: answer with accumulated context using standard prompt
   let context = '';
-  if (factParts.length > 0) context += '## Known Facts\n' + factParts.slice(0, 15).join('\n') + '\n\n';
-  if (supportParts.length > 0) context += '## Supporting Context\n' + supportParts.slice(0, 10).join('\n---\n');
+  if (accumulatedFacts.length > 0) context += '## Known Facts\n' + accumulatedFacts.slice(0, 20).join('\n') + '\n\n';
+  if (accumulatedSupport.length > 0) context += '## Supporting Context\n' + accumulatedSupport.slice(0, 10).join('\n---\n');
+  if (!context) context = '(No relevant memories found)';
+
+  const prompt = buildPrompt(qa, context, speakerA, speakerB);
+  const answer = await client.complete(prompt, {
+    model: 'haiku', maxTokens: 100, maxTurns: 1,
+  });
+  return cleanAnswer(answer);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 2.5: ANSWER GENERATION (dispatches by category)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Answer a single QA item. Dispatches to:
+ *   - Category 1 (multi-hop): IRCoT iterative retrieval
+ *   - All other categories: production-parity single-pass retrieval
+ *
+ * Both paths use the full retrieval pipeline (entity expansion, graph
+ * traversal, scene expansion, bridge discovery) instead of the old
+ * simplified inline retrieval.
+ */
+async function answerQuestion(
+  root: string,
+  qa: QAItem,
+  speakerA: string,
+  speakerB: string,
+  chromaCollectionId: string
+): Promise<string> {
+  // Category 1 (multi-hop): use IRCoT iterative retrieval
+  if (qa.category === 1) {
+    return answerMultiHopIRCoT(root, qa, speakerA, speakerB, chromaCollectionId);
+  }
+
+  // All other categories: single-pass with full production retrieval pipeline
+  const { factParts, supportParts } = await retrieveContext(
+    root, qa.question, chromaCollectionId,
+    { maxFacts: 20, maxSupporting: 10, tokenBudget: 6000, graphHops: 2 }
+  );
+
+  let context = '';
+  if (factParts.length > 0) context += '## Known Facts\n' + factParts.join('\n') + '\n\n';
+  if (supportParts.length > 0) context += '## Supporting Context\n' + supportParts.join('\n---\n');
   if (!context) context = '(No relevant memories found)';
 
   const prompt = buildPrompt(qa, context, speakerA, speakerB);
