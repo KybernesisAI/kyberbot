@@ -39,6 +39,7 @@ export {
   addComment, getComments,
   recoverStuckIssues,
   getStuckIssues,
+  setMentionTrigger,
 } from './issues.js';
 
 // Inbox

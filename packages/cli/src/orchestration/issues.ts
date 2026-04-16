@@ -9,7 +9,18 @@
 import { getOrchDb } from './db.js';
 import { logActivity } from './activity.js';
 import { isValidTransition, getTransitionSideEffects } from './state-machine.js';
+import { createLogger } from '../logger.js';
 import type { Issue, IssueStatus, IssuePriority, IssueComment } from './types.js';
+
+const logger = createLogger('orch-issues');
+
+// Callback for triggering agent heartbeats from @mentions.
+// Set by the orchestration API when it mounts, to avoid circular deps.
+let onMentionTrigger: ((agentName: string) => void) | null = null;
+
+export function setMentionTrigger(fn: (agentName: string) => void): void {
+  onMentionTrigger = fn;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ISSUES — WRITE
@@ -308,6 +319,20 @@ export function addComment(issueId: number, authorAgent: string, content: string
     entity_id: String(issueId),
     details: JSON.stringify({ preview: content.slice(0, 100) }),
   });
+
+  // Detect @mentions and trigger agent heartbeats
+  const mentions = fixedContent.match(/@(\w+)/g);
+  if (mentions && onMentionTrigger) {
+    const orgLookup = db.prepare('SELECT agent_name FROM org_nodes').all() as Array<{ agent_name: string }>;
+    const orgNames = new Set(orgLookup.map(n => n.agent_name.toLowerCase()));
+    for (const mention of mentions) {
+      const mentionedName = mention.slice(1).toLowerCase();
+      if (orgNames.has(mentionedName) && mentionedName !== authorAgent.toLowerCase()) {
+        logger.info(`@mention detected in comment: ${mentionedName}, triggering heartbeat`);
+        onMentionTrigger(mentionedName);
+      }
+    }
+  }
 
   const id = Number(result.lastInsertRowid);
   return db.prepare('SELECT * FROM issue_comments WHERE id = ?').get(id) as IssueComment;

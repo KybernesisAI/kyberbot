@@ -29,6 +29,7 @@ import {
   getOrchestrationSettings, updateOrchestrationSettings,
   recoverStuckIssues, recoverStuckRuns,
   queueWorkerHeartbeat, queueCeoHeartbeat,
+  setMentionTrigger,
 } from '../orchestration/index.js';
 import { runCeoHeartbeat } from '../orchestration/ceo-heartbeat.js';
 import { runWorkerHeartbeat } from '../orchestration/worker-heartbeat.js';
@@ -60,6 +61,27 @@ export function createOrchestrationRouter(
       logger.info('Startup recovery', { stuckIssues, stuckRuns });
     }
   } catch { /* DB might not be initialized yet */ }
+
+  // Wire up @mention trigger — when any addComment() detects @agentname,
+  // queue that agent's heartbeat. Works for comments from API AND from
+  // internal code (worker heartbeat, CEO heartbeat).
+  if (agentIdentities) {
+    setMentionTrigger((mentionedName: string) => {
+      const lower = mentionedName.toLowerCase();
+      let identity: AgentIdentity | undefined;
+      for (const [k, v] of agentIdentities.entries()) {
+        if (k.toLowerCase() === lower) { identity = v; break; }
+      }
+      if (!identity) return;
+      const orgNode = getOrgChart().find(n => n.agent_name.toLowerCase() === lower);
+      if (!orgNode) return;
+      if (orgNode.is_ceo) {
+        queueCeoHeartbeat(identity.root, orgNode.agent_name, runCeoHeartbeat);
+      } else {
+        queueWorkerHeartbeat(identity.root, orgNode.agent_name, orgNode.role, orgNode.title || orgNode.agent_name);
+      }
+    });
+  }
 
   // ─────────────────────────────────────────────────────────────────
   // Dashboard (aggregate)
@@ -416,40 +438,8 @@ export function createOrchestrationRouter(
       res.status(400).json({ error: 'content is required' });
       return;
     }
+    // addComment() internally detects @mentions and triggers agent heartbeats
     const comment = addComment(Number(param(req, 'id')), author || 'human', content);
-
-    // Detect @-mentions and trigger agent heartbeats (fire-and-forget)
-    const mentions = content.match(/@(\w+)/g);
-    if (mentions && agentIdentities) {
-      for (const mention of mentions) {
-        const mentionedName = mention.slice(1).toLowerCase();
-        let mentionedIdentity: AgentIdentity | undefined;
-        for (const [k, v] of agentIdentities.entries()) {
-          if (k.toLowerCase() === mentionedName || v.name.toLowerCase() === mentionedName) {
-            mentionedIdentity = v; break;
-          }
-        }
-        if (mentionedIdentity) {
-          logger.info(`@-mention detected: ${mentionedName}, triggering heartbeat`);
-          // Fire-and-forget — don't block the response
-          (async () => {
-            try {
-              const orgNode = getOrgChart().find(n => n.agent_name.toLowerCase() === mentionedName);
-              if (orgNode?.is_ceo) {
-                queueCeoHeartbeat(mentionedIdentity!.root, orgNode.agent_name, runCeoHeartbeat);
-              } else if (orgNode) {
-                queueWorkerHeartbeat(
-                  mentionedIdentity!.root,
-                  orgNode.agent_name,
-                  orgNode.role,
-                  orgNode.title || orgNode.agent_name,
-                );
-              }
-            } catch (err) { logger.warn('Mention-triggered heartbeat failed', { error: String(err) }); }
-          })();
-        }
-      }
-    }
 
     res.status(201).json({ comment });
   }));
