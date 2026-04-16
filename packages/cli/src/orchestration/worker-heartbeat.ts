@@ -15,7 +15,7 @@ import { createLogger } from '../logger.js';
 import {
   listIssues, getComments, checkoutIssue, transitionIssue, addComment,
 } from './index.js';
-import { createRun, completeRun, failRun, appendRunLog } from './runs.js';
+import { createRun, completeRun, failRun, appendRunLog, countRecentFailures } from './runs.js';
 import { getClaudeClient } from '../claude.js';
 import type { Issue } from './types.js';
 
@@ -95,9 +95,23 @@ export async function runWorkerHeartbeat(
   const todo = listIssues({ assigned_to: agentName, status: 'todo' });
 
   // Prioritize in_progress first, then highest priority todo
-  const targetIssue = inProgress[0] || todo[0];
+  let targetIssue = inProgress[0] || todo[0];
   if (!targetIssue) {
     return 'No assigned work.';
+  }
+
+  // Check if this issue has failed too many times
+  const failures = countRecentFailures(agentName, targetIssue.id);
+  if (failures >= 3) {
+    logger.warn(`Issue KYB-${targetIssue.id} has failed ${failures} times for ${agentName}, moving to blocked`);
+    try {
+      addComment(targetIssue.id, agentName, `Automatically blocked: ${failures} consecutive failures in the last 24 hours. Needs human review or task decomposition.`);
+      transitionIssue(targetIssue.id, 'blocked', agentName);
+    } catch { /* ignore */ }
+    // Try the next issue
+    const nextIssue = [...inProgress, ...todo].find(i => i.id !== targetIssue.id);
+    if (!nextIssue) return `Issue KYB-${targetIssue.id} blocked due to ${failures} failures. Will pick up other work on next heartbeat.`;
+    targetIssue = nextIssue;
   }
 
   const runId = createRun(agentName, 'worker');
@@ -139,6 +153,8 @@ export async function runWorkerHeartbeat(
       '- Work within your agent directory and the project scope. Do not explore unrelated directories, systems, or services outside the task.',
       '- If the task is too large to complete in one pass, do the most impactful part and report STATUS: IN_PROGRESS with what remains.',
       '- Do not spend more than 15-20 tool calls on a single task. If you are going in circles, report STATUS: BLOCKED with what is stopping you.',
+      '- If you need information from another agent, add a comment on the issue with @agentname asking your question. They will be notified and can respond.',
+      '- Do NOT use the agent bus for orchestration communication — use issue comments so everything is tracked.',
       '',
       'When you are done, write a concise summary of:',
       '1. What you did',

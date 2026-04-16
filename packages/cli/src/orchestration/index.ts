@@ -38,6 +38,7 @@ export {
   transitionIssue, checkoutIssue, releaseCheckout,
   addComment, getComments,
   recoverStuckIssues,
+  getStuckIssues,
 } from './issues.js';
 
 // Inbox
@@ -47,7 +48,7 @@ export { createInboxItem, listInbox, acknowledgeInboxItem, resolveInboxItem, get
 export { logActivity, getActivityLog } from './activity.js';
 
 // Heartbeat Runs
-export { createRun, completeRun, failRun, listRuns, getRun, recoverStuckRuns, appendRunLog, readRunLog } from './runs.js';
+export { createRun, completeRun, failRun, listRuns, getRun, recoverStuckRuns, appendRunLog, readRunLog, countRecentFailures } from './runs.js';
 
 // Heartbeat Queue
 export { queueWorkerHeartbeat, queueCeoHeartbeat } from './worker-heartbeat.js';

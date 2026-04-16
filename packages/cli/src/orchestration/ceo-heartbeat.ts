@@ -20,6 +20,7 @@ import {
   listInbox, getPendingInboxCount,
   getActivityLog,
   listRuns,
+  getStuckIssues,
 } from './index.js';
 import { createRun, completeRun, failRun, appendRunLog } from './runs.js';
 import { getCeoToolDefs, formatToolsForPrompt, parseToolCalls, executeTool, resetSessionLimits } from './tools.js';
@@ -112,8 +113,8 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
     }
   }
 
-  // Issue board
-  const allIssues = listIssues();
+  // Issue board (capped to 50 issues for prompt size)
+  const allIssues = listIssues({ limit: 50 });
   const byStatus: Record<string, typeof allIssues> = {};
   for (const issue of allIssues) {
     if (!byStatus[issue.status]) byStatus[issue.status] = [];
@@ -121,22 +122,53 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
   }
 
   sections.push('## Issue Board');
+  let shownCount = 0;
+  const MAX_BOARD_ISSUES = 30;
   for (const status of ['in_progress', 'todo', 'blocked', 'in_review', 'backlog']) {
     const items = byStatus[status] || [];
     if (items.length === 0) continue;
     sections.push(`### ${status.toUpperCase()} (${items.length})`);
     for (const i of items) {
+      if (shownCount >= MAX_BOARD_ISSUES) break;
       const assignee = i.assigned_to || 'unassigned';
       const checkout = i.checkout_by ? ` [checked out by ${i.checkout_by}]` : '';
       sections.push(`- KYB-${i.id} [${i.priority}] ${i.title} → ${assignee}${checkout}`);
+      shownCount++;
+    }
+    if (shownCount >= MAX_BOARD_ISSUES && items.length > 0) {
+      sections.push(`_(${items.length - Math.min(items.length, MAX_BOARD_ISSUES - (shownCount - items.length))} more ${status} issues not shown)_`);
     }
     sections.push('');
   }
 
-  // Done issues (just count)
+  // Done/cancelled issues (just count)
   const doneCount = (byStatus['done'] || []).length;
+  const cancelledCount = (byStatus['cancelled'] || []).length;
   if (doneCount > 0) {
     sections.push(`### DONE: ${doneCount} issues completed`);
+    sections.push('');
+  }
+  if (cancelledCount > 0) {
+    sections.push(`### CANCELLED: ${cancelledCount} issues`);
+    sections.push('');
+  }
+
+  // Stuck issues (need attention)
+  const { staleInProgress, staleBlocked } = getStuckIssues();
+  if (staleInProgress.length > 0 || staleBlocked.length > 0) {
+    sections.push('## Stuck Issues (Need Attention)');
+    if (staleInProgress.length > 0) {
+      sections.push('### In Progress 24+ hours:');
+      for (const i of staleInProgress) {
+        sections.push(`- KYB-${i.id} [${i.priority}] ${i.title} → ${i.assigned_to || 'unassigned'} (last updated: ${i.updated_at})`);
+      }
+    }
+    if (staleBlocked.length > 0) {
+      sections.push('### Blocked 48+ hours:');
+      for (const i of staleBlocked) {
+        sections.push(`- KYB-${i.id} [${i.priority}] ${i.title} → ${i.assigned_to || 'unassigned'} (last updated: ${i.updated_at})`);
+      }
+    }
     sections.push('');
   }
 
@@ -182,8 +214,8 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
     sections.push('');
   }
 
-  // Recent activity
-  const activity = getActivityLog({ limit: 15 });
+  // Recent activity (capped to 10 for prompt size)
+  const activity = getActivityLog({ limit: 10 });
   if (activity.length > 0) {
     sections.push('## Recent Activity');
     for (const entry of activity) {
@@ -212,6 +244,7 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
   sections.push('- **Dependencies matter**: Think about what must happen before other things can start. Sequence work logically.');
   sections.push('- **Trickle, don\'t dump**: Create a few high-impact issues per heartbeat, not a wall of tasks. More will come on future heartbeats as work completes.');
   sections.push('- **Review before creating**: Before creating new issues, check what already exists. Don\'t duplicate work.');
+  sections.push('- **No duplicates**: Before creating an issue, check the existing issue board above. If an open issue already covers the same work, comment on it instead of creating a new one.');
   sections.push('- **Progressive planning**: Break goals into phases. Phase 1 issues go to backlog now. Phase 2+ issues get created as Phase 1 completes.');
   sections.push('');
   sections.push('### Each heartbeat');
@@ -221,6 +254,10 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
   sections.push('4. **Create new work** — Only if there\'s a clear gap between goals and existing issues. Start in backlog.');
   sections.push('5. **Communicate** — Only comment if you have NEW information or direction. Do not nag agents who are already working.');
   sections.push('6. **Escalate** — Use escalate_to_human for decisions you cannot make.');
+  sections.push('');
+  sections.push('### Automated safeguards');
+  sections.push('- **Stuck issues**: If an issue has been in_progress for 24+ hours or blocked for 48+ hours, escalate to the human inbox.');
+  sections.push('- **Failed retries**: If an agent failed on a task more than 3 times (check run history), move the issue to blocked and escalate to human. Do not keep retrying the same failing task.');
   sections.push('');
   sections.push('Use the tools above to take actions. You can make multiple tool calls.');
   sections.push('If everything is on track and no action is needed, respond with: HEARTBEAT_OK');

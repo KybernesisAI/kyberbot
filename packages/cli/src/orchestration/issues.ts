@@ -321,6 +321,21 @@ export function getComments(issueId: number): IssueComment[] {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// STUCK ISSUES — issues stale beyond thresholds
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function getStuckIssues(): { staleInProgress: Issue[]; staleBlocked: Issue[] } {
+  const db = getOrchDb();
+  const staleInProgress = db.prepare(
+    "SELECT * FROM issues WHERE status='in_progress' AND updated_at < datetime('now', '-24 hours')"
+  ).all() as Issue[];
+  const staleBlocked = db.prepare(
+    "SELECT * FROM issues WHERE status='blocked' AND updated_at < datetime('now', '-48 hours')"
+  ).all() as Issue[];
+  return { staleInProgress, staleBlocked };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // RECOVERY — startup crash recovery
 // ═══════════════════════════════════════════════════════════════════════════════
 

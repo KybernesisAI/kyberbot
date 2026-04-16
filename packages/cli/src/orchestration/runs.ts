@@ -164,6 +164,21 @@ export function getRun(id: number): HeartbeatRun | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FAILURE COUNTING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Count how many times an agent has failed on a given issue in the last 24 hours.
+ */
+export function countRecentFailures(agentName: string, issueId: number): number {
+  const db = getOrchDb();
+  const row = db.prepare(
+    "SELECT COUNT(*) as count FROM heartbeat_runs WHERE LOWER(agent_name) = LOWER(?) AND status = 'failed' AND result_summary LIKE ? AND started_at > datetime('now', '-24 hours')"
+  ).get(agentName, `%KYB-${issueId}%`) as { count: number };
+  return row.count;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // RECOVERY — startup crash recovery
 // ═══════════════════════════════════════════════════════════════════════════════
 
