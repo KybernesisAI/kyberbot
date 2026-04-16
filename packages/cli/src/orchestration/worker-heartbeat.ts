@@ -30,14 +30,22 @@ let isProcessing = false;
 const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per heartbeat
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`Heartbeat timeout after ${ms / 1000}s: ${label}`)), ms)
-    ),
-  ]);
+  let timerId: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timerId = setTimeout(() => reject(new Error(`Heartbeat timeout after ${ms / 1000}s: ${label}`)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timerId!));
 }
 
+/**
+ * Process queued heartbeats sequentially. The isProcessing flag prevents
+ * concurrent execution. This is safe because:
+ * 1. Node.js is single-threaded — no true parallel access to isProcessing
+ * 2. Each task is awaited before the next starts
+ * 3. New items added during processing are picked up by the while loop
+ * 4. If processQueue() is called while already processing, it returns immediately
+ *    but the running loop will pick up any newly added items
+ */
 async function processQueue(): Promise<void> {
   if (isProcessing) return;
   isProcessing = true;
@@ -274,5 +282,5 @@ export function processWorkerToolCalls(responseText: string, agentName: string):
       }
     }
     logger.info(`Worker ${agentName}: ${toolCalls.length} orchestration tool calls processed`);
-  }).catch(() => {});
+  }).catch((err) => logger.warn('Failed to load tools module for worker tool calls', { error: String(err) }));
 }

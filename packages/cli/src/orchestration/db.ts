@@ -32,9 +32,15 @@ export function getOrchDb(): Database.Database {
 
   db.exec(SCHEMA);
 
-  // Migrations for existing databases
-  try { db.exec('ALTER TABLE heartbeat_runs ADD COLUMN log_output TEXT'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE heartbeat_runs ADD COLUMN log_ref TEXT'); } catch { /* already exists */ }
+  // Migrations for existing databases — check column existence before altering
+  const columns = db.prepare("PRAGMA table_info(heartbeat_runs)").all() as Array<{name: string}>;
+  const columnNames = new Set(columns.map(c => c.name));
+  if (!columnNames.has('log_output')) {
+    db.exec('ALTER TABLE heartbeat_runs ADD COLUMN log_output TEXT');
+  }
+  if (!columnNames.has('log_ref')) {
+    db.exec('ALTER TABLE heartbeat_runs ADD COLUMN log_ref TEXT');
+  }
 
   logger.info('Orchestration database initialized', { path: dbPath });
   return db;

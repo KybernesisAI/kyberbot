@@ -18,6 +18,8 @@ export type {
 } from './types.js';
 
 // State machine
+// Note: getValidTargets and isTerminal are exported as public API utilities
+// for consumers that need to inspect the state machine (e.g. UI, plugins).
 export { isValidTransition, getValidTargets, isTerminal } from './state-machine.js';
 
 // Company

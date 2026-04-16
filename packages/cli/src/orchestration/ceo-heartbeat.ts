@@ -252,17 +252,17 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
   }
 
   // Error patterns
-  const failedRuns = recentRuns.filter(r => r.status === 'failed');
-  if (failedRuns.length >= 3) {
+  const errorRuns = recentRuns.filter(r => r.status === 'failed');
+  if (errorRuns.length >= 3) {
     // Check for patterns
     const failuresByAgent: Record<string, number> = {};
     const failureErrors: string[] = [];
-    for (const run of failedRuns) {
+    for (const run of errorRuns) {
       failuresByAgent[run.agent_name] = (failuresByAgent[run.agent_name] || 0) + 1;
       if (run.error) failureErrors.push(run.error.slice(0, 100));
     }
     sections.push('## Error Pattern Analysis');
-    sections.push(`${failedRuns.length} failures detected in recent runs:`);
+    sections.push(`${errorRuns.length} failures detected in recent runs:`);
     for (const [agent, count] of Object.entries(failuresByAgent)) {
       if (count >= 2) sections.push(`- **${agent}**: ${count} failures — may indicate a systemic issue`);
     }

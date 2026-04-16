@@ -293,13 +293,14 @@ export function addComment(issueId: number, authorAgent: string, content: string
   for (const node of orgNodes) {
     const names = [node.agent_name, node.title].filter(Boolean) as string[];
     for (const name of names) {
+      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       // Fix "Name —" or "Name," or "Name:" at start of comment (without @)
-      const startPattern = new RegExp(`^(\\*\\*)?${name}(\\*\\*)?\\s*[—,:\\-]`, 'i');
+      const startPattern = new RegExp(`^(\\*\\*)?${escapedName}(\\*\\*)?\\s*[—,:\\-]`, 'i');
       if (startPattern.test(fixedContent) && !fixedContent.startsWith(`@${name}`) && !fixedContent.startsWith(`**@${name}`)) {
         fixedContent = fixedContent.replace(startPattern, `@${name.toLowerCase()} —`);
       }
       // Fix "Name" mentions in the middle of text (only if preceded by whitespace/newline and followed by punctuation/space)
-      const midPattern = new RegExp(`(?<=\\s|^|\\n)(\\*\\*)?${name}(\\*\\*)?(?=\\s*[—,:\\-\\.])`, 'gi');
+      const midPattern = new RegExp(`(?<=\\s|^|\\n)(\\*\\*)?${escapedName}(\\*\\*)?(?=\\s*[—,:\\-\\.])`, 'gi');
       fixedContent = fixedContent.replace(midPattern, `@${name.toLowerCase()}`);
     }
   }
@@ -380,12 +381,12 @@ export function recoverStuckIssues(): number {
     "UPDATE issues SET status='todo', checkout_by=NULL, checkout_at=NULL, updated_at=datetime('now') WHERE status='in_progress' AND checkout_by IS NOT NULL"
   ).run();
 
-  for (const row of stuck) {
+  for (const { id } of stuck as Array<{ id: number }>) {
     logActivity({
       actor: 'system',
       action: 'issue.recovered',
       entity_type: 'issue',
-      entity_id: String((row as any).id),
+      entity_id: String(id),
       details: 'Moved back to todo after fleet restart',
     });
   }

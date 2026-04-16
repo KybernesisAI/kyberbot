@@ -11,7 +11,10 @@ import { getOrchDb } from './db.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdirSync, existsSync, appendFileSync, readFileSync, statSync } from 'fs';
+import { createLogger } from '../logger.js';
 import type { HeartbeatRun, HeartbeatRunType } from './types.js';
+
+const logger = createLogger('orch-runs');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // WRITE
@@ -52,7 +55,7 @@ export function appendRunLog(id: number, text: string): void {
   if (!run?.log_ref) return;
   try {
     appendFileSync(run.log_ref, text);
-  } catch { /* ignore */ }
+  } catch (err) { logger.debug('Failed to append run log', { error: String(err) }); }
 }
 
 /**
@@ -101,7 +104,7 @@ export function completeRun(
   if (data.log_output) {
     const run = getRun(id);
     if (run?.log_ref) {
-      try { appendFileSync(run.log_ref, data.log_output); } catch { /* ignore */ }
+      try { appendFileSync(run.log_ref, data.log_output); } catch (err) { logger.debug('Failed to write log file', { error: String(err) }); }
     }
   }
 }

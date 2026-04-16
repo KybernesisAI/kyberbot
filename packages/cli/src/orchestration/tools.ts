@@ -15,7 +15,7 @@ import {
   setOrgNode,
   createInboxItem,
 } from './index.js';
-import type { IssueStatus, GoalLevel } from './types.js';
+import type { IssueStatus, IssuePriority, InboxUrgency, GoalLevel, GoalStatus } from './types.js';
 
 const logger = createLogger('orch-tools');
 
@@ -231,7 +231,7 @@ export function executeTool(
         title: params.title as string,
         description: params.description as string | undefined,
         assigned_to: params.assigned_to ? (params.assigned_to as string).toLowerCase() : actor.toLowerCase(),
-        priority: (params.priority as any) || 'medium',
+        priority: (params.priority as IssuePriority) || 'medium',
         status: 'backlog',
         created_by: actor,
       });
@@ -245,7 +245,7 @@ export function executeTool(
         source_agent: actor,
         title: params.title as string,
         body: params.body as string | undefined,
-        urgency: (params.urgency as any) || 'normal',
+        urgency: (params.urgency as InboxUrgency) || 'normal',
         related_issue_id: params.related_issue_id ? Number(params.related_issue_id) : undefined,
       });
 
@@ -268,7 +268,7 @@ export function executeTool(
       return updateGoal(Number(params.id), {
         title: params.title as string | undefined,
         description: params.description as string | undefined,
-        status: params.status as any,
+        status: (params.status as GoalStatus) || undefined,
       });
     case 'create_issue':
       if (SESSION_LIMITS.issues >= MAX_ISSUES_PER_HEARTBEAT) {
@@ -279,12 +279,12 @@ export function executeTool(
         title: params.title as string,
         description: params.description as string | undefined,
         assigned_to: params.assigned_to ? (params.assigned_to as string).toLowerCase() : undefined,
-        priority: (params.priority as any) || 'medium',
+        priority: (params.priority as IssuePriority) || 'medium',
         goal_id: params.goal_id ? Number(params.goal_id) : undefined,
         project_id: params.project_id ? Number(params.project_id) : undefined,
         parent_id: params.parent_id ? Number(params.parent_id) : undefined,
         labels: params.labels as string | undefined,
-        status: (params.status as any) || 'todo',
+        status: (params.status as IssueStatus) || 'todo',
         created_by: actor,
       });
     case 'assign_issue':

@@ -519,7 +519,7 @@ export function createOrchestrationRouter(
 
   // Stream run log with offset support for live viewing
   router.get('/runs/:id/log', (req, res) => {
-    const offset = parseInt(req.query.offset as string) || 0;
+    const offset = Math.max(0, parseInt(req.query.offset as string, 10) || 0);
     const { content, totalBytes } = readRunLog(Number(param(req, 'id')), offset);
     res.json({ content, totalBytes, offset });
   });

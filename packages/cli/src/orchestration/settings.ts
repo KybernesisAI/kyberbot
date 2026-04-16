@@ -14,9 +14,15 @@ import type { OrchestrationSettings } from './types.js';
 
 export function getOrchestrationSettings(): OrchestrationSettings {
   const db = getOrchDb();
+  interface SettingsRow {
+    orchestration_enabled: number;
+    heartbeat_interval: string;
+    active_hours_start: string | null;
+    active_hours_end: string | null;
+  }
   const row = db.prepare(
     'SELECT orchestration_enabled, heartbeat_interval, active_hours_start, active_hours_end FROM orchestration_settings WHERE id = 1'
-  ).get() as any;
+  ).get() as SettingsRow;
 
   return {
     orchestration_enabled: row.orchestration_enabled === 1,
