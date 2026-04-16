@@ -151,8 +151,8 @@ export class ClaudeClient {
       const args = ['--print', '-'];
       if (useStreamJson) {
         args.push('--output-format', 'stream-json', '--verbose');
+        args.push('--dangerously-skip-permissions');
       }
-      args.push('--dangerously-skip-permissions');
       if (opts.system) {
         args.push('--system-prompt', opts.system);
       }

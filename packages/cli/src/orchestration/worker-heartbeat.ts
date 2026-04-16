@@ -27,13 +27,27 @@ const logger = createLogger('worker-heartbeat');
 
 const heartbeatQueue: Array<() => Promise<void>> = [];
 let isProcessing = false;
+const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per heartbeat
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Heartbeat timeout after ${ms / 1000}s: ${label}`)), ms)
+    ),
+  ]);
+}
 
 async function processQueue(): Promise<void> {
   if (isProcessing) return;
   isProcessing = true;
   while (heartbeatQueue.length > 0) {
     const task = heartbeatQueue.shift()!;
-    try { await task(); } catch { /* errors logged inside each task */ }
+    try {
+      await withTimeout(task(), HEARTBEAT_TIMEOUT_MS, 'queued heartbeat');
+    } catch (err) {
+      logger.error('Queue task failed', { error: String(err) });
+    }
   }
   isProcessing = false;
 }

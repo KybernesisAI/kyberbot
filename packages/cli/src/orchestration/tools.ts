@@ -182,6 +182,17 @@ export function parseToolCalls(text: string): Array<{ name: string; params: Reco
   return calls;
 }
 
+// Rate limiting: max issues/goals created per heartbeat session
+const SESSION_LIMITS = { issues: 0, goals: 0 };
+const MAX_ISSUES_PER_HEARTBEAT = 5;
+const MAX_GOALS_PER_HEARTBEAT = 3;
+
+/** Reset session limits — call at the start of each heartbeat. */
+export function resetSessionLimits(): void {
+  SESSION_LIMITS.issues = 0;
+  SESSION_LIMITS.goals = 0;
+}
+
 /**
  * Execute a single tool call and return the result.
  */
@@ -221,6 +232,10 @@ export function executeTool(
 
     // CEO tools
     case 'create_goal':
+      if (SESSION_LIMITS.goals >= MAX_GOALS_PER_HEARTBEAT) {
+        return { error: `Rate limited: max ${MAX_GOALS_PER_HEARTBEAT} goals per heartbeat. Wait for next heartbeat.` };
+      }
+      SESSION_LIMITS.goals++;
       return createGoal({
         title: params.title as string,
         description: params.description as string | undefined,
@@ -237,6 +252,10 @@ export function executeTool(
         status: params.status as any,
       });
     case 'create_issue':
+      if (SESSION_LIMITS.issues >= MAX_ISSUES_PER_HEARTBEAT) {
+        return { error: `Rate limited: max ${MAX_ISSUES_PER_HEARTBEAT} issues per heartbeat. Wait for next heartbeat.` };
+      }
+      SESSION_LIMITS.issues++;
       return createIssue({
         title: params.title as string,
         description: params.description as string | undefined,

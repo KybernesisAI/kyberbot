@@ -22,7 +22,7 @@ import {
   listRuns,
 } from './index.js';
 import { createRun, completeRun, failRun, appendRunLog } from './runs.js';
-import { getCeoToolDefs, formatToolsForPrompt, parseToolCalls, executeTool } from './tools.js';
+import { getCeoToolDefs, formatToolsForPrompt, parseToolCalls, executeTool, resetSessionLimits } from './tools.js';
 
 const logger = createLogger('ceo-heartbeat');
 
@@ -237,6 +237,7 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
 export async function runCeoHeartbeat(root: string, agentName: string): Promise<string> {
   logger.info('Running CEO orchestration heartbeat', { agent: agentName });
 
+  resetSessionLimits(); // Prevent runaway issue/goal creation
   const runId = createRun(agentName, 'orchestration');
 
   try {
