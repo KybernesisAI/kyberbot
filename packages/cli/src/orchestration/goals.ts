@@ -83,10 +83,14 @@ export function updateGoal(id: number, updates: Partial<Pick<Goal, 'title' | 'de
 
 export function deleteGoal(id: number): void {
   const db = getOrchDb();
+  // Unlink issues and child goals before deleting
+  db.prepare('UPDATE issues SET goal_id = NULL WHERE goal_id = ?').run(id);
+  db.prepare('UPDATE goals SET parent_goal_id = NULL WHERE parent_goal_id = ?').run(id);
+  db.prepare('DELETE FROM goal_kpis WHERE goal_id = ?').run(id);
   db.prepare('DELETE FROM goals WHERE id = ?').run(id);
 
   logActivity({
-    actor: 'system',
+    actor: 'human',
     action: 'goal.deleted',
     entity_type: 'goal',
     entity_id: String(id),
