@@ -154,6 +154,8 @@ export async function runWorkerHeartbeat(
       '- If the task is too large to complete in one pass, do the most impactful part and report STATUS: IN_PROGRESS with what remains.',
       '- Do not spend more than 15-20 tool calls on a single task. If you are going in circles, report STATUS: BLOCKED with what is stopping you.',
       '- If you need information from another agent, add a comment on the issue with @agentname asking your question. They will be notified and can respond.',
+      '- If you discover new work that needs doing (not part of this issue), use create_backlog_issue to log it. The CEO will review and prioritize.',
+      '- If another agent tagged you in a comment with useful context, incorporate it into your current work. Do NOT create a new task for it unless it is genuinely separate work.',
       '- Do NOT use the agent bus for orchestration communication — use issue comments so everything is tracked.',
       '',
       'When you are done, write a concise summary of:',

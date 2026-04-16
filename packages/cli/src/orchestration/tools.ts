@@ -79,6 +79,16 @@ const WORKER_TOOLS: ToolDef[] = [
       related_issue_id: { type: 'number', description: 'Related issue ID', required: false },
     },
   },
+  {
+    name: 'create_backlog_issue',
+    description: 'Create a new issue in backlog for work you discovered that needs doing. The CEO will review and prioritize it.',
+    parameters: {
+      title: { type: 'string', description: 'Issue title', required: true },
+      description: { type: 'string', description: 'Issue description', required: false },
+      assigned_to: { type: 'string', description: 'Suggest an agent (yourself or another)', required: false },
+      priority: { type: 'string', description: 'Suggested priority', required: false, enum: ['critical', 'high', 'medium', 'low'] },
+    },
+  },
 ];
 
 const CEO_ONLY_TOOLS: ToolDef[] = [
@@ -216,6 +226,15 @@ export function executeTool(
       return transitionIssue(Number(params.id), params.status as IssueStatus, actor);
     case 'add_comment':
       return addComment(Number(params.issue_id), actor, params.content as string);
+    case 'create_backlog_issue':
+      return createIssue({
+        title: params.title as string,
+        description: params.description as string | undefined,
+        assigned_to: params.assigned_to ? (params.assigned_to as string).toLowerCase() : actor.toLowerCase(),
+        priority: (params.priority as any) || 'medium',
+        status: 'backlog',
+        created_by: actor,
+      });
     case 'update_kpi':
       return upsertKPI(Number(params.goal_id), {
         name: params.kpi_name as string,
