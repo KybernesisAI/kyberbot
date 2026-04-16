@@ -224,6 +224,57 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
     sections.push('');
   }
 
+  // Workload summary per agent
+  if (org.length > 0) {
+    const allIssuesForWorkload = listIssues({ limit: 200 });
+    sections.push('## Agent Workload');
+    for (const node of org) {
+      if (node.is_ceo) continue;
+      const agentIssues = allIssuesForWorkload.filter(i =>
+        i.assigned_to?.toLowerCase() === node.agent_name.toLowerCase()
+      );
+      const todo = agentIssues.filter(i => i.status === 'todo').length;
+      const inProg = agentIssues.filter(i => i.status === 'in_progress').length;
+      const blocked = agentIssues.filter(i => i.status === 'blocked').length;
+      const done = agentIssues.filter(i => i.status === 'done').length;
+      const total = agentIssues.length;
+
+      // Check recent failures for this agent
+      const agentRuns = recentRuns.filter(r => r.agent_name.toLowerCase() === node.agent_name.toLowerCase());
+      const agentFailures = agentRuns.filter(r => r.status === 'failed').length;
+      const failureNote = agentFailures > 0 ? ` ⚠ ${agentFailures} recent failures` : '';
+
+      sections.push(`- **${node.title || node.agent_name}**: ${inProg} in progress, ${todo} todo, ${blocked} blocked, ${done} done (${total} total)${failureNote}`);
+    }
+    sections.push('');
+    sections.push('Use this workload data to balance assignments. Do not overload agents who already have 2+ items in todo/in_progress. Assign to agents with capacity.');
+    sections.push('');
+  }
+
+  // Error patterns
+  const failedRuns = recentRuns.filter(r => r.status === 'failed');
+  if (failedRuns.length >= 3) {
+    // Check for patterns
+    const failuresByAgent: Record<string, number> = {};
+    const failureErrors: string[] = [];
+    for (const run of failedRuns) {
+      failuresByAgent[run.agent_name] = (failuresByAgent[run.agent_name] || 0) + 1;
+      if (run.error) failureErrors.push(run.error.slice(0, 100));
+    }
+    sections.push('## Error Pattern Analysis');
+    sections.push(`${failedRuns.length} failures detected in recent runs:`);
+    for (const [agent, count] of Object.entries(failuresByAgent)) {
+      if (count >= 2) sections.push(`- **${agent}**: ${count} failures — may indicate a systemic issue`);
+    }
+    // Check for common error messages
+    const commonErrors = failureErrors.filter((e, i, arr) => arr.indexOf(e) !== i);
+    if (commonErrors.length > 0) {
+      sections.push(`Common error: "${commonErrors[0]}"`);
+    }
+    sections.push('If you see a pattern (same agent, same error), escalate to human inbox with the pattern description.');
+    sections.push('');
+  }
+
   // Tools
   sections.push(formatToolsForPrompt(getCeoToolDefs()));
 
@@ -240,7 +291,7 @@ export function buildCeoHeartbeatPrompt(agentName: string): string {
   sections.push('');
   sections.push('### Work management principles');
   sections.push('- **Backlog first**: New issues go to BACKLOG, not TODO. Only move the highest-priority, immediately-actionable items to TODO.');
-  sections.push('- **Limit work in progress**: Each agent should have at most 1-2 items in TODO at a time. Do not flood agents with work.');
+  sections.push('- **Limit work in progress**: Each agent should have at most 1-2 items in TODO at a time. Do not flood agents with work. Check the Agent Workload section above before assigning.');
   sections.push('- **Dependencies matter**: Think about what must happen before other things can start. Sequence work logically.');
   sections.push('- **Trickle, don\'t dump**: Create a few high-impact issues per heartbeat, not a wall of tasks. More will come on future heartbeats as work completes.');
   sections.push('- **Review before creating**: Before creating new issues, check what already exists. Don\'t duplicate work.');
