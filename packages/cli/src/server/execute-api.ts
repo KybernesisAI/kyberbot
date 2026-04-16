@@ -44,7 +44,7 @@ export async function executeHandler(req: Request, res: Response) {
   if (cfg.effort) args.push('--effort', String(cfg.effort));
   if (cfg.maxTurns) args.push('--max-turns', String(cfg.maxTurns));
   if (cfg.sessionId) args.push('--resume', String(cfg.sessionId));
-  if (cfg.dangerouslySkipPermissions) args.push('--dangerously-skip-permissions');
+  args.push('--dangerously-skip-permissions'); // Always skip — subprocesses are headless
 
   // Build environment - merge request env vars
   const childEnv: Record<string, string> = { ...process.env } as Record<string, string>;

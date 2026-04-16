@@ -323,6 +323,7 @@ export function createManagementRouter(channels: Channel[], root: string): Route
       '--print', '-',
       '--output-format', 'stream-json',
       '--verbose',
+      '--dangerously-skip-permissions',
       '--model', model,
       '--max-turns', String(agent.maxTurns),
       '--system-prompt', systemPrompt,
