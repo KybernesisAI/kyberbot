@@ -96,6 +96,14 @@ export function completeRun(
     data.log_output ?? null,
     id,
   );
+
+  // Also write full output to log file for streaming reads
+  if (data.log_output) {
+    const run = getRun(id);
+    if (run?.log_ref) {
+      try { appendFileSync(run.log_ref, data.log_output); } catch { /* ignore */ }
+    }
+  }
 }
 
 /**
