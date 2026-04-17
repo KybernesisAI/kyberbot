@@ -7,6 +7,8 @@
 
 import express from 'express';
 import http from 'http';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { createLogger } from '../logger.js';
 import { getIdentityForRoot } from '../config.js';
 import { loadRegistry } from '../registry.js';
@@ -59,6 +61,12 @@ export class FleetManager {
 
       // Skip remote agents — they're handled separately
       if (entry.type === 'remote' || !entry.root) continue;
+
+      // Skip agents whose directory was moved/renamed/deleted
+      if (!existsSync(entry.root) || !existsSync(join(entry.root, 'identity.yaml'))) {
+        logger.warn(`Skipping agent "${name}" — directory not found: ${entry.root}`);
+        continue;
+      }
 
       const identity = getIdentityForRoot(entry.root);
       const runtime = new AgentRuntime({
