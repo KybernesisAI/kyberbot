@@ -35,7 +35,11 @@ export function openWithRecovery(dbPath: string): Database.Database {
   if (existsSync(verifiedPath)) {
     try {
       return new Database(dbPath);
-    } catch {
+    } catch (err) {
+      // Native module mismatch — don't touch the DB files, just throw
+      if (isNativeModuleError(err)) {
+        throw err;
+      }
       // File was deleted or moved since verification — re-check below
       try { unlinkSync(verifiedPath); } catch { /* ignore */ }
     }
@@ -52,6 +56,16 @@ export function openWithRecovery(dbPath: string): Database.Database {
     db.close();
     logger.warn(`Database corruption detected: ${dbPath}`);
   } catch (err) {
+    // Native module mismatch (NODE_MODULE_VERSION, wrong arch, etc.)
+    // is NOT a DB problem — don't attempt recovery, don't touch data files.
+    // The fix is `pnpm rebuild better-sqlite3` + restart, not data recovery.
+    if (isNativeModuleError(err)) {
+      logger.error(
+        `better-sqlite3 native module mismatch — run: cd ~/.kyberbot/source && pnpm rebuild better-sqlite3 && then restart the agent`,
+        { error: String(err) },
+      );
+      throw err;
+    }
     logger.warn(`Database failed to open: ${dbPath}`, { error: String(err) });
   }
 
@@ -88,6 +102,8 @@ export function openWithRecovery(dbPath: string): Database.Database {
     unlinkSync(recoveredPath);
     logger.warn('Recovery produced invalid database — starting fresh');
   } catch (err) {
+    // If recovery itself hits a native module error, bail out completely
+    if (isNativeModuleError(err)) throw err;
     logger.warn('Recovery via sqlite3 CLI failed', { error: String(err) });
     try { unlinkSync(recoveredPath); } catch { /* ignore */ }
   }
@@ -106,6 +122,18 @@ export function openWithRecovery(dbPath: string): Database.Database {
   const freshDb = new Database(dbPath);
   markVerified(verifiedPath);
   return freshDb;
+}
+
+/**
+ * Detect errors caused by native module version mismatch rather than
+ * actual database corruption. These should NOT trigger data recovery.
+ */
+function isNativeModuleError(err: unknown): boolean {
+  const msg = String(err);
+  return msg.includes('NODE_MODULE_VERSION')
+    || msg.includes('was compiled against a different Node.js version')
+    || msg.includes('not a valid Win32 application')
+    || msg.includes('invalid ELF header');
 }
 
 /** Write a marker file so we skip integrity checks on future startups */
