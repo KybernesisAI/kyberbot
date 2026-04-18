@@ -41,7 +41,7 @@ import {
 } from '../entity-graph.js';
 import { resetSleepDb } from '../sleep/db.js';
 import { randomUUID } from 'crypto';
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 
 const logger = createLogger('eval');
 

@@ -289,7 +289,7 @@ async function searchFactsDirect(
  * Returns entities annotated with their hop distance from the seeds.
  */
 function traverseEntityGraph(
-  entityDb: import('better-sqlite3').Database,
+  entityDb: import('libsql').Database,
   seedEntityIds: number[],
   maxHops: number = 3,
   maxEntities: number = 20
@@ -672,7 +672,7 @@ function formatTimestamp(timestamp: string): string {
  * Ensure a FTS5 virtual table exists for the facts table.
  * Safe to call multiple times — uses CREATE ... IF NOT EXISTS.
  */
-async function ensureFactsFts(db: import('better-sqlite3').Database): Promise<void> {
+async function ensureFactsFts(db: import('libsql').Database): Promise<void> {
   try {
     db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(

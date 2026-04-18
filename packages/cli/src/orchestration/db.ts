@@ -6,7 +6,7 @@
  * Pattern matches runtime/bus-db.ts.
  */
 
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdirSync, existsSync } from 'fs';

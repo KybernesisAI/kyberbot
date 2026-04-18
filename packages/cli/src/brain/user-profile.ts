@@ -8,7 +8,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { createLogger } from '../logger.js';
 import { getTimelineDb } from './timeline.js';
 import { ensureFactsTable } from './fact-store.js';

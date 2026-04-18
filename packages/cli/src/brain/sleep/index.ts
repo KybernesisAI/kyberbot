@@ -341,7 +341,7 @@ export async function runSleepCycleNow(root: string, config: Partial<SleepConfig
  * Record step telemetry to the sleep_telemetry table.
  */
 function recordTelemetry(
-  db: import('better-sqlite3').Database,
+  db: import('libsql').Database,
   runId: number,
   step: string,
   result: { count: number; processed?: number; durationMs: number; errors?: string[] }

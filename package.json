@@ -37,8 +37,7 @@
       ]
     },
     "onlyBuiltDependencies": [
-      "electron",
-      "better-sqlite3"
+      "electron"
     ]
   },
   "devDependencies": {

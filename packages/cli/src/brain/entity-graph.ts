@@ -10,7 +10,7 @@
  * Uses SQLite for persistence.
  */
 
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { openWithRecovery } from './db-recovery.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';

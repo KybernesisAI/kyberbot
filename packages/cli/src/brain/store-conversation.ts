@@ -30,8 +30,8 @@ const logger = createLogger('brain');
 
 /**
  * Serialize storeConversation calls to prevent concurrent SQLite/subprocess
- * operations from causing OOM crashes. better-sqlite3 + concurrent async
- * access = 8GB heap spikes.
+ * operations from causing OOM crashes. Synchronous SQLite + concurrent
+ * async access = heap pressure.
  */
 const storeQueues = new Map<string, Promise<void>>();
 const activeStores = new Set<string>();

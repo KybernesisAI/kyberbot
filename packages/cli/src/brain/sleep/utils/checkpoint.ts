@@ -4,7 +4,7 @@
  * Tracks sleep agent progress through steps for crash recovery awareness.
  */
 
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 
 export function saveCheckpoint(
   db: Database.Database,

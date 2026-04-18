@@ -5,7 +5,7 @@
  * maintenance queue, memory edges, and telemetry.
  */
 
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
 import { createLogger } from '../../logger.js';

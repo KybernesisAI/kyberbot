@@ -5,7 +5,7 @@
  * Stores messages and topic subscriptions with WAL-mode journaling.
  */
 
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { join } from 'path';
 import { homedir } from 'os';
 import { openWithRecovery } from '../brain/db-recovery.js';

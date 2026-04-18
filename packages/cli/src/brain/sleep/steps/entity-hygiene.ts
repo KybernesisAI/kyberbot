@@ -353,7 +353,7 @@ function buildResult(
 }
 
 function buildSameNameCandidates(
-  db: import('better-sqlite3').Database,
+  db: import('libsql').Database,
   groups: Array<{ normalized_name: string; ids: string; types: string; names: string; mention_counts: string }>
 ): CandidatePair[] {
   const candidates: CandidatePair[] = [];
@@ -387,7 +387,7 @@ function buildSameNameCandidates(
   return candidates;
 }
 
-function findVariantCandidates(db: import('better-sqlite3').Database): CandidatePair[] {
+function findVariantCandidates(db: import('libsql').Database): CandidatePair[] {
   // Cap at 500 entities to keep the O(n²) comparison bounded (~125k pairs max).
   // Ordered by mention_count DESC so high-value entities are compared first.
   const entities = db.prepare(`
@@ -510,7 +510,7 @@ function detectVariantMatch(nameA: string, nameB: string, typeA: string, typeB: 
 }
 
 function buildEntityProfile(
-  db: import('better-sqlite3').Database,
+  db: import('libsql').Database,
   entity: { id: number; name: string; type: string; mention_count: number }
 ): EntityProfile {
   // Sample mention contexts for THIS entity

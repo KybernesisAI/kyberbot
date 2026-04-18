@@ -7,7 +7,7 @@
  * Uses SQLite with FTS5 for full-text search.
  */
 
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { openWithRecovery } from './db-recovery.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
@@ -112,8 +112,7 @@ async function ensureDatabase(root: string): Promise<Database.Database> {
       summary,
       entities,
       topics,
-      content=timeline_events,
-      content_rowid=id
+      content=''
     );
 
     CREATE TRIGGER IF NOT EXISTS timeline_ai AFTER INSERT ON timeline_events BEGIN
@@ -134,11 +133,48 @@ async function ensureDatabase(root: string): Promise<Database.Database> {
     END;
   `);
 
+  rebuildBrokenTimelineFts(newDb);
   runMigrations(newDb);
 
   databases.set(root, newDb);
   logger.info('Timeline database initialized', { path: newDbPath });
   return newDb;
+}
+
+/**
+ * Early builds declared timeline_fts with `content=timeline_events` but FTS
+ * column names (`entities`, `topics`) didn't match base-table columns
+ * (`entities_json`, `topics_json`), leaving FTS unqueryable. Detect the
+ * broken shape, drop it, and repopulate a contentless FTS from the rows we
+ * already have.
+ */
+function rebuildBrokenTimelineFts(database: Database.Database): void {
+  let needsRebuild = false;
+  try {
+    database.prepare('SELECT count(*) as c FROM timeline_fts').get();
+  } catch {
+    needsRebuild = true;
+  }
+  if (!needsRebuild) return;
+
+  logger.info('Rebuilding broken timeline_fts index from timeline_events');
+  database.exec('DROP TABLE IF EXISTS timeline_fts');
+  database.exec(`
+    CREATE VIRTUAL TABLE timeline_fts USING fts5(
+      title, summary, entities, topics, content=''
+    );
+  `);
+  const rows = database.prepare(
+    'SELECT id, title, summary, entities_json, topics_json FROM timeline_events'
+  ).all() as Array<{ id: number; title: string; summary: string | null; entities_json: string; topics_json: string }>;
+  const insert = database.prepare(
+    'INSERT INTO timeline_fts(rowid, title, summary, entities, topics) VALUES (?,?,?,?,?)'
+  );
+  const txn = database.transaction((batch: typeof rows) => {
+    for (const r of batch) insert.run(r.id, r.title, r.summary ?? '', r.entities_json, r.topics_json);
+  });
+  txn(rows);
+  logger.info(`Repopulated timeline_fts with ${rows.length} rows`);
 }
 
 function runMigrations(database: Database.Database): void {

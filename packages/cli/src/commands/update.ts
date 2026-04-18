@@ -355,10 +355,6 @@ function refreshWrapper(repoPath: string | null): void {
     return;
   }
 
-  const sourceDir = existsSync(sourceEntry)
-    ? join(home, '.kyberbot', 'source')
-    : (repoPath || join(home, '.kyberbot', 'source'));
-
   try {
     mkdirSync(binDir, { recursive: true });
 
@@ -366,7 +362,6 @@ function refreshWrapper(repoPath: string | null): void {
 # KyberBot CLI — auto-refreshed by kyberbot update
 LOCK_FILE="$HOME/.kyberbot/node_path"
 CLI_ENTRY="${cliEntry}"
-SOURCE_DIR="${sourceDir}"
 if [ -f "$LOCK_FILE" ]; then NODE=$(cat "$LOCK_FILE"); fi
 if [ -z "$NODE" ] || [ ! -x "$NODE" ]; then
   [ -d "$HOME/.nvm/versions/node" ] && NODE=$(ls -d "$HOME/.nvm/versions/node"/v*/bin/node 2>/dev/null | sort -V | tail -1)
@@ -374,12 +369,6 @@ if [ -z "$NODE" ] || [ ! -x "$NODE" ]; then
   [ -z "$NODE" ] && [ -x /opt/homebrew/bin/node ] && NODE=/opt/homebrew/bin/node
   [ -z "$NODE" ] && NODE=$(which node 2>/dev/null)
   [ -z "$NODE" ] && echo "Error: Node.js not found" && exit 1
-fi
-CHECK=$("$NODE" "$CLI_ENTRY" --version 2>&1)
-if echo "$CHECK" | grep -q "NODE_MODULE_VERSION"; then
-  echo "Rebuilding better-sqlite3 for current Node version..."
-  cd "$SOURCE_DIR" && pnpm rebuild better-sqlite3 2>/dev/null
-  echo "$NODE" > "$LOCK_FILE"
 fi
 exec "$NODE" "$CLI_ENTRY" "$@"
 `;

@@ -9,7 +9,7 @@
  * Queues tier-changed items for re-summarization.
  */
 
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { createLogger } from '../../../logger.js';
 import { getTimelineDb } from '../../timeline.js';
 import { getSleepDb } from '../db.js';

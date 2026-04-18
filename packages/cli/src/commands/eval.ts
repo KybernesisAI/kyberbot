@@ -12,7 +12,7 @@
  */
 
 import { Command } from 'commander';
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { join, resolve } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { getRoot } from '../config.js';
