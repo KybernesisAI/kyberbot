@@ -1,6 +1,6 @@
 {
   "name": "@kyberbot/cli",
-  "version": "1.8.3",
+  "version": "1.8.4",
   "description": "KyberBot CLI — personal AI agent powered by Claude Code",
   "type": "module",
   "main": "dist/index.js",
@@ -9,7 +9,7 @@
     "kyberbot": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
     "dev": "tsc --watch",
     "start": "node --max-old-space-size=8192 dist/index.js"
   },

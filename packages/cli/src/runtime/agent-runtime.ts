@@ -153,11 +153,12 @@ export class AgentRuntime {
       }
     }
 
-    // Set fleet awareness in channel system prompts
+    // Wire up the fleet bus so channel system prompts can generate
+    // per-agent awareness sections on demand.
     if (this.bus) {
       try {
-        const { setFleetAwareness } = await import('../server/channels/system-prompt.js');
-        setFleetAwareness(buildFleetAwarenessSection(this.bus, this.name));
+        const { setFleetBus } = await import('../server/channels/system-prompt.js');
+        setFleetBus(this.bus);
       } catch { /* system-prompt not available */ }
     }
 

@@ -115,6 +115,14 @@ export function createRunCommand(): Command {
           setLogLevel('debug');
         }
 
+        // Refresh template files if the agent was stamped with an older CLI
+        // version. Desktop users never run `kyberbot update`, so this is how
+        // new CLAUDE.md instructions / core skills reach them transparently.
+        try {
+          const { ensureTemplatesUpToDate } = await import('../templates/auto-migrate.js');
+          ensureTemplatesUpToDate(root);
+        } catch { /* non-fatal */ }
+
         // Initialize monitoring (Sentry, process error handlers)
         await initMonitoring();
 

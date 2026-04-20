@@ -107,6 +107,23 @@ When a task benefits from a different perspective, isolated expertise, or a sepa
 4. **Register** — run `kyberbot agent rebuild` to update CLAUDE.md
 5. **Spawn** — run `kyberbot agent spawn <name> "<prompt>"` to delegate the task
 
+### Inter-Agent Delegation (Fleet Mode)
+
+If I'm running alongside other KyberBot agents in a fleet, I talk to them with `kyberbot bus send <agent> "<message>"` — not by guessing on their behalf from my own memory. Full command surface is in the **Fleet & Inter-Agent Communication** section below.
+
+**Always reach for the bus when:**
+- The user says "ask <agent>", "check with <agent>", "tell <agent>", "what does <agent> think" — these are explicit bus calls, not rhetorical
+- A question sits squarely in another agent's domain (Nova → marketing, Atlas → engineering, etc. — see the fleet list for current owners)
+- I discover information another agent should know — send a heads-up rather than letting it rot in my memory
+- A decision crosses domains — get a second opinion via `kyberbot bus send <agent> "..." -w` (wait for reply)
+
+**Don't reach for the bus for:**
+- Routine things I can handle myself
+- Questions the user clearly aimed at me specifically
+- Anything where I already have a confident, accurate answer
+
+If no other agents are running, bus commands fail gracefully. Try anyway when the user instructs me to.
+
 ## Heartbeat
 
 I check HEARTBEAT.md every {{HEARTBEAT_INTERVAL}}. I run the most overdue task, update state, and return.
@@ -280,6 +297,10 @@ kyberbot timeline --yesterday       # Yesterday
 kyberbot timeline --week            # This week
 kyberbot timeline --search "topic"  # Search timeline
 kyberbot timeline --stats           # Memory statistics
+
+kyberbot pin "<name>"                       # Pin an entity/memory (protects from decay + archival)
+kyberbot unpin "<name>"                     # Unpin
+kyberbot pinned                             # List everything currently pinned
 ```
 
 ### Brain
@@ -374,6 +395,65 @@ kyberbot update --check          # Preview what would change
 kyberbot update --templates      # Only refresh templates (skip CLI update)
 kyberbot onboard                 # Run the initial setup wizard (9-step process)
 ```
+
+### Fleet & Inter-Agent Communication
+
+When multiple KyberBot agents are running together (a "fleet"), you can talk to them. **Use these commands** — do not try to answer on behalf of another agent from your own memory when a peer owns the domain.
+
+```bash
+# Messaging
+kyberbot bus send <agent> "<message>"       # Ask a specific agent a question
+kyberbot bus send <agent> "<message>" -w    # Send and wait for the reply
+kyberbot bus broadcast "<message>"          # Notify all agents
+kyberbot bus history                        # Recent inter-agent messages
+kyberbot bus history --agent <name>         # Filter to one agent
+
+# Topic subscriptions (receive notifications proactively)
+kyberbot bus subscribe <from-agent> <topic> # Subscribe to an agent's notifications on a topic
+kyberbot bus unsubscribe <from-agent> <topic>
+kyberbot bus subscriptions                  # List your active subscriptions
+
+# Fleet management
+kyberbot fleet list                         # Show all registered agents
+kyberbot fleet status                       # Health dashboard for the fleet
+kyberbot fleet start                        # Start agents in a shared runtime
+kyberbot fleet stop [name]                  # Stop one or all agents
+kyberbot fleet register [path]              # Register a local agent directory
+kyberbot fleet register-remote <name> -u <ngrok-url>  # Register a remote agent
+kyberbot fleet unregister <name>            # Remove from registry (files kept)
+```
+
+**When to use inter-agent communication:**
+- You need expertise from another agent's domain (e.g. Nova owns marketing, Atlas owns engineering)
+- The user asks something another agent clearly knows better — delegate rather than guess
+- You discover information relevant to another agent's responsibilities — notify them
+- You want a second opinion on a decision that crosses domains
+- An incident or issue affects multiple domains — broadcast to coordinate
+
+**When NOT to:**
+- Trivial matters or routine operations you can handle yourself
+- Questions the user is obviously asking YOU specifically
+- Anything you can answer accurately from your own memory and skills
+
+**Pattern**: when the user says "ask <other-agent> about X" or "check with <other-agent>" — that is an explicit instruction to run `kyberbot bus send <other-agent> "..."`. Do not paraphrase from your own memory; actually send the bus message.
+
+If no other agents are running, bus commands fail gracefully. Try anyway when instructed.
+
+### Orchestration
+
+For multi-agent work coordination — goals, issues, org chart, activity log:
+
+```bash
+kyberbot orch status                        # Dashboard overview
+kyberbot orch init                          # Initialize (set CEO, build org chart)
+kyberbot orch org                           # Show org chart
+kyberbot orch goals                         # List goals
+kyberbot orch issues                        # List issues (kanban view)
+kyberbot orch inbox                         # Items needing human attention
+kyberbot orch activity                      # Recent activity log
+```
+
+Use these to check assignments, see what peers are working on, and track shared goals.
 
 <!-- BEGIN_KYBERNESIS -->
 ### Kybernesis Cloud

@@ -20,11 +20,15 @@ import { createLogger } from '../../logger.js';
 
 const logger = createLogger('system-prompt');
 
-// Fleet awareness — set by AgentRuntime when running in fleet mode
-let _fleetAwareness = '';
+// Fleet bus reference — set by AgentRuntime when running in fleet mode.
+// We keep the bus, not a precomputed string, so each system-prompt build
+// regenerates awareness fresh for the requesting agent. This is correct
+// in fleet mode where multiple agents share this process and a global
+// string would be overwritten by whichever agent started last.
+let _fleetBus: import('../../runtime/agent-bus.js').AgentBus | null = null;
 let _pendingNotificationsGetter: ((agentName: string) => Array<{ from: string; topic?: string; payload: string }>) | null = null;
 
-export function setFleetAwareness(section: string): void { _fleetAwareness = section; }
+export function setFleetBus(bus: import('../../runtime/agent-bus.js').AgentBus): void { _fleetBus = bus; }
 export function setPendingNotificationsGetter(getter: (agentName: string) => Array<{ from: string; topic?: string; payload: string }>): void {
   _pendingNotificationsGetter = getter;
 }
@@ -169,9 +173,14 @@ export async function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp' 
     logger.debug('Failed to load agents for channel prompt', { error: String(err) });
   }
 
-  // Fleet awareness — other running agents and bus commands
-  if (_fleetAwareness) {
-    parts.push(_fleetAwareness);
+  // Fleet awareness — other running agents and bus commands. Built fresh
+  // per-call so each agent sees a correct peer list in fleet mode.
+  if (_fleetBus) {
+    try {
+      const { buildFleetAwarenessSection } = await import('../../runtime/agent-runtime.js');
+      const section = buildFleetAwarenessSection(_fleetBus, agentName);
+      if (section) parts.push(section);
+    } catch { /* runtime not available */ }
   }
 
   // Pending notifications from other agents (via topic subscriptions)

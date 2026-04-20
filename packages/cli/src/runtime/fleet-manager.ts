@@ -68,6 +68,14 @@ export class FleetManager {
         continue;
       }
 
+      // Silent template auto-migration: desktop users never run CLI update
+      // commands, so refresh their agent's CLAUDE.md / core skills whenever
+      // the CLI version has moved past the version stamped in identity.yaml.
+      try {
+        const { ensureTemplatesUpToDate } = await import('../templates/auto-migrate.js');
+        ensureTemplatesUpToDate(entry.root);
+      } catch { /* non-fatal */ }
+
       const identity = getIdentityForRoot(entry.root);
       const runtime = new AgentRuntime({
         root: entry.root,
