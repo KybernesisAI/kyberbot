@@ -21,7 +21,9 @@ export interface FleetSleepConfig {
 const DEFAULT_CONFIG: FleetSleepConfig = {
   initialDelayMinutes: 5,
   cycleGapSeconds: 30,
-  intervalMinutes: 60,
+  // Every 3 hours per-agent in fleet mode. See also brain/sleep/config.ts
+  // DEFAULT_CONFIG.intervalMinutes — keep these aligned.
+  intervalMinutes: 180,
 };
 
 export class FleetSleepScheduler {

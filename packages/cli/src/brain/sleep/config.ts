@@ -59,7 +59,10 @@ export interface SleepConfig {
 }
 
 export const DEFAULT_CONFIG: SleepConfig = {
-  intervalMinutes: 60,
+  // Run sleep maintenance every 3 hours by default. Each cycle does
+  // multiple Claude (Haiku) calls per agent — running every hour on an
+  // idle fleet was burning tokens for almost no new memory input.
+  intervalMinutes: 180,
   initialDelayMinutes: 5,
 
   batchSize: 50,

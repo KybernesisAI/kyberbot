@@ -87,7 +87,7 @@ export function getTimezone(): string {
  * Get heartbeat interval as milliseconds
  */
 export function getHeartbeatInterval(): number {
-  const interval = getIdentity().heartbeat_interval || '30m';
+  const interval = getIdentity().heartbeat_interval || '1h';
   return parseDuration(interval);
 }
 
@@ -124,7 +124,7 @@ export function getKybernesisApiKey(): string | null {
 }
 
 /**
- * Get preferred Claude model
+ * Get preferred Claude model for user-facing conversations
  */
 export function getClaudeModel(): string {
   try {
@@ -132,6 +132,29 @@ export function getClaudeModel(): string {
   } catch {
     return 'opus';
   }
+}
+
+/**
+ * Get the model to use for heartbeat (scheduled task execution) and the
+ * orchestration CEO/worker heartbeats. Sonnet by default — heartbeat is
+ * tool-use orchestration, not deep reasoning. Override with
+ * `heartbeat_model: haiku|sonnet|opus` in identity.yaml. Reading from a
+ * specific root so fleet-mode callers can resolve the right config.
+ */
+export function getHeartbeatModelForRoot(root: string): 'haiku' | 'sonnet' | 'opus' {
+  try {
+    const raw = getIdentityForRoot(root).heartbeat_model;
+    if (raw === 'haiku' || raw === 'sonnet' || raw === 'opus') return raw;
+  } catch { /* fall through */ }
+  return 'sonnet';
+}
+
+export function getHeartbeatModel(): 'haiku' | 'sonnet' | 'opus' {
+  try {
+    const raw = getIdentity().heartbeat_model;
+    if (raw === 'haiku' || raw === 'sonnet' || raw === 'opus') return raw;
+  } catch { /* fall through */ }
+  return 'sonnet';
 }
 
 /**

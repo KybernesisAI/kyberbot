@@ -211,7 +211,7 @@ export function createOnboardCommand(): Command {
         agent_name: agentName,
         agent_description: agentDescription,
         timezone,
-        heartbeat_interval: '30m',
+        heartbeat_interval: '1h',
         heartbeat_active_hours: {
           start: '08:00',
           end: '22:00',

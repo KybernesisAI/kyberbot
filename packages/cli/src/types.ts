@@ -33,6 +33,13 @@ export interface IdentityConfig {
     end: string;
     timezone?: string;
   };
+  /**
+   * Model used for heartbeat and orchestration (CEO/worker) Claude calls.
+   * Defaults to 'sonnet' if unset — heartbeat is tool-use orchestration,
+   * not deep reasoning, so running Opus there is wasteful. The agent's
+   * main chat still uses `claude.model` (Opus by default).
+   */
+  heartbeat_model?: 'haiku' | 'sonnet' | 'opus';
   server?: {
     port: number;
     host?: string;

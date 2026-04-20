@@ -59,7 +59,7 @@ export function rebuildClaudeMd(root?: string): void {
   // Replace heartbeat interval
   try {
     const intervalMs = root
-      ? parseDurationStr(getIdentityForRoot(root).heartbeat_interval || '30m')
+      ? parseDurationStr(getIdentityForRoot(root).heartbeat_interval || '1h')
       : getHeartbeatInterval();
     const intervalMin = intervalMs / 1000 / 60;
     const intervalStr = intervalMin >= 60 ? `${intervalMin / 60} hour(s)` : `${intervalMin} minutes`;
@@ -109,7 +109,7 @@ function parseDurationStr(interval: string): number {
     case 'm': return value * 60 * 1000;
     case 'h': return value * 60 * 60 * 1000;
     case 'd': return value * 24 * 60 * 60 * 1000;
-    default: return 30 * 60 * 1000;
+    default: return 60 * 60 * 1000;
   }
 }
 

@@ -239,7 +239,7 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS orchestration_settings (
     id INTEGER PRIMARY KEY CHECK(id = 1),
     orchestration_enabled INTEGER NOT NULL DEFAULT 1,
-    heartbeat_interval TEXT NOT NULL DEFAULT '30m',
+    heartbeat_interval TEXT NOT NULL DEFAULT '1h',
     active_hours_start TEXT,
     active_hours_end TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))

@@ -13,7 +13,7 @@
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createLogger } from '../logger.js';
-import { getIdentityForRoot } from '../config.js';
+import { getIdentityForRoot, getHeartbeatModelForRoot } from '../config.js';
 import { getClaudeClient } from '../claude.js';
 import { ServiceHandle } from '../types.js';
 import { storeConversation } from '../brain/store-conversation.js';
@@ -33,7 +33,58 @@ function parseIntervalMs(intervalStr: string): number {
   const match = intervalStr.match(/^(\d+)(m|h)$/);
   return match
     ? (match[2] === 'h' ? Number(match[1]) * 60 * 60 * 1000 : Number(match[1]) * 60 * 1000)
-    : 30 * 60 * 1000;
+    : 60 * 60 * 1000;
+}
+
+/**
+ * Pull the `### Task Name` + `**Schedule**: ...` pairs out of HEARTBEAT.md.
+ * Only tasks in the `## Tasks` section are returned. Schedule is kept as
+ * a raw string; `isTaskDue` does the interpretation.
+ */
+interface ParsedTask { name: string; schedule: string }
+function parseHeartbeatTasks(content: string): ParsedTask[] {
+  const tasks: ParsedTask[] = [];
+  const afterTasks = content.split(/^##\s+Tasks\b/im)[1];
+  if (!afterTasks) return tasks;
+  const blocks = afterTasks.split(/^###\s+/m).slice(1);
+  for (const block of blocks) {
+    const nameMatch = block.match(/^([^\n]+)/);
+    const scheduleMatch = block.match(/\*\*Schedule\*\*:\s*([^\n]+)/i);
+    if (nameMatch && scheduleMatch) {
+      tasks.push({ name: nameMatch[1].trim(), schedule: scheduleMatch[1].trim() });
+    }
+  }
+  return tasks;
+}
+
+/**
+ * Decide whether a parsed task is due given its last-check timestamp.
+ * Handles the common schedule phrasings used in HEARTBEAT.md templates:
+ * `every Nm|Nh|Nd`, `daily`, `weekly`, `monthly`. Unknown syntax is
+ * treated as "may be due" — conservative so we don't silently suppress
+ * real work.
+ */
+function isTaskDue(task: ParsedTask, lastCheckIso: string | undefined, now: Date): boolean {
+  if (!lastCheckIso) return true; // Never run — run now
+  const lastCheck = new Date(lastCheckIso);
+  if (isNaN(lastCheck.getTime())) return true;
+  const elapsedMs = now.getTime() - lastCheck.getTime();
+  const schedule = task.schedule.toLowerCase();
+
+  const everyMatch = schedule.match(/every\s+(\d+)\s*(m|h|d)\b/);
+  if (everyMatch) {
+    const n = Number(everyMatch[1]);
+    const unit = everyMatch[2];
+    const required = n * (unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000);
+    return elapsedMs >= required;
+  }
+
+  if (schedule.startsWith('daily')) return elapsedMs >= 24 * 3_600_000;
+  if (schedule.startsWith('weekly')) return elapsedMs >= 7 * 24 * 3_600_000;
+  if (schedule.startsWith('monthly')) return elapsedMs >= 28 * 24 * 3_600_000;
+
+  // Unrecognized — conservative: treat as due
+  return true;
 }
 
 export function markBusy(isBusy: boolean): void {
@@ -42,7 +93,7 @@ export function markBusy(isBusy: boolean): void {
 
 export async function startHeartbeat(root: string): Promise<ServiceHandle> {
   const identity = getIdentityForRoot(root);
-  const intervalStr = identity.heartbeat_interval || '30m';
+  const intervalStr = identity.heartbeat_interval || '1h';
   const intervalMs = parseIntervalMs(intervalStr);
   logger.info(`Heartbeat interval: ${intervalMs / 1000 / 60} minutes`);
 
@@ -94,7 +145,7 @@ async function tick(root: string): Promise<void> {
       const agentName = identity.agent_name;
 
       // Check if enough time has passed since last orchestration tick for this agent
-      const orchIntervalMs = parseIntervalMs(settings.heartbeat_interval || '30m');
+      const orchIntervalMs = parseIntervalMs(settings.heartbeat_interval || '1h');
       const lastTick = lastOrchTick.get(agentName) || 0;
       const elapsed = Date.now() - lastTick;
 
@@ -136,6 +187,26 @@ async function tick(root: string): Promise<void> {
   if (!content || !content.includes('## Tasks')) {
     logger.debug('HEARTBEAT.md has no tasks — skipping');
     return;
+  }
+
+  // Short-circuit: if no task's Schedule is due yet, skip the Claude
+  // invocation entirely. Heartbeat ticks into an empty queue used to
+  // still spawn a full (Sonnet) subprocess just to reply HEARTBEAT_OK —
+  // token waste for an idle fleet. Conservative: if we can't parse a
+  // task's schedule, we assume it may be due so Claude still runs.
+  try {
+    const stateFileEarly = join(root, 'heartbeat-state.json');
+    const stateEarly = existsSync(stateFileEarly)
+      ? JSON.parse(readFileSync(stateFileEarly, 'utf-8'))
+      : { lastChecks: {} };
+    const tasks = parseHeartbeatTasks(content);
+    if (tasks.length > 0 && !tasks.some((t) => isTaskDue(t, stateEarly.lastChecks?.[t.name], new Date()))) {
+      logger.debug(`Heartbeat skipped — no task due yet (${tasks.length} scheduled)`);
+      return;
+    }
+  } catch (err) {
+    // Parse/IO error — fall through to the Claude path; conservative
+    logger.debug('Heartbeat due-check errored, proceeding to Claude', { error: String(err) });
   }
 
   try {
@@ -225,6 +296,7 @@ async function tick(root: string): Promise<void> {
     const result = await client.complete(prompt, {
       maxTurns: 15,
       subprocess: true,
+      model: getHeartbeatModelForRoot(root),
       system: [
         'You are a heartbeat task executor for a KyberBot agent.',
         'You have full tool access — you can run Bash commands, read/write files, and make HTTP requests.',
