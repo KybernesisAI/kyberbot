@@ -47,14 +47,21 @@ export async function runSummarizeStep(
     // Phase 2: Find items that need summaries
     // - Never summarized or very short
     // - Raw content stored as summary (JSON blobs, full markdown files)
+    //
+    // Skip anything already touched by the enrichment pipeline in the last
+    // 3 days. If a summary is still bad after a recent enrichment, something
+    // upstream is broken; a 3-day backoff avoids re-running Claude on the
+    // same problem cycle after cycle. Tier-changed items still come in via
+    // Phase 1 (maintenance_queue) and bypass this check.
     const remaining = config.maxSummariesPerRun - pendingItems.length;
     const needsSummary = remaining > 0 ? timeline.prepare(`
       SELECT id FROM timeline_events
-      WHERE summary IS NULL
-         OR length(summary) < 50
-         OR summary LIKE '{%'
-         OR summary LIKE '# %'
-         OR length(summary) > 500
+      WHERE (summary IS NULL
+             OR length(summary) < 50
+             OR summary LIKE '{%'
+             OR summary LIKE '# %'
+             OR length(summary) > 500)
+        AND (last_enriched IS NULL OR last_enriched < datetime('now', '-3 days'))
       ORDER BY priority DESC
       LIMIT ?
     `).all(remaining) as Array<{ id: number }> : [];

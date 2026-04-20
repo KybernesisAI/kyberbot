@@ -10,11 +10,8 @@
  */
 
 import { getClaudeClient } from '../claude.js';
-import { storeFact, ensureFactsTable, getFactById, type FactInput, type FactCategory, VALID_CATEGORIES } from './fact-store.js';
-import { detectContradictions } from './fact-contradiction.js';
-import { markFactSuperseded } from './fact-store.js';
+import { storeFact, ensureFactsTable, type FactInput, type FactCategory, VALID_CATEGORIES } from './fact-store.js';
 import { detectTemporalExpiry } from './fact-temporal.js';
-import { createContradiction, getEntityGraphDb } from './entity-graph.js';
 import { createLogger } from '../logger.js';
 import { SOURCE_CONFIDENCE } from './store-conversation.js';
 
@@ -119,44 +116,14 @@ export async function extractFactsRealtime(
       }
 
       try {
-        const storedId = await storeFact(root, factInput);
+        await storeFact(root, factInput);
         factsCreated++;
-
-        // Check for contradictions with existing facts
-        try {
-          const contradictions = await detectContradictions(root, {
-            content: fact.content,
-            entities: fact.entities,
-            category,
-          });
-
-          for (const c of contradictions.contradictions) {
-            if (c.relationship === 'updates') {
-              const oldFact = await getFactById(root, c.oldFactId);
-              const confidenceGap = oldFact
-                ? Math.abs(confidence - oldFact.confidence)
-                : 1;
-
-              if (confidenceGap > 0.3 || !oldFact) {
-                await markFactSuperseded(root, c.oldFactId, storedId);
-              } else {
-                // Close confidence — record as contradiction
-                try {
-                  const entityDb = await getEntityGraphDb(root);
-                  const entityName = (fact.entities[0] || '').toLowerCase();
-                  const entityRow = entityDb.prepare(
-                    'SELECT id FROM entities WHERE LOWER(name) = ? OR LOWER(normalized_name) = ? LIMIT 1'
-                  ).get(entityName, entityName) as { id: number } | undefined;
-                  if (entityRow) {
-                    await createContradiction(root, entityRow.id, c.oldFactId, storedId, oldFact.content, fact.content, c.rationale);
-                  }
-                } catch { /* best-effort */ }
-              }
-            }
-          }
-        } catch {
-          // Contradiction detection is best-effort
-        }
+        // Contradiction detection is NOT run in the real-time path. The
+        // sleep-cycle observe step calls `detectContradictions` on every
+        // fact it sees (including ones stored here), and runs every 3h.
+        // Running it twice — once inline and once in sleep — doubles the
+        // Haiku call count for this responsibility without improving
+        // correctness. Sleep's pass is the single source of truth.
       } catch {
         // Individual fact storage is best-effort
       }

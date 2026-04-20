@@ -1151,10 +1151,21 @@ export async function markInsightsStale(
     .run(entityId);
 }
 
+/**
+ * Pick entities worth re-reasoning in the next sleep cycle. Two gates:
+ *   1. Stale: last_reasoned_at is null or older than `staleDays` ago
+ *   2. Recent: last_seen is within `recencyDays` — cold entities (no
+ *      mention for weeks) gain nothing from re-reasoning; their fact set
+ *      hasn't changed, so the previous insights are still valid.
+ * Both passes together prevent the reasoning step from burning Haiku
+ * calls on dormant entities while still catching active ones whose
+ * insights have gone stale.
+ */
 export async function getEntitiesForReasoning(
   root: string,
   limit: number = 5,
-  staleDays: number = 7
+  staleDays: number = 7,
+  recencyDays: number = 14
 ): Promise<Array<{ id: number; name: string; type: string }>> {
   const database = await ensureDatabase(root);
   return database
@@ -1162,10 +1173,11 @@ export async function getEntitiesForReasoning(
       SELECT e.id, e.name, e.type FROM entities e
       WHERE e.mention_count >= 3
         AND (e.last_reasoned_at IS NULL OR e.last_reasoned_at < datetime('now', ?))
+        AND (e.last_seen IS NULL OR e.last_seen > datetime('now', ?))
       ORDER BY e.mention_count DESC
       LIMIT ?
     `)
-    .all(`-${staleDays} days`, limit) as Array<{ id: number; name: string; type: string }>;
+    .all(`-${staleDays} days`, `-${recencyDays} days`, limit) as Array<{ id: number; name: string; type: string }>;
 }
 
 export async function markEntityReasoned(
