@@ -110,11 +110,18 @@ export function createBusCommand(): Command {
     .description('Send a message to a specific agent')
     .option('-t, --topic <topic>', 'Message topic for routing')
     .option('-f, --from <name>', 'Sender name (defaults to current agent)')
-    .action(async (agent: string, message: string, options: { topic?: string; from?: string }) => {
+    .option('--timeout <seconds>', 'How long to wait for the reply before giving up (default 600)', '600')
+    .action(async (agent: string, message: string, options: { topic?: string; from?: string; timeout?: string }) => {
       const from = options.from || getCurrentAgentName();
+      // Slow-thinking agents (big context, many tools, long memory files) can
+      // legitimately take several minutes to produce a full reply. Default to
+      // a generous 10 minutes and let the caller bump it explicitly if needed.
+      // If this timeout fires, the target agent may still complete and write
+      // its response to bus.db — check `kyberbot bus history` later.
+      const timeoutMs = Math.max(1, parseInt(options.timeout || '600', 10)) * 1000;
 
       try {
-        console.log(DIM(`Sending to ${agent}... (waiting for Claude response)`));
+        console.log(DIM(`Sending to ${agent}... (waiting for Claude response, up to ${timeoutMs / 1000}s)`));
         const res = await fleetFetch('/fleet/bus/send', {
           method: 'POST',
           body: JSON.stringify({
@@ -123,7 +130,7 @@ export function createBusCommand(): Command {
             message,
             topic: options.topic,
           }),
-        }, 120_000);  // 2 min timeout — Claude needs time to think
+        }, timeoutMs);
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
@@ -149,8 +156,11 @@ export function createBusCommand(): Command {
         }
         console.log();
       } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-          console.error(chalk.red('Error: Fleet server not responding (timeout)'));
+        if ((error as Error).name === 'AbortError' || (error as Error).name === 'TimeoutError') {
+          console.error(chalk.red(`Error: Timed out waiting for ${agent} to respond.`));
+          console.error(DIM(`  The agent may still finish and write its reply to the bus.`));
+          console.error(DIM(`  Check later: kyberbot bus history --agent ${agent}`));
+          console.error(DIM(`  Or retry with a longer wait: kyberbot bus send ${agent} "..." --timeout 900`));
         } else {
           console.error(chalk.red(`Error: Could not reach fleet server. Is it running?`));
           console.error(DIM(`  Try: kyberbot fleet start`));
@@ -164,48 +174,111 @@ export function createBusCommand(): Command {
   // ─────────────────────────────────────────────────────────────
   bus
     .command('broadcast <message>')
-    .description('Broadcast a message to all agents')
+    .description('Broadcast a message to all agents (optionally excluding some)')
     .option('-t, --topic <topic>', 'Message topic for routing')
     .option('-f, --from <name>', 'Sender name (defaults to current agent)')
-    .action(async (message: string, options: { topic?: string; from?: string }) => {
+    .option('--exclude <names>', 'Comma-separated list of agents to skip (the sender is always skipped)')
+    .option('--timeout <seconds>', 'Per-agent wait for reply (default 600)', '600')
+    .action(async (message: string, options: { topic?: string; from?: string; exclude?: string; timeout?: string }) => {
       const from = options.from || getCurrentAgentName();
+      const excluded = new Set(
+        (options.exclude || '')
+          .split(',')
+          .map((n) => n.trim().toLowerCase())
+          .filter(Boolean),
+      );
+      excluded.add(from.toLowerCase()); // Don't send to yourself
 
-      try {
-        console.log(DIM(`Broadcasting... (waiting for agent responses)`));
-        const res = await fleetFetch('/fleet/bus/broadcast', {
-          method: 'POST',
-          body: JSON.stringify({
-            from,
-            message,
-            topic: options.topic,
-          }),
-        }, 120_000);
+      // Prefer the fleet server's live agent list — only agents actually
+      // running are reachable. Fall back to the registry if the fleet server
+      // isn't up (single-agent dev mode). Remote agents are skipped since
+      // their reachability varies and bus-send already handles them.
+      const targets: string[] = await (async () => {
+        try {
+          const res = await fetch('http://localhost:3456/health', { signal: AbortSignal.timeout(3000) });
+          if (res.ok) {
+            const body = await res.json() as { mode?: string; agents?: Array<{ name: string; status: string }> };
+            if (body.mode === 'fleet' && Array.isArray(body.agents)) {
+              return body.agents
+                .filter((a) => a.status === 'running')
+                .map((a) => a.name)
+                .filter((n) => !excluded.has(n.toLowerCase()));
+            }
+          }
+        } catch { /* fall through */ }
+        try {
+          const { loadRegistry } = await import('../registry.js');
+          const reg = loadRegistry();
+          return Object.keys(reg.agents).filter((n) => {
+            if (excluded.has(n.toLowerCase())) return false;
+            const entry = reg.agents[n];
+            return !(entry?.type === 'remote');
+          });
+        } catch {
+          return [];
+        }
+      })();
 
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-          console.error(chalk.red(`Error: ${body.error || res.statusText}`));
-          process.exit(1);
-        }
-
-        console.log();
-        console.log(PRIMARY.bold('  Broadcast sent'));
-        console.log();
-        console.log(`  ${DIM('From:')}    ${ACCENT(from)}`);
-        console.log(`  ${DIM('To:')}      ${ACCENT('all agents')}`);
-        if (options.topic) {
-          console.log(`  ${DIM('Topic:')}   ${options.topic}`);
-        }
-        console.log(`  ${DIM('Message:')} ${message}`);
-        console.log();
-      } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-          console.error(chalk.red('Error: Fleet server not responding (timeout)'));
-        } else {
-          console.error(chalk.red(`Error: Could not reach fleet server. Is it running?`));
-          console.error(DIM(`  Try: kyberbot fleet start`));
-        }
+      if (targets.length === 0) {
+        console.error(chalk.red('No target agents after exclusion.'));
         process.exit(1);
       }
+
+      const timeoutMs = Math.max(1, parseInt(options.timeout || '600', 10)) * 1000;
+
+      console.log();
+      console.log(PRIMARY.bold(`  Broadcast to ${targets.length} agent${targets.length === 1 ? '' : 's'}`));
+      console.log(`  ${DIM('From:')}     ${ACCENT(from)}`);
+      console.log(`  ${DIM('Targets:')}  ${ACCENT(targets.join(', '))}`);
+      if (excluded.size > 1) {
+        console.log(`  ${DIM('Excluded:')} ${Array.from(excluded).filter((n) => n !== from.toLowerCase()).join(', ') || '(none)'}`);
+      }
+      if (options.topic) console.log(`  ${DIM('Topic:')}    ${options.topic}`);
+      console.log(`  ${DIM('Message:')}  ${message}`);
+      console.log();
+      console.log(DIM(`  Waiting for replies (up to ${timeoutMs / 1000}s per agent)...`));
+      console.log();
+
+      // Fan out in parallel so slow agents don't block fast ones
+      const results = await Promise.all(targets.map(async (agent) => {
+        try {
+          const res = await fleetFetch('/fleet/bus/send', {
+            method: 'POST',
+            body: JSON.stringify({ from, to: agent, message, topic: options.topic }),
+          }, timeoutMs);
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+            return { agent, ok: false as const, error: body.error || res.statusText };
+          }
+          const data = await res.json() as { ok: boolean; response: { payload: string } | null };
+          return { agent, ok: true as const, response: data.response?.payload || '' };
+        } catch (error) {
+          const name = (error as Error).name;
+          const errMsg = (name === 'AbortError' || name === 'TimeoutError') ? 'timed out' : String(error);
+          return { agent, ok: false as const, error: errMsg };
+        }
+      }));
+
+      let ok = 0;
+      for (const r of results) {
+        if (r.ok) {
+          ok++;
+          console.log(PRIMARY(`  ✓ ${r.agent}`));
+          if (r.response) {
+            const preview = r.response.length > 500 ? r.response.slice(0, 500) + '…' : r.response;
+            for (const line of preview.split('\n')) console.log(`    ${DIM(line)}`);
+          }
+        } else {
+          console.log(chalk.red(`  ✗ ${r.agent}: ${r.error}`));
+          if (r.error === 'timed out') {
+            console.log(DIM(`    (may still complete — check: kyberbot bus history --agent ${r.agent})`));
+          }
+        }
+      }
+      console.log();
+      console.log(DIM(`  ${ok}/${targets.length} replied`));
+      console.log();
+      if (ok === 0) process.exit(1);
     });
 
   // ─────────────────────────────────────────────────────────────

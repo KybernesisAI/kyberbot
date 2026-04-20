@@ -393,6 +393,42 @@ export function createFleetCommand(): Command {
       console.log(PRIMARY.bold('  Fleet Status'));
       console.log();
 
+      // If the fleet server is running (single process, many agents) it owns
+      // authoritative status. Per-agent PID files only exist in legacy
+      // independent-mode installs; in fleet mode there are no per-agent PIDs,
+      // so falling back to that check would report every agent "stopped".
+      // The fleet /health endpoint returns services as an OBJECT keyed by
+      // service name (e.g. `{ heartbeat: "running", channels: [...], embeddings: "running" }`)
+      // — not the flat array that per-agent /health uses. Normalize into
+      // the flat shape we render for both modes.
+      const fleetHealth = await (async (): Promise<Record<string, { status: string; services?: Array<{ name: string; status: string }> }> | null> => {
+        try {
+          const res = await fetch('http://localhost:3456/health', { signal: AbortSignal.timeout(3000) });
+          if (!res.ok) return null;
+          const body = await res.json() as { mode?: string; agents?: Array<{ name: string; status: string; services?: Record<string, unknown> }> };
+          if (body.mode !== 'fleet' || !Array.isArray(body.agents)) return null;
+          const map: Record<string, { status: string; services?: Array<{ name: string; status: string }> }> = {};
+          for (const a of body.agents) {
+            const flat: Array<{ name: string; status: string }> = [];
+            if (a.services && typeof a.services === 'object') {
+              for (const [svcName, svcVal] of Object.entries(a.services)) {
+                if (svcName === 'channels' && Array.isArray(svcVal)) {
+                  for (const ch of svcVal as Array<{ name?: string; connected?: boolean }>) {
+                    flat.push({ name: `${ch.name || 'channel'}`, status: ch.connected ? 'running' : 'stopped' });
+                  }
+                } else if (typeof svcVal === 'string') {
+                  flat.push({ name: svcName, status: svcVal });
+                }
+              }
+            }
+            map[a.name.toLowerCase()] = { status: a.status, services: flat };
+          }
+          return map;
+        } catch {
+          return null;
+        }
+      })();
+
       let running = 0;
       let total = 0;
 
@@ -400,33 +436,53 @@ export function createFleetCommand(): Command {
         total++;
         const entry = agents[name];
         const port = entry.root ? getPortForRoot(entry.root) : 0;
-        const pid = getRunningPid(name);
-        const healthy = pid ? await probeHealth(port) : false;
+
+        // Prefer fleet-server reality if we have it; fall back to per-agent
+        // PID + port probe for legacy independent-mode installs.
+        const fleetAgent = fleetHealth?.[name.toLowerCase()];
+        const pid = fleetAgent ? null : getRunningPid(name);
+        const healthy = fleetAgent
+          ? fleetAgent.status === 'running'
+          : pid
+            ? await probeHealth(port)
+            : false;
 
         if (healthy) running++;
 
         const statusIcon = healthy ? chalk.green('●') : pid ? chalk.yellow('●') : chalk.gray('○');
-        const statusText = healthy ? 'healthy' : pid ? `starting (PID ${pid})` : 'stopped';
+        const statusText = healthy
+          ? (fleetAgent ? 'running (fleet)' : 'healthy')
+          : pid
+            ? `starting (PID ${pid})`
+            : 'stopped';
 
         console.log(`  ${statusIcon} ${ACCENT(name.padEnd(14))} ${statusText}`);
 
         if (healthy) {
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 2000);
-            const res = await fetch(`http://localhost:${port}/health`, { signal: controller.signal });
-            clearTimeout(timeout);
-            if (res.ok) {
-              const health = await res.json() as Record<string, unknown>;
-              const services = health.services as Array<{ name: string; status: string }> | undefined;
-              if (services) {
-                for (const svc of services) {
-                  const svcIcon = svc.status === 'running' ? chalk.green('✓') : chalk.gray('–');
-                  console.log(`    ${svcIcon} ${svc.name}`);
+          if (fleetAgent?.services) {
+            // Fleet mode — services list came from the shared /health
+            for (const svc of fleetAgent.services) {
+              const svcIcon = svc.status === 'running' ? chalk.green('✓') : chalk.gray('–');
+              console.log(`    ${svcIcon} ${svc.name}`);
+            }
+          } else {
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 2000);
+              const res = await fetch(`http://localhost:${port}/health`, { signal: controller.signal });
+              clearTimeout(timeout);
+              if (res.ok) {
+                const health = await res.json() as Record<string, unknown>;
+                const services = health.services as Array<{ name: string; status: string }> | undefined;
+                if (services) {
+                  for (const svc of services) {
+                    const svcIcon = svc.status === 'running' ? chalk.green('✓') : chalk.gray('–');
+                    console.log(`    ${svcIcon} ${svc.name}`);
+                  }
                 }
               }
-            }
-          } catch { /* ignore */ }
+            } catch { /* ignore */ }
+          }
         }
       }
 

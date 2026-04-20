@@ -402,9 +402,10 @@ When multiple KyberBot agents are running together (a "fleet"), you can talk to 
 
 ```bash
 # Messaging
-kyberbot bus send <agent> "<message>"       # Ask a specific agent a question
-kyberbot bus send <agent> "<message>" -w    # Send and wait for the reply
-kyberbot bus broadcast "<message>"          # Notify all agents
+kyberbot bus send <agent> "<message>"                      # Ask one specific agent (waits up to 10 min for reply)
+kyberbot bus send <agent> "<message>" --timeout 900         # Wait longer for slow agents (seconds)
+kyberbot bus broadcast "<message>"                          # Ask every running agent in parallel, aggregate replies
+kyberbot bus broadcast "<message>" --exclude mythos,nova    # Same, but skip named agents (sender is always skipped)
 kyberbot bus history                        # Recent inter-agent messages
 kyberbot bus history --agent <name>         # Filter to one agent
 
@@ -435,7 +436,10 @@ kyberbot fleet unregister <name>            # Remove from registry (files kept)
 - Questions the user is obviously asking YOU specifically
 - Anything you can answer accurately from your own memory and skills
 
-**Pattern**: when the user says "ask <other-agent> about X" or "check with <other-agent>" — that is an explicit instruction to run `kyberbot bus send <other-agent> "..."`. Do not paraphrase from your own memory; actually send the bus message.
+**Patterns**:
+- User says "ask <agent> about X" / "check with <agent>" → run `kyberbot bus send <agent> "..."`. Don't paraphrase from my own memory; actually send the bus message.
+- User says "ask everyone" / "get an update from all agents" → run `kyberbot bus broadcast "..."`. One command, parallel responses.
+- User says "ask everyone except <agent>" / "ping the team besides <agent>" → run `kyberbot bus broadcast "..." --exclude <agent>`. Do NOT fire individual sends per-agent — broadcast handles the fan-out and shows per-agent results.
 
 If no other agents are running, bus commands fail gracefully. Try anyway when instructed.
 
