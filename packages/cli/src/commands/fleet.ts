@@ -256,6 +256,23 @@ export function createFleetCommand(): Command {
       await fleet.loadAgents(names);
       await fleet.start(port);
 
+      // Telemetry dashboard — live view of per-agent Claude subprocess
+      // usage + fleet-side activity. Auto-spins with the fleet; set
+      // KYBERBOT_NO_TELEMETRY=1 to skip.
+      let telemetryUrl: string | null = null;
+      if (process.env.KYBERBOT_NO_TELEMETRY !== '1') {
+        try {
+          const { startTelemetryServer } = await import('../services/telemetry.js');
+          const preferredPort = process.env.KYBERBOT_TELEMETRY_PORT
+            ? parseInt(process.env.KYBERBOT_TELEMETRY_PORT, 10)
+            : 4545;
+          const t = await startTelemetryServer({ port: preferredPort });
+          telemetryUrl = t.url;
+        } catch (err) {
+          console.log(DIM(`  Telemetry dashboard failed to start: ${String(err)}`));
+        }
+      }
+
       // Per-agent status breakdown
       tunnelUrl = getTunnelUrl();
       const statuses = fleet.getAllStatuses();
@@ -306,6 +323,9 @@ export function createFleetCommand(): Command {
         console.log(`  ${DIM('Routes:')}       http://localhost:${port}/agent/${s.name}/*`);
       }
       console.log(`  ${DIM('Bus:')}          http://localhost:${port}/fleet/bus/*`);
+      if (telemetryUrl) {
+        console.log(`  ${DIM('Telemetry:')}    ${ACCENT(telemetryUrl)}  ${DIM('← open in browser for live token/cost view')}`);
+      }
       console.log();
 
       // Keep process alive
