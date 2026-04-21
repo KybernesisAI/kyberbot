@@ -367,27 +367,37 @@ const HTML = `<!doctype html>
 <title>KyberBot Telemetry</title>
 <style>
   :root {
-    --bg-primary: #0a0a0a;
-    --bg-secondary: #111111;
-    --bg-tertiary: #1a1a1a;
-    --bg-elevated: #222222;
-    --fg-primary: #fafafa;
-    --fg-secondary: #a1a1aa;
-    --fg-tertiary: #71717a;
-    --fg-muted: #52525b;
-    --border-color: rgba(255, 255, 255, 0.08);
-    --border-color-hover: rgba(255, 255, 255, 0.15);
-    --accent-teal: #14b8a6;
-    --accent-cyan: #22d3ee;
-    --accent-violet: #8b5cf6;
-    --accent-emerald: #10b981;
-    --accent-amber: #f59e0b;
-    --status-success: #10b981;
-    --status-warning: #f59e0b;
-    --status-error: #ef4444;
-    --status-info: #3b82f6;
+    /* Light theme only — matches the desktop app's light mode tokens.
+       Warm cream background, slate-blue text, darker accent colors
+       so teal and cyan stay readable on a bright surface. */
+    --bg-primary: #faf9f7;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f5f4f2;
+    --bg-elevated: #ffffff;
+    --fg-primary: #1e293b;
+    --fg-secondary: #475569;
+    --fg-tertiary: #64748b;
+    --fg-muted: #94a3b8;
+    --border-color: #e8e6e1;
+    --border-color-hover: #d5d3ce;
+    --accent-teal: #0d9488;
+    --accent-cyan: #0891b2;
+    --accent-violet: #7c3aed;
+    --accent-emerald: #059669;
+    --accent-amber: #d97706;
+    --status-success: #059669;
+    --status-warning: #d97706;
+    --status-error: #dc2626;
+    --status-info: #2563eb;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.08);
     --font-mono: 'Space Mono', 'SF Mono', 'Monaco', 'Menlo', monospace;
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    /* Force light mode regardless of OS preference. Matches the
+       telemetry design language — always light. */
+    :root { color-scheme: light; }
   }
 
   * { box-sizing: border-box; }
@@ -449,8 +459,8 @@ const HTML = `<!doctype html>
     display: inline-block; width: 6px; height: 6px; border-radius: 50%;
     margin-right: 6px; vertical-align: middle;
   }
-  .hdr .meta .dot.ok { background: var(--status-success); box-shadow: 0 0 6px rgba(16,185,129,0.5); }
-  .hdr .meta .dot.off { background: var(--status-error); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+  .hdr .meta .dot.ok { background: var(--status-success); box-shadow: 0 0 6px rgba(5,150,105,0.35); }
+  .hdr .meta .dot.off { background: var(--status-error); box-shadow: 0 0 6px rgba(220,38,38,0.35); }
 
   /* ── Buttons ──────────────────────────────────────── */
   button {
@@ -557,7 +567,7 @@ const HTML = `<!doctype html>
     vertical-align: top;
   }
   tr:last-child td { border-bottom: 0; }
-  tr:hover td { background: rgba(255,255,255,0.02); }
+  tr:hover td { background: rgba(13, 148, 136, 0.04); }
 
   /* Cost cell emphasis */
   td.cost { color: var(--accent-teal); font-weight: 500; text-align: right; }
@@ -571,23 +581,23 @@ const HTML = `<!doctype html>
     line-height: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: rgba(255,255,255,0.05);
-    color: var(--fg-muted);
+    background: rgba(0,0,0,0.04);
+    color: var(--fg-tertiary);
     border: 1px solid var(--border-color);
   }
-  .badge.haiku  { color: var(--accent-cyan);    border-color: rgba(34,211,238,0.4);  background: rgba(34,211,238,0.1); }
-  .badge.sonnet { color: var(--accent-violet);  border-color: rgba(139,92,246,0.4);  background: rgba(139,92,246,0.1); }
-  .badge.opus   { color: var(--accent-amber);   border-color: rgba(245,158,11,0.4);  background: rgba(245,158,11,0.1); }
-  .badge.kind-heartbeat { color: var(--accent-cyan); border-color: rgba(34,211,238,0.4); }
-  .badge.kind-sleep     { color: var(--accent-violet); border-color: rgba(139,92,246,0.4); }
-  .badge.kind-bus       { color: var(--accent-emerald); border-color: rgba(16,185,129,0.4); }
+  .badge.haiku  { color: var(--accent-cyan);    border-color: rgba(8,145,178,0.3);   background: rgba(8,145,178,0.08); }
+  .badge.sonnet { color: var(--accent-violet);  border-color: rgba(124,58,237,0.3);  background: rgba(124,58,237,0.08); }
+  .badge.opus   { color: var(--accent-amber);   border-color: rgba(217,119,6,0.3);   background: rgba(217,119,6,0.08); }
+  .badge.kind-heartbeat { color: var(--accent-cyan); border-color: rgba(8,145,178,0.3); background: rgba(8,145,178,0.08); }
+  .badge.kind-sleep     { color: var(--accent-violet); border-color: rgba(124,58,237,0.3); background: rgba(124,58,237,0.08); }
+  .badge.kind-bus       { color: var(--accent-emerald); border-color: rgba(5,150,105,0.3); background: rgba(5,150,105,0.08); }
 
   /* ── Row with status dot ──────────────────────────── */
   .dot-status {
     width: 6px; height: 6px; border-radius: 50%; display: inline-block;
     flex-shrink: 0; vertical-align: middle; margin-right: 8px;
   }
-  .dot-status.running   { background: var(--status-success); box-shadow: 0 0 6px rgba(16,185,129,0.5); }
+  .dot-status.running   { background: var(--status-success); box-shadow: 0 0 6px rgba(5,150,105,0.35); }
   .dot-status.stopped   { background: var(--fg-muted); }
 
   /* ── Prompt cell (truncate with hover tooltip) ────── */
@@ -626,10 +636,10 @@ const HTML = `<!doctype html>
     letter-spacing: 1.5px;
   }
 
-  /* Scrollbar styling */
+  /* Scrollbar styling — subtle against the warm-cream background */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: var(--bg-primary); }
-  ::-webkit-scrollbar-thumb { background: var(--border-color); }
+  ::-webkit-scrollbar-track { background: var(--bg-tertiary); }
+  ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 0; }
   ::-webkit-scrollbar-thumb:hover { background: var(--border-color-hover); }
 </style>
 </head>
@@ -893,9 +903,8 @@ async function refresh() {
     if (t.fleet) {
       const running = ((t.fleet.agents || []).filter(a => a.status === 'running')).length;
       const total = (t.fleet.agents || []).length;
-      setText('fleetStatus', '');
       document.getElementById('fleetStatus').innerHTML =
-        '<span class="dot ok"></span>fleet · ' + running + '/' + total + ' running · uptime ' + (t.fleet.uptime || '—');
+        '<span class="dot ok"></span>fleet \u00b7 ' + running + '/' + total + ' running \u00b7 uptime ' + (t.fleet.uptime || '\u2014');
     } else {
       document.getElementById('fleetStatus').innerHTML = '<span class="dot off"></span>fleet not reachable';
     }
