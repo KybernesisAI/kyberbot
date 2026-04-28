@@ -121,10 +121,11 @@ export async function chatSseHandler(req: Request, res: Response, root: string) 
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  // Build system prompt
+  // Build system prompt — pass root explicitly so fleet-mode agents resolve
+  // their own identity rather than the singleton's last-loaded agent.
   let systemPrompt: string;
   try {
-    systemPrompt = await buildChannelSystemPrompt('web');
+    systemPrompt = await buildChannelSystemPrompt('web', root);
   } catch (err) {
     logger.error('Failed to build system prompt', { error: String(err) });
     sendEvent(res, 'error', { message: 'Failed to build system prompt' });
@@ -164,8 +165,8 @@ export async function chatSseHandler(req: Request, res: Response, root: string) 
   } else if (sessionId) {
     fullPrompt = buildPromptFromSession(cwd, sessionId, prompt);
   } else {
-    fullPrompt = buildPromptWithHistory('web:default', prompt);
-    pushUserMessage('web:default', prompt);
+    fullPrompt = buildPromptWithHistory('web:default', prompt, cwd);
+    pushUserMessage('web:default', prompt, cwd);
   }
 
   const keepalive = setInterval(() => {
@@ -409,7 +410,7 @@ function chatViaSubprocess(
     proc.on('close', (code) => {
       logger.info(`Subprocess exited code=${code}, texts=${assistantTexts.length}`);
       const fullResponse = assistantTexts.join('\n\n').trim();
-      if (fullResponse) pushAssistantMessage('web:default', fullResponse);
+      if (fullResponse) pushAssistantMessage('web:default', fullResponse, cwd);
 
       // Persist assistant message to SQLite
       if (sessionId && fullResponse) {

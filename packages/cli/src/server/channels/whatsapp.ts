@@ -81,8 +81,8 @@ export class WhatsAppChannel implements Channel {
           const convoId = `whatsapp:${msg.key.remoteJid}`;
           try {
             const client = getClaudeClient();
-            const prompt = buildPromptWithHistory(convoId, text);
-            const systemPrompt = await buildChannelSystemPrompt('whatsapp');
+            const prompt = buildPromptWithHistory(convoId, text, this.root);
+            const systemPrompt = await buildChannelSystemPrompt('whatsapp', this.root);
             const reply = await client.complete(prompt, {
               system: systemPrompt,
               maxTurns: 30,
@@ -91,14 +91,14 @@ export class WhatsAppChannel implements Channel {
             });
 
             // Track both sides in history
-            pushUserMessage(convoId, text);
+            pushUserMessage(convoId, text, this.root);
 
             if (!reply || reply.trim().length === 0) {
               logger.warn('Claude returned empty response, skipping reply');
               return;
             }
 
-            pushAssistantMessage(convoId, reply);
+            pushAssistantMessage(convoId, reply, this.root);
             await this.send(msg.key.remoteJid!, reply);
 
             // Fire-and-forget: store conversation in memory

@@ -8,11 +8,15 @@
  * Cross-channel context: recent timeline events from ALL channels
  * (terminal, telegram, whatsapp, heartbeat) are included so the agent
  * has awareness of what happened in other sessions.
+ *
+ * Fleet-mode safety: callers running multiple agents in one process MUST
+ * pass `root` so identity resolution doesn't fall through to the global
+ * singleton (which is set by whichever agent loaded last).
  */
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getAgentName, getRoot } from '../../config.js';
+import { getAgentNameForRoot, getRoot } from '../../config.js';
 import { loadInstalledSkills } from '../../skills/loader.js';
 import { loadInstalledAgents } from '../../agents/loader.js';
 import { getRecentActivity } from '../../brain/timeline.js';
@@ -37,10 +41,18 @@ export function setPendingNotificationsGetter(getter: (agentName: string) => Arr
  * Build system prompt for a messaging channel.
  * Includes: identity, personality, user context, operational knowledge,
  * and recent cross-channel activity for continuity.
+ *
+ * @param channel  Channel kind (telegram, whatsapp, web).
+ * @param rootArg  Agent root directory. REQUIRED in fleet mode — otherwise
+ *                 falls back to the singleton getRoot(), which in fleet mode
+ *                 reflects whichever agent was loaded last.
  */
-export async function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp' | 'web'): Promise<string> {
-  const agentName = getAgentName();
-  const root = getRoot();
+export async function buildChannelSystemPrompt(
+  channel: 'telegram' | 'whatsapp' | 'web',
+  rootArg?: string,
+): Promise<string> {
+  const root = rootArg ?? getRoot();
+  const agentName = getAgentNameForRoot(root);
   const parts: string[] = [];
 
   // Channel-specific framing
@@ -108,7 +120,7 @@ export async function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp' 
 
   // Load installed skills dynamically (always current, unlike CLAUDE.md which may be stale)
   try {
-    const skills = loadInstalledSkills();
+    const skills = loadInstalledSkills(root);
     if (skills.length > 0) {
       parts.push('\n## Installed Skills\n');
       parts.push('These skills are available. When the user asks about something a skill handles, **use that skill** — read its full instructions at `skills/<name>/SKILL.md` and follow them.\n');
@@ -159,7 +171,7 @@ export async function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp' 
 
   // Load installed agents for delegation awareness
   try {
-    const agents = loadInstalledAgents();
+    const agents = loadInstalledAgents(root);
     if (agents.length > 0) {
       parts.push('\n## Available Sub-Agents\n');
       parts.push('These sub-agents can be spawned for specialized tasks. Delegate when a task benefits from a different perspective or isolated expertise.\n');

@@ -98,7 +98,7 @@ export class TelegramChannel implements Channel {
 
       // ── Handle /start after verification ───────────────────────────────
       if (text === '/start') {
-        clearHistory(`telegram:${chatId}`);
+        clearHistory(`telegram:${chatId}`, this.root);
         const agentName = getAgentNameForRoot(this.root);
         const greeting = this.loadGreeting(agentName);
         await ctx.reply(greeting);
@@ -125,19 +125,19 @@ export class TelegramChannel implements Channel {
         const convoId = `telegram:${chatId}`;
         try {
           const client = getClaudeClient();
-          const prompt = buildPromptWithHistory(convoId, text);
-          const systemPrompt = await buildChannelSystemPrompt('telegram');
+          const prompt = buildPromptWithHistory(convoId, text, this.root);
+          const systemPrompt = await buildChannelSystemPrompt('telegram', this.root);
           const reply = await client.complete(prompt, { system: systemPrompt, maxTurns: 30, subprocess: true, cwd: this.root });
 
           // Track both sides in history
-          pushUserMessage(convoId, text);
+          pushUserMessage(convoId, text, this.root);
 
           if (!reply || reply.trim().length === 0) {
             logger.warn('Claude returned empty response, skipping reply');
             return;
           }
 
-          pushAssistantMessage(convoId, reply);
+          pushAssistantMessage(convoId, reply, this.root);
 
           // Telegram has a 4096 char limit per message
           if (reply.length > 4096) {
