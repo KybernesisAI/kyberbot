@@ -15,6 +15,7 @@ vi.mock('../../config.js', () => ({
   getAgentName: vi.fn(() => 'TestBot'),
   getAgentNameForRoot: vi.fn(() => 'TestBot'),
   getRoot: vi.fn(() => '/mock/root'),
+  isFleetMode: vi.fn(() => false),
 }));
 
 // Mock claude client
@@ -228,10 +229,10 @@ describe('TelegramChannel', () => {
 
       await messageHandler(ctx);
 
-      expect(mockBuildPrompt).toHaveBeenCalledWith('telegram:12345', 'What time is it?');
+      expect(mockBuildPrompt).toHaveBeenCalledWith('TestBot:telegram:12345', 'What time is it?');
       expect(mockComplete).toHaveBeenCalled();
-      expect(mockPushUser).toHaveBeenCalledWith('telegram:12345', 'What time is it?');
-      expect(mockPushAssistant).toHaveBeenCalledWith('telegram:12345', 'Mock response');
+      expect(mockPushUser).toHaveBeenCalledWith('TestBot:telegram:12345', 'What time is it?');
+      expect(mockPushAssistant).toHaveBeenCalledWith('TestBot:telegram:12345', 'Mock response');
       expect(ctx.reply).toHaveBeenCalledWith('Mock response');
     });
 
@@ -371,7 +372,7 @@ describe('TelegramChannel', () => {
 
       await messageHandler(ctx);
 
-      expect(mockClearHistory).toHaveBeenCalledWith('telegram:12345');
+      expect(mockClearHistory).toHaveBeenCalledWith('TestBot:telegram:12345');
       expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining('TestBot'));
       expect(mockComplete).not.toHaveBeenCalled(); // Should not route to Claude
     });

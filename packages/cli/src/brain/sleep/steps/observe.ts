@@ -13,7 +13,7 @@
 import { createLogger } from '../../../logger.js';
 import { getTimelineDb } from '../../timeline.js';
 import { getClaudeClient } from '../../../claude.js';
-import { storeFact, ensureFactsTable, markFactSuperseded, getFactById, VALID_CATEGORIES, type FactInput, type FactCategory } from '../../fact-store.js';
+import { storeFact, ensureFactsTable, markFactSuperseded, getFactById, VALID_CATEGORIES, VALID_SPEAKER_IDS, VALID_SPEECH_TYPES, type FactInput, type FactCategory, type SpeakerId, type SpeechType } from '../../fact-store.js';
 import { detectContradictions } from '../../fact-contradiction.js';
 import { detectTemporalExpiry } from '../../fact-temporal.js';
 import { createContradiction, getEntityGraphDb } from '../../entity-graph.js';
@@ -33,15 +33,28 @@ interface ExtractedFact {
   category: string;
   confidence: number;
   entities: string[];
+  speaker_id?: string;
+  speech_type?: string;
 }
 
 const FACT_EXTRACTION_PROMPT = `Extract key facts from this conversation as a JSON array of objects.
+
+The conversation is pre-labeled: "User:" lines are from the human or incoming agent, "Assistant:" lines are from this AI agent.
 
 Each fact object has:
 - "content": The fact statement (8-25 words, specific and verifiable)
 - "category": One of: biographical, preference, event, relationship, temporal, opinion, plan, general
 - "confidence": 0.7-0.95 (how confident you are this is accurate)
 - "entities": Array of person/entity names mentioned in this fact
+- "speaker_id": who said the thing this fact was extracted from — one of: user, agent, external_party, system
+- "speech_type": what kind of utterance — one of: user_utterance, agent_utterance, quoted_external, reported_speech, hypothetical, acknowledgment, system_event
+
+Attribution rules:
+- Facts from "User:" lines → speaker_id: "user", speech_type: "user_utterance" (default)
+- Facts from "Assistant:" lines → speaker_id: "agent", speech_type: "agent_utterance"
+- If a fact comes from a paste, forward, or quote inside either turn → speaker_id: "external_party", speech_type: "quoted_external"
+- Hypotheticals ("if X happened", "imagine if") → speech_type: "hypothetical"
+- Do NOT extract facts from acknowledgment turns ("Thanks!", "Got it", "Sure") — emit speech_type: "acknowledgment" only if you must represent the turn, but skip extraction for those
 
 Rules:
 - Each fact must be SPECIFIC and verifiable — not vague
@@ -53,9 +66,9 @@ Rules:
 
 Example output:
 [
-  {"content": "Caroline moved from Sweden 4 years ago", "category": "biographical", "confidence": 0.9, "entities": ["Caroline"]},
-  {"content": "Melanie's daughter's birthday is August 13", "category": "event", "confidence": 0.85, "entities": ["Melanie"]},
-  {"content": "Caroline wants to pursue counseling as a career", "category": "plan", "confidence": 0.8, "entities": ["Caroline"]}
+  {"content": "Caroline moved from Sweden 4 years ago", "category": "biographical", "confidence": 0.9, "entities": ["Caroline"], "speaker_id": "user", "speech_type": "user_utterance"},
+  {"content": "Melanie's daughter's birthday is August 13", "category": "event", "confidence": 0.85, "entities": ["Melanie"], "speaker_id": "user", "speech_type": "user_utterance"},
+  {"content": "Caroline wants to pursue counseling as a career", "category": "plan", "confidence": 0.8, "entities": ["Caroline"], "speaker_id": "agent", "speech_type": "agent_utterance"}
 ]
 
 Conversation:
@@ -162,6 +175,22 @@ export async function runObserveStep(
         const validFacts = validateFacts(rawFacts);
 
         for (const [i, fact] of validFacts.entries()) {
+          // Skip acknowledgment turns — they carry no extractable facts
+          if (fact.speech_type === 'acknowledgment') continue;
+
+          // Validate speaker attribution — skip rather than write 'unknown' at runtime
+          const speaker_id = VALID_SPEAKER_IDS.has(fact.speaker_id ?? '') ? fact.speaker_id as SpeakerId : null;
+          const speech_type = VALID_SPEECH_TYPES.has(fact.speech_type ?? '') ? fact.speech_type as SpeechType : null;
+
+          if (!speaker_id || speaker_id === 'unknown' || !speech_type || speech_type === 'unknown') {
+            logger.warn('Skipping fact with unresolved speaker attribution', {
+              content: fact.content.slice(0, 60),
+              speaker_id: fact.speaker_id,
+              speech_type: fact.speech_type,
+            });
+            continue;
+          }
+
           const factInput: FactInput = {
             content: fact.content,
             source_path: `fact://${parentId}/${i}`,
@@ -170,6 +199,8 @@ export async function runObserveStep(
             timestamp: event.timestamp,
             confidence: Math.min(fact.confidence, 0.60), // AI-extracted facts capped at 0.60
             category: fact.category as FactCategory,
+            speaker_id,
+            speech_type,
             source_type: 'ai-extraction',
           };
 
@@ -308,7 +339,12 @@ function validateFacts(rawFacts: unknown[]): ExtractedFact[] {
       logger.debug(`Fact has no entities: "${content.slice(0, 60)}"`);
     }
 
-    validated.push({ content, category, confidence, entities });
+    // Forward speaker attribution fields — required for the attribution guard
+    // downstream. If absent here the guard will skip the fact entirely.
+    const speaker_id = typeof fact.speaker_id === 'string' ? fact.speaker_id : undefined;
+    const speech_type = typeof fact.speech_type === 'string' ? fact.speech_type : undefined;
+
+    validated.push({ content, category, confidence, entities, speaker_id, speech_type });
   }
 
   return validated;

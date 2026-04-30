@@ -23,11 +23,11 @@ const DIM = chalk.dim;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function getFleetPort(): number {
-  try {
-    return getServerPort();
-  } catch {
-    return 3456;
-  }
+  // Fleet manager always listens on 3456 in fleet mode (see registry.ts:168, fleet-manager.ts:110).
+  // getServerPort() returns the per-agent port (e.g. 3457 for kermit, 3458 for rizzo) which is
+  // wrong here — those ports require KYBERBOT_API_TOKEN auth and 401 the bus call, which then
+  // falls back to a 404 "Not Found" via getFleetConnection().
+  return 3456;
 }
 
 function getApiToken(): string {

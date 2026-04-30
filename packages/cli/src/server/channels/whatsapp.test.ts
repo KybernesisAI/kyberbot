@@ -13,6 +13,8 @@ vi.mock('../../logger.js', () => ({
 // Mock config
 vi.mock('../../config.js', () => ({
   getRoot: () => '/tmp/test-root',
+  getAgentNameForRoot: () => 'TestBot',
+  isFleetMode: () => false,
 }));
 
 // Mock claude client

@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, statSync, existsSync, readdirSync } from '
 import { join } from 'path';
 import { spawn } from 'node:child_process';
 import yaml from 'js-yaml';
-import { getClaudeModel } from '../config.js';
+import { getClaudeModel, getClaudeModelForRoot, isFleetMode } from '../config.js';
 import { loadInstalledSkills, getSkill } from '../skills/loader.js';
 import { scaffoldSkill } from '../skills/scaffolder.js';
 import { removeSkill, rebuildClaudeMd } from '../skills/registry.js';
@@ -316,7 +316,12 @@ export function createManagementRouter(channels: Channel[], root: string): Route
     sendEvent('init', { agent: agent.name, model: agent.model });
 
     const systemPrompt = buildSystemPrompt(agent);
-    const model = agent.model || getClaudeModel();
+    // agent.model wins (per-agent.md frontmatter). Otherwise resolve from
+    // this management-api's own root — never the singleton, which would
+    // collapse onto whichever agent loaded last in fleet mode.
+    const model = agent.model || (isFleetMode()
+      ? getClaudeModelForRoot(root)
+      : getClaudeModel());
 
     // Spawn claude subprocess with stream-json output
     const args = [

@@ -7,6 +7,7 @@
 
 import { createLogger } from '../../logger.js';
 import { getClaudeClient } from '../../claude.js';
+import { getAgentNameForRoot } from '../../config.js';
 import { Channel, ChannelMessage } from './types.js';
 import { join } from 'path';
 import { storeConversation } from '../../brain/store-conversation.js';
@@ -78,11 +79,15 @@ export class WhatsAppChannel implements Channel {
         if (this.messageHandler) {
           await this.messageHandler(message);
         } else {
-          const convoId = `whatsapp:${msg.key.remoteJid}`;
+          // Resolve agent name once per turn so the convoId Map key and the
+          // system-prompt build use the right agent. In fleet mode the Map
+          // is shared across agents — un-namespaced keys collide.
+          const agentName = getAgentNameForRoot(this.root);
+          const convoId = `${agentName}:whatsapp:${msg.key.remoteJid}`;
           try {
             const client = getClaudeClient();
             const prompt = buildPromptWithHistory(convoId, text);
-            const systemPrompt = await buildChannelSystemPrompt('whatsapp');
+            const systemPrompt = await buildChannelSystemPrompt('whatsapp', this.root);
             const reply = await client.complete(prompt, {
               system: systemPrompt,
               maxTurns: 30,

@@ -40,6 +40,35 @@ export const VALID_CATEGORIES: ReadonlySet<string> = new Set<FactCategory>([
   'general',
 ]);
 
+/**
+ * Who said the thing the fact was extracted from.
+ * 'unknown' is a migration-only sentinel — new writes must use an explicit value.
+ */
+export type SpeakerId = 'user' | 'agent' | 'external_party' | 'system' | 'unknown';
+
+/**
+ * What kind of utterance the fact came from.
+ * 'unknown' is a migration-only sentinel — new writes must use an explicit value.
+ */
+export type SpeechType =
+  | 'user_utterance'
+  | 'agent_utterance'
+  | 'quoted_external'
+  | 'reported_speech'
+  | 'hypothetical'
+  | 'acknowledgment'
+  | 'system_event'
+  | 'unknown';
+
+export const VALID_SPEAKER_IDS: ReadonlySet<string> = new Set<SpeakerId>([
+  'user', 'agent', 'external_party', 'system', 'unknown',
+]);
+
+export const VALID_SPEECH_TYPES: ReadonlySet<string> = new Set<SpeechType>([
+  'user_utterance', 'agent_utterance', 'quoted_external', 'reported_speech',
+  'hypothetical', 'acknowledgment', 'system_event', 'unknown',
+]);
+
 export interface FactInput {
   content: string;
   source_path: string;
@@ -48,6 +77,8 @@ export interface FactInput {
   timestamp: string;
   confidence: number;
   category: FactCategory;
+  speaker_id: SpeakerId;   // who said this — required on every new write
+  speech_type: SpeechType; // kind of utterance — required on every new write
   expires_at?: string;  // ISO 8601 — temporal facts expire automatically
   source_type?: string; // 'user-correction' | 'user-direct' | 'chat' | 'heartbeat' | 'ai-extraction'
   // ── ARP unification (Phase A) — agent-resource metadata ─────────────
@@ -144,6 +175,17 @@ export async function ensureFactsTable(root: string): Promise<void> {
   if (!colNames.has('last_reinforced_at')) {
     db.exec(`ALTER TABLE facts ADD COLUMN last_reinforced_at TEXT`);
   }
+  if (!colNames.has('speaker_id')) {
+    // 'unknown' is the migration sentinel for pre-attribution rows.
+    // All new writes must set an explicit non-'unknown' value.
+    db.exec(`ALTER TABLE facts ADD COLUMN speaker_id TEXT NOT NULL DEFAULT 'unknown'
+      CHECK (speaker_id IN ('user','agent','external_party','system','unknown'))`);
+  }
+  if (!colNames.has('speech_type')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN speech_type TEXT NOT NULL DEFAULT 'unknown'
+      CHECK (speech_type IN ('user_utterance','agent_utterance','quoted_external','reported_speech','hypothetical','acknowledgment','system_event','unknown'))`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_speaker ON facts(speaker_id, speech_type)`);
+  }
 
   // ── ARP unification (Phase A) — agent-resource metadata ─────────────
   // Schema vocabulary defined in @kybernesis/arp-spec :: AgentResourceMetadata.
@@ -208,8 +250,9 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
   const result = db.prepare(`
     INSERT OR REPLACE INTO facts
       (content, source_path, source_conversation_id, entities_json, timestamp, confidence, category, expires_at, source_type,
-       project_id, tags_json, classification, connection_id, source_did)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       project_id, tags_json, classification, connection_id, source_did,
+       speaker_id, speech_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fact.content,
     fact.source_path,
@@ -225,6 +268,8 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
     fact.classification ?? null,
     fact.connection_id ?? null,
     fact.source_did ?? null,
+    fact.speaker_id,
+    fact.speech_type,
   );
 
   const factId = result.lastInsertRowid as number;
@@ -334,7 +379,9 @@ export async function getFactsForEntity(
     SELECT id, content, source_path, source_conversation_id, entities_json,
            timestamp, confidence, category, created_at,
            COALESCE(is_latest, 1) as is_latest,
-           superseded_by
+           superseded_by,
+           COALESCE(speaker_id, 'unknown') as speaker_id,
+           COALESCE(speech_type, 'unknown') as speech_type
     FROM facts
     WHERE LOWER(entities_json) LIKE ? ESCAPE '\\'
       AND COALESCE(is_retracted, 0) = 0
@@ -364,6 +411,8 @@ export async function getFactsForEntity(
     created_at: string;
     is_latest: number;
     superseded_by: number | null;
+    speaker_id: string;
+    speech_type: string;
   }>;
 
   return rows.map(row => ({
@@ -375,6 +424,8 @@ export async function getFactsForEntity(
     timestamp: row.timestamp,
     confidence: row.confidence,
     category: row.category as FactCategory,
+    speaker_id: (row.speaker_id || 'unknown') as SpeakerId,
+    speech_type: (row.speech_type || 'unknown') as SpeechType,
     created_at: row.created_at,
     is_latest: row.is_latest,
     superseded_by: row.superseded_by,

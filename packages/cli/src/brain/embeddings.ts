@@ -10,7 +10,7 @@
 import { ChromaClient, Collection, type IEmbeddingFunction } from 'chromadb';
 import OpenAI from 'openai';
 import { createLogger } from '../logger.js';
-import { getIdentity, getIdentityForRoot } from '../config.js';
+import { getIdentity, getIdentityForRoot, isFleetMode } from '../config.js';
 
 const logger = createLogger('embeddings');
 
@@ -53,10 +53,57 @@ export interface SearchResult {
 
 /**
  * Derive a per-agent ChromaDB collection name.
- * If root is given, uses getIdentityForRoot (multi-agent safe).
- * Falls back to getIdentity() or 'kyberbot_data'.
+ *
+ * Strict in fleet mode: refuses to fall back to the singleton 'kyberbot_data'
+ * collection. Silent fallback in fleet mode means every agent that hits the
+ * fallback writes to the same shared collection — that's how cross-agent
+ * contamination enters the vector store.
+ *
+ * Outside fleet mode (terminal/CLI/single-agent), the soft fallback is
+ * preserved so fresh installs and edge cases still work.
  */
 function getCollectionNameForRoot(root?: string): string {
+  // Fleet mode: must have a root, must resolve to a real per-agent name.
+  if (isFleetMode()) {
+    if (!root) {
+      throw new Error(
+        'getCollectionNameForRoot called without a root in fleet mode. ' +
+        'Caller must pass the agent root. Refusing to fall back to ' +
+        '"kyberbot_data" — that would route every agent to the same ' +
+        'shared ChromaDB collection and produce cross-agent contamination.'
+      );
+    }
+    let identity;
+    try {
+      identity = getIdentityForRoot(root);
+    } catch (err) {
+      throw new Error(
+        `getCollectionNameForRoot(${root}) failed to load identity.yaml in ` +
+        `fleet mode: ${String(err)}. Refusing to fall back to "kyberbot_data".`
+      );
+    }
+    const name = identity.agent_name;
+    if (!name) {
+      throw new Error(
+        `getCollectionNameForRoot(${root}): identity.yaml has no agent_name ` +
+        `in fleet mode. Refusing to fall back to "kyberbot_data".`
+      );
+    }
+    const sanitized = name
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '_')
+      .replace(/^[^a-z0-9]+/, '')
+      .replace(/[^a-z0-9]+$/, '');
+    if (!sanitized) {
+      throw new Error(
+        `getCollectionNameForRoot(${root}): agent_name "${name}" sanitizes ` +
+        `to empty in fleet mode. Refusing to fall back to "kyberbot_data".`
+      );
+    }
+    return `kyberbot_${sanitized}`;
+  }
+
+  // Non-fleet (terminal/CLI/single-agent): soft fallback preserved.
   try {
     const identity = root ? getIdentityForRoot(root) : getIdentity();
     if (identity.agent_name) {
@@ -277,7 +324,22 @@ export async function indexDocument(
     await initializeEmbeddings(root);
   }
 
-  const collection = collections.get(root) || collections.get('__default__');
+  // Fleet mode: never silently route to '__default__'. That fallback is the
+  // path where Agent A's writes land in the shared default collection, then
+  // Agent B's searches return Agent A's content as their own.
+  let collection: Collection | undefined;
+  if (isFleetMode()) {
+    collection = collections.get(root);
+    if (!collection) {
+      throw new Error(
+        `indexDocument(${root}): no per-agent collection initialized in fleet ` +
+        `mode. Refusing to fall back to '__default__'. Did initializeEmbeddings(root) ` +
+        `succeed? See earlier log lines for ChromaDB connection errors.`
+      );
+    }
+  } else {
+    collection = collections.get(root) || collections.get('__default__');
+  }
   if (!chromaAvailable || !collection) {
     logger.debug(`Skipping indexing (ChromaDB not available): ${id}`);
     return 0;
@@ -367,7 +429,19 @@ export async function semanticSearch(
     await initializeEmbeddings(root);
   }
 
-  const collection = collections.get(root) || collections.get('__default__');
+  let collection: Collection | undefined;
+  if (isFleetMode()) {
+    collection = collections.get(root);
+    if (!collection) {
+      throw new Error(
+        `semanticSearch(${root}): no per-agent collection initialized in fleet ` +
+        `mode. Refusing to fall back to '__default__'. ` +
+        `That fallback is exactly the cross-agent recall path we are closing.`
+      );
+    }
+  } else {
+    collection = collections.get(root) || collections.get('__default__');
+  }
   if (!chromaAvailable || !collection) {
     logger.warn('Semantic search not available - ChromaDB not connected');
     return [];
@@ -449,7 +523,20 @@ export async function getIndexStats(root?: string): Promise<{
     await initializeEmbeddings(root);
   }
 
-  const collection = root ? collections.get(root) : (collections.get('__default__') || collections.values().next().value);
+  let collection: Collection | undefined;
+  if (isFleetMode()) {
+    if (!root) {
+      throw new Error(
+        'getIndexStats called without a root in fleet mode. ' +
+        'Pass the agent root explicitly. Refusing to fall back to ' +
+        '__default__ or "first available collection" — both produce ' +
+        'wrong-agent stats.'
+      );
+    }
+    collection = collections.get(root);
+  } else {
+    collection = root ? collections.get(root) : (collections.get('__default__') || collections.values().next().value);
+  }
   if (!chromaAvailable || !collection) {
     return { totalChunks: 0, available: false };
   }

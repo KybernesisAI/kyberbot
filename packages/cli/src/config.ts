@@ -12,6 +12,17 @@ import { IdentityConfig } from './types.js';
 
 let _root: string | null = null;
 let _identity: IdentityConfig | null = null;
+let _fleetMode = false;
+
+/**
+ * Mark this process as a multi-agent fleet run. Set once by FleetManager
+ * before any AgentRuntime starts. When true, every per-root resolver (model,
+ * agent name, ChromaDB collection, system prompt root) refuses to fall back
+ * to the singleton/default — silent fallback in fleet mode produces
+ * cross-agent contamination (PR #39 reasoning).
+ */
+export function setFleetMode(enabled: boolean): void { _fleetMode = enabled; }
+export function isFleetMode(): boolean { return _fleetMode; }
 
 /**
  * Get the KyberBot instance root directory.
@@ -124,14 +135,59 @@ export function getKybernesisApiKey(): string | null {
 }
 
 /**
- * Get preferred Claude model for user-facing conversations
+ * Get preferred Claude model for user-facing conversations.
+ *
+ * STRICT in fleet mode: throws. Outside fleet mode, soft-falls-back to
+ * 'opus' as before. The throw exists to surface hidden callers — every
+ * fleet caller should pass a root and use getClaudeModelForRoot(root).
+ *
+ * If you hit this throw: grep for `getClaudeModel\b` (no `ForRoot`) and
+ * migrate the call site to `getClaudeModelForRoot(root)`.
  */
 export function getClaudeModel(): string {
+  if (_fleetMode) {
+    throw new Error(
+      'getClaudeModel() called in fleet mode without a root — this would silently ' +
+      'collapse all agents onto whichever identity loaded last. Migrate this caller ' +
+      'to getClaudeModelForRoot(root). Refusing to fall back to "opus".'
+    );
+  }
   try {
     return getIdentity().claude?.model || 'opus';
   } catch {
     return 'opus';
   }
+}
+
+/**
+ * Get the user-facing model for a specific root. Strict — no soft fallback.
+ * Mirrors getHeartbeatModelForRoot(). Use this from every fleet-mode caller.
+ */
+export function getClaudeModelForRoot(root: string): string {
+  if (!root) {
+    throw new Error(
+      'getClaudeModelForRoot called without a root. Caller must pass the agent root ' +
+      'directory. Refusing to fall back to a singleton lookup.'
+    );
+  }
+  let identity: IdentityConfig;
+  try {
+    identity = getIdentityForRoot(root);
+  } catch (err) {
+    throw new Error(
+      `getClaudeModelForRoot(${root}) failed to load identity.yaml: ${String(err)}. ` +
+      `Refusing to fall back to "opus" — that would silently route this agent's ` +
+      `traffic onto another agent's model.`
+    );
+  }
+  const model = identity.claude?.model;
+  if (!model) {
+    throw new Error(
+      `getClaudeModelForRoot(${root}): identity.yaml has no claude.model set. ` +
+      `Refusing to fall back to "opus".`
+    );
+  }
+  return model;
 }
 
 /**
@@ -265,7 +321,31 @@ export function getIdentityForRoot(root: string): IdentityConfig {
 }
 
 export function getAgentNameForRoot(root: string): string {
-  return getIdentityForRoot(root).agent_name || 'KyberBot';
+  let identity: IdentityConfig;
+  try {
+    identity = getIdentityForRoot(root);
+  } catch (err) {
+    if (_fleetMode) {
+      throw new Error(
+        `getAgentNameForRoot(${root}) failed to load identity.yaml: ${String(err)}. ` +
+        `Refusing to fall back to "KyberBot" — in fleet mode that name would collide ` +
+        `with every other agent that hits this fallback and produce symmetric ` +
+        `cross-agent contamination.`
+      );
+    }
+    return 'KyberBot';
+  }
+  const name = identity.agent_name;
+  if (!name) {
+    if (_fleetMode) {
+      throw new Error(
+        `getAgentNameForRoot(${root}): identity.yaml has no agent_name set. ` +
+        `Refusing to fall back to "KyberBot" in fleet mode.`
+      );
+    }
+    return 'KyberBot';
+  }
+  return name;
 }
 
 export function getServerPortForRoot(root: string): number {

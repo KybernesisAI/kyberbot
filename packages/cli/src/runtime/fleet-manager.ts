@@ -10,7 +10,7 @@ import http from 'http';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../logger.js';
-import { getIdentityForRoot } from '../config.js';
+import { getIdentityForRoot, setFleetMode } from '../config.js';
 import { loadRegistry } from '../registry.js';
 import { AgentRuntime, AgentRuntimeStatus } from './agent-runtime.js';
 import { AgentBus, setActiveBus } from './agent-bus.js';
@@ -35,6 +35,11 @@ export class FleetManager {
   private startedAt = 0;
 
   constructor() {
+    // Mark fleet mode BEFORE any AgentRuntime is constructed. Every per-root
+    // resolver (model, agent name, ChromaDB collection, system prompt root)
+    // checks this flag and throws on silent fallback paths to surface hidden
+    // singleton collapses.
+    setFleetMode(true);
     this.bus = new AgentBus();
     setActiveBus(this.bus);
   }
