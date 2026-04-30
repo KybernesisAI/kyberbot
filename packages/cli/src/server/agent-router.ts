@@ -14,6 +14,7 @@ import { createBrainRouter } from './brain-api.js';
 import { createWebApiRouter } from './web-api.js';
 import { createManagementRouter } from './management-api.js';
 import { createBusApiRouter } from './bus-api.js';
+import { createArpRouter } from './arp/router.js';
 import { chatSseHandler } from './chat-sse.js';
 import { executeHandler } from './execute-api.js';
 import { Channel } from './channels/types.js';
@@ -74,6 +75,16 @@ export function createAgentRouter(root: string, channels: Channel[]): Router {
 
   // Management API
   router.use('/api/web/manage', createManagementRouter(channels, root));
+
+  // ── ARP unification (Phase B) — typed agent-to-agent endpoints ─────
+  // Mounted at /api/arp; the cloud-bridge kyberbot adapter dispatches
+  // structured action requests here (notes.search, knowledge.query,
+  // etc.) instead of running them through /api/web/chat. Each endpoint
+  // filters by project_id / classification / tags at the data layer
+  // and applies obligations as code. Cedar PDP on the cloud side
+  // gates whether the call happens; this router enforces scope at the
+  // brain.
+  router.use('/api/arp', createArpRouter(root));
 
   return router;
 }
