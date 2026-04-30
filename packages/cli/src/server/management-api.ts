@@ -674,9 +674,13 @@ export function createManagementRouter(channels: Channel[], root: string): Route
     }
   });
 
-  // POST /remember — Store a memory via the running server (avoids subprocess OOM)
+  // POST /remember — Store a memory via the running server (avoids subprocess OOM).
+  // ARP unification (Phase A.6): accepts an optional `metadata` field
+  // carrying agent-resource attributes (project_id, tags, classification,
+  // connection_id, source_did). Forwarded into storeConversation; the
+  // brain layer stamps facts/timeline/sessions/ChromaDB accordingly.
   router.post('/remember', asyncHandler(async (req, res) => {
-    const { text, response, channel } = req.body ?? {};
+    const { text, response, channel, metadata } = req.body ?? {};
     if (!text || typeof text !== 'string') {
       res.status(400).json({ error: 'text is required' });
       return;
@@ -687,6 +691,7 @@ export function createManagementRouter(channels: Channel[], root: string): Route
         prompt: text,
         response: response || '',
         channel: channel || 'terminal',
+        ...(metadata && typeof metadata === 'object' ? { metadata } : {}),
       });
       res.json({ ok: true });
     } catch (err) {
