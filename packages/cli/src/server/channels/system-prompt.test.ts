@@ -12,7 +12,9 @@ vi.mock('../../logger.js', () => ({
 
 vi.mock('../../config.js', () => ({
   getAgentName: vi.fn(() => 'TestBot'),
+  getAgentNameForRoot: vi.fn(() => 'TestBot'),
   getRoot: vi.fn(() => '/mock/root'),
+  isFleetMode: vi.fn(() => false),
 }));
 
 vi.mock('../../skills/loader.js', () => ({
