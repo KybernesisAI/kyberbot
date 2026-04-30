@@ -10,7 +10,7 @@
  */
 
 import { spawn } from 'child_process';
-import { getClaudeMode, getClaudeModel, getRoot } from './config.js';
+import { getClaudeMode, getClaudeModel, getClaudeModelForRoot, getRoot, isFleetMode } from './config.js';
 import { createLogger } from './logger.js';
 
 const logger = createLogger('claude');
@@ -91,9 +91,33 @@ export class ClaudeClient {
    * Single completion — fire and forget prompt
    */
   async complete(prompt: string, opts: CompleteOptions = {}): Promise<string> {
-    // Always resolve model — never let subprocess/agent-sdk fall back to CLI defaults
+    // Always resolve model — never let subprocess/agent-sdk fall back to CLI defaults.
+    //
+    // Fleet-mode resolution rules:
+    //  1. Explicit opts.model wins (caller knows best).
+    //  2. Else, if opts.cwd is given, resolve via the per-root model. Channel
+    //     handlers, sleep steps, heartbeat, store-conversation, and the bus
+    //     handler all pass cwd: this.root, so this is the normal path.
+    //  3. Else, in fleet mode, throw — there is no safe singleton fallback.
+    //     Falling back to getClaudeModel() would silently route every agent
+    //     to whichever identity loaded last in the FleetManager process.
+    //  4. Outside fleet mode (terminal/CLI/single-agent), the legacy soft
+    //     fallback to getClaudeModel() is preserved.
     if (!opts.model) {
-      opts.model = (getClaudeModel() || 'opus') as 'haiku' | 'sonnet' | 'opus';
+      if (opts.cwd) {
+        opts.model = getClaudeModelForRoot(opts.cwd) as 'haiku' | 'sonnet' | 'opus';
+      } else if (isFleetMode()) {
+        throw new Error(
+          'ClaudeClient.complete() called in fleet mode without opts.model and ' +
+          'without opts.cwd. Cannot resolve which agent\'s model to use without ' +
+          'one of them. Caller fix: pass `cwd: this.root` (preferred) or ' +
+          '`model: getClaudeModelForRoot(this.root)`. Refusing to fall back to ' +
+          'the singleton getClaudeModel() — that path collapses every agent ' +
+          'onto whichever identity loaded last.'
+        );
+      } else {
+        opts.model = (getClaudeModel() || 'opus') as 'haiku' | 'sonnet' | 'opus';
+      }
     }
 
     // All server-process calls should use subprocess for memory isolation.

@@ -8,7 +8,7 @@
 
 import { spawn } from 'node:child_process';
 import type { Request, Response } from 'express';
-import { getClaudeModel } from '../config.js';
+import { getClaudeModel, getClaudeModelForRoot, isFleetMode } from '../config.js';
 import { createLogger } from '../logger.js';
 import { buildChannelSystemPrompt } from './channels/system-prompt.js';
 import { pushUserMessage, pushAssistantMessage, buildPromptWithHistory } from './channels/conversation-history.js';
@@ -121,10 +121,11 @@ export async function chatSseHandler(req: Request, res: Response, root: string) 
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  // Build system prompt
+  // Build system prompt — pass `root` so fleet mode resolves the right
+  // agent's identity/SOUL/USER/recent-activity, not whichever loaded last.
   let systemPrompt: string;
   try {
-    systemPrompt = await buildChannelSystemPrompt('web');
+    systemPrompt = await buildChannelSystemPrompt('web', root);
   } catch (err) {
     logger.error('Failed to build system prompt', { error: String(err) });
     sendEvent(res, 'error', { message: 'Failed to build system prompt' });
@@ -134,7 +135,15 @@ export async function chatSseHandler(req: Request, res: Response, root: string) 
 
   const cwd = root;
 
-  const model = getClaudeModel() || 'opus';
+  // Resolve the model for THIS handler's agent root. In fleet mode the
+  // legacy getClaudeModel() singleton throws to surface hidden callers;
+  // here we always have `root` so route through getClaudeModelForRoot().
+  // Outside fleet mode this is also strict — if a single-agent install
+  // has no claude.model set, we want to know rather than silently route
+  // through 'opus'.
+  const model = isFleetMode()
+    ? getClaudeModelForRoot(root)
+    : (getClaudeModel() || 'opus');
 
   // Persist user message
   if (sessionId) {

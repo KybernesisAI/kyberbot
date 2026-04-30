@@ -96,10 +96,14 @@ export class TelegramChannel implements Channel {
         return;
       }
 
+      // Resolve agent name once per turn so every Map key and prompt-build
+      // call uses the right agent. In fleet mode this MUST come from
+      // getAgentNameForRoot(this.root), never the singleton getAgentName().
+      const agentName = getAgentNameForRoot(this.root);
+
       // ── Handle /start after verification ───────────────────────────────
       if (text === '/start') {
-        clearHistory(`telegram:${chatId}`);
-        const agentName = getAgentNameForRoot(this.root);
+        clearHistory(`${agentName}:telegram:${chatId}`);
         const greeting = this.loadGreeting(agentName);
         await ctx.reply(greeting);
         return;
@@ -121,12 +125,16 @@ export class TelegramChannel implements Channel {
       if (this.messageHandler) {
         await this.messageHandler(message);
       } else {
-        // Default: route to agent with conversation history
-        const convoId = `telegram:${chatId}`;
+        // Default: route to agent with conversation history.
+        // convoId is namespaced by agent name so the in-memory history Map
+        // (module-scoped, shared across agents in fleet mode) cannot collide
+        // between agents that happen to be in the same chat_id with the same
+        // human user.
+        const convoId = `${agentName}:telegram:${chatId}`;
         try {
           const client = getClaudeClient();
           const prompt = buildPromptWithHistory(convoId, text);
-          const systemPrompt = await buildChannelSystemPrompt('telegram');
+          const systemPrompt = await buildChannelSystemPrompt('telegram', this.root);
           const reply = await client.complete(prompt, { system: systemPrompt, maxTurns: 30, subprocess: true, cwd: this.root });
 
           // Track both sides in history

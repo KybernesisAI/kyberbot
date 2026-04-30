@@ -12,7 +12,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getAgentName, getRoot } from '../../config.js';
+import { getAgentName, getAgentNameForRoot, getRoot, isFleetMode } from '../../config.js';
 import { loadInstalledSkills } from '../../skills/loader.js';
 import { loadInstalledAgents } from '../../agents/loader.js';
 import { getRecentActivity } from '../../brain/timeline.js';
@@ -37,10 +37,30 @@ export function setPendingNotificationsGetter(getter: (agentName: string) => Arr
  * Build system prompt for a messaging channel.
  * Includes: identity, personality, user context, operational knowledge,
  * and recent cross-channel activity for continuity.
+ *
+ * `rootArg` is REQUIRED in fleet mode. Without it, both getRoot() and
+ * getAgentName() collapse onto whichever agent loaded last in this process
+ * — every channel system prompt would carry the wrong agent's identity,
+ * SOUL.md, USER.md, CLAUDE.md, and recent-activity injection.
+ *
+ * Outside fleet mode (terminal/CLI/single-agent), the singleton fallback
+ * is the correct behavior and is preserved.
  */
-export async function buildChannelSystemPrompt(channel: 'telegram' | 'whatsapp' | 'web'): Promise<string> {
-  const agentName = getAgentName();
-  const root = getRoot();
+export async function buildChannelSystemPrompt(
+  channel: 'telegram' | 'whatsapp' | 'web',
+  rootArg?: string,
+): Promise<string> {
+  if (isFleetMode() && !rootArg) {
+    throw new Error(
+      'buildChannelSystemPrompt() called in fleet mode without a root. ' +
+      'Pass the agent\'s root as the second argument. Refusing to fall back ' +
+      'to getRoot()/getAgentName() — that resolves to whichever agent loaded ' +
+      'last and produces cross-agent prompt contamination. Caller fix: ' +
+      'buildChannelSystemPrompt(channel, this.root).'
+    );
+  }
+  const root = rootArg ?? getRoot();
+  const agentName = rootArg ? getAgentNameForRoot(rootArg) : getAgentName();
   const parts: string[] = [];
 
   // Channel-specific framing

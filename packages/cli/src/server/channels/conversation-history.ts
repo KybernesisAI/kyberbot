@@ -8,6 +8,16 @@
  * History lives in memory — it persists across messages within a session
  * but resets on restart. Long-term memory is handled by storeConversation()
  * and the brain subsystems.
+ *
+ * FLEET MODE WARNING:
+ * The Map below is module-scoped — in fleet mode, every AgentRuntime in
+ * this process shares it. Callers MUST namespace `conversationId` with
+ * the agent's identity (e.g. `${agentName}:telegram:${chatId}`). An
+ * un-namespaced key like `telegram:${chatId}` will collide across agents
+ * and inject one agent's prior turns into another agent's prompt.
+ * This file deliberately does not enforce the convention — that lookup
+ * would require knowing the calling agent, which is the exact ambiguity
+ * we're trying to remove. The contract lives at the call sites.
  */
 
 import { createLogger } from '../../logger.js';
