@@ -51,25 +51,65 @@ If there's a natural response or additional context to pair with it:
 kyberbot remember "<text>" --response "<context>"
 ```
 
+### Step 2b: Tag the Memory (when context is clear)
+
+When the user's message tells you the memory belongs to a specific
+project, has obvious sensitivity, or is cross-cutting, **tag it**.
+ARP scope policies use these tags as the source of truth for what
+gets shared with paired peer agents — an untagged memory is invisible
+to a project-scoped peer query, a tagged one is matched.
+
+| Flag | When to set | Example |
+|---|---|---|
+| `--project <slug>` | The memory is specifically about a named project, product, or initiative | `--project alpha`, `--project kyberco-launch` |
+| `--tag <name>` (repeatable) | Cross-cutting themes the user has used; client/team names that aren't the primary project | `--tag launch --tag draft` |
+| `--classification <tier>` | Content is sensitive | `--classification pii` (SSNs, addresses, health), `--classification confidential` (internal-only), `--classification internal` (default for company info), `--classification public` (already-public info) |
+
+Pick **slugs** for `--project` (lowercase, dashes/underscores) — they need
+to match what's typed in the ARP scope picker on the cloud side.
+"Project Alpha" → `alpha`. "Q2 Launch" → `q2-launch`.
+
+**Don't make up tags.** Only set `--project` / `--tag` when the user
+has clearly named a project or theme — guessing from context risks
+mis-scoping and a peer agent seeing or missing the wrong memories.
+
 ### Step 3: Confirm
 
 Briefly acknowledge to the user that the information has been stored. A simple "Noted." or "Stored." suffices unless the user explicitly asked you to remember something, in which case confirm what you stored.
 
 ## Examples
 
-**Person mentioned:** User says "I talked to Jake from the infra team about migrating to Kubernetes"
+**Person mentioned (no project context):** User says "I talked to Jake from the infra team about migrating to Kubernetes"
 ```bash
 kyberbot remember "Talked to Jake from the infra team about migrating to Kubernetes"
 ```
 
-**Decision made:** User says "Let's go with Next.js for the frontend"
+**Decision in a named project:** User says "For project alpha, let's go with Next.js for the frontend"
 ```bash
-kyberbot remember "Decision: using Next.js for the frontend" --response "Chosen over Remix and SvelteKit"
+kyberbot remember "Decision: using Next.js for the frontend" \
+  --response "Chosen over Remix and SvelteKit" \
+  --project alpha
 ```
 
-**Meeting notes:** User shares detailed meeting notes
+**Meeting notes scoped to a project:** User shares detailed Q2 launch meeting notes
 ```bash
-kyberbot remember "Weekly sync with product team — discussed Q2 roadmap, prioritized auth overhaul and dashboard redesign" --response "Auth overhaul starts March 1, dashboard redesign in April. Sarah leading auth, Mike on dashboard."
+kyberbot remember "Weekly sync with product team — discussed Q2 roadmap, prioritized auth overhaul and dashboard redesign" \
+  --response "Auth overhaul starts March 1, dashboard redesign in April. Sarah leading auth, Mike on dashboard." \
+  --project q2-launch \
+  --tag roadmap
+```
+
+**Sensitive content:** User pastes a client SSN or contract terms
+```bash
+kyberbot remember "Acme Corp contract: $250K/year, auto-renews 2027-01-01" \
+  --project acme-deal \
+  --classification confidential
+```
+
+**PII (highest sensitivity tier):** User mentions a person's home address or health status
+```bash
+kyberbot remember "Sarah's home address is 123 Maple St" \
+  --classification pii
 ```
 
 ## Correction Detection
