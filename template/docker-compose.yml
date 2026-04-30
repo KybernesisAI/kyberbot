@@ -7,7 +7,7 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - ./data/chromadb:/chroma/chroma
+      - ./data/chromadb:/data
     environment:
       - ANONYMIZED_TELEMETRY=false
       - IS_PERSISTENT=TRUE
