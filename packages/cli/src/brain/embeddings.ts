@@ -353,6 +353,14 @@ export async function semanticSearch(
   options: {
     limit?: number;
     type?: DocumentMetadata['type'];
+    // ── ARP unification (Phase A/B) — metadata filters ────────────
+    // Applied at the ChromaDB `where:` layer so out-of-scope chunks
+    // are excluded BEFORE the result set leaves the vector store.
+    // Defense in depth: cloud PDP gates whether the query happens;
+    // these filters guarantee the result set stays scoped.
+    project_id?: string;
+    classification?: DocumentMetadata['classification'];
+    connection_id?: string;
   } = {}
 ): Promise<SearchResult[]> {
   if (!chromaInitialized) {
@@ -372,8 +380,20 @@ export async function semanticSearch(
     // Generate embedding for query
     const queryEmbedding = await generateEmbedding(query);
 
-    // Build where filter
-    const whereFilter = options.type ? { type: options.type } : undefined;
+    // Build where filter — combine type + ARP metadata filters into a
+    // single $and clause when more than one is set. ChromaDB requires
+    // the $and operator for multi-condition filters.
+    const conditions: Array<Record<string, unknown>> = [];
+    if (options.type) conditions.push({ type: options.type });
+    if (options.project_id) conditions.push({ project_id: options.project_id });
+    if (options.classification) conditions.push({ classification: options.classification });
+    if (options.connection_id) conditions.push({ connection_id: options.connection_id });
+    const whereFilter =
+      conditions.length === 0
+        ? undefined
+        : conditions.length === 1
+          ? (conditions[0] as Record<string, string>)
+          : { $and: conditions } as unknown as Record<string, string>;
 
     const results = await collection.query({
       queryEmbeddings: [queryEmbedding],
