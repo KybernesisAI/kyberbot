@@ -26,6 +26,18 @@ export interface DocumentMetadata {
   entities?: string[];
   topics?: string[];
   summary?: string;
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // Mirrors the canonical AgentResourceMetadata vocabulary from
+  // @kybernesis/arp-spec. Lets typed /api/arp/*.search and .query
+  // handlers filter ChromaDB results at the metadata layer (fast,
+  // pre-LLM) instead of post-filtering. ChromaDB metadata values are
+  // scalars; tags_csv stores tags as a comma-separated string for
+  // `where: { tags_csv: { $like: '%marketing%' } }` style queries.
+  project_id?: string;
+  tags_csv?: string;
+  classification?: 'public' | 'internal' | 'confidential' | 'pii';
+  connection_id?: string;
+  source_did?: string;
 }
 
 export interface SearchResult {
@@ -290,6 +302,18 @@ export async function indexDocument(
     for (let i = 0; i < chunks.length; i++) {
       ids.push(`${id}_chunk_${chunks[i].index}`);
       documents.push(chunks[i].text);
+      // ── ARP unification (Phase A) — pass through agent-resource ──────
+      // metadata fields when the producer set them. Empty string is the
+      // ChromaDB-friendly null (avoids `undefined` filter issues) but
+      // typed handlers SHOULD use `where: {project_id: 'alpha'}` not
+      // `where: {project_id: ''}` for the unscoped lookup.
+      const arpMeta: Record<string, string | number> = {};
+      if (metadata.project_id) arpMeta['project_id'] = metadata.project_id;
+      if (metadata.tags_csv) arpMeta['tags_csv'] = metadata.tags_csv;
+      if (metadata.classification) arpMeta['classification'] = metadata.classification;
+      if (metadata.connection_id) arpMeta['connection_id'] = metadata.connection_id;
+      if (metadata.source_did) arpMeta['source_did'] = metadata.source_did;
+
       metadatas.push({
         type: metadata.type,
         source_path: metadata.source_path,
@@ -300,6 +324,7 @@ export async function indexDocument(
         entities: metadata.entities?.join(',') || '',
         topics: metadata.topics?.join(',') || '',
         summary: metadata.summary || '',
+        ...arpMeta,
       });
     }
 

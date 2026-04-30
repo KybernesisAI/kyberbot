@@ -226,6 +226,28 @@ async function storeConversationImpl(
   const sourceType = channelToSourceType(input.channel);
   const sourceConfidence = SOURCE_CONFIDENCE[sourceType] ?? 0.85;
 
+  // ── ARP unification (Phase A) — pull canonical agent-resource metadata
+  // from input.metadata so each storage layer (timeline, ChromaDB, facts)
+  // can stamp the same provenance dimensions. Vocabulary defined in
+  // @kybernesis/arp-spec :: AgentResourceMetadata. All optional; absence
+  // means "unscoped" and matches policies that don't constrain it.
+  const meta = (input.metadata ?? {}) as Record<string, unknown>;
+  const arpProjectId = typeof meta['project_id'] === 'string' ? meta['project_id'] as string : undefined;
+  const arpTags = Array.isArray(meta['tags']) ? (meta['tags'] as unknown[]).filter((t): t is string => typeof t === 'string') : undefined;
+  const arpClassification =
+    typeof meta['classification'] === 'string'
+      ? (meta['classification'] as 'public' | 'internal' | 'confidential' | 'pii')
+      : undefined;
+  const arpConnectionId = typeof meta['connection_id'] === 'string' ? meta['connection_id'] as string : undefined;
+  const arpSourceDid = typeof meta['source_did'] === 'string' ? meta['source_did'] as string : undefined;
+  const arpMetadataBundle = {
+    project_id: arpProjectId,
+    tags: arpTags,
+    classification: arpClassification,
+    connection_id: arpConnectionId,
+    source_did: arpSourceDid,
+  };
+
   const heapMB = () => Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
   logger.info('storeConversation:start', {
     channel: input.channel,
@@ -306,7 +328,8 @@ async function storeConversationImpl(
         root, conversationId, sourcePath, timestamp, undefined,
         fullTitle,
         timelineSummary,
-        entityNames, topicNames
+        entityNames, topicNames,
+        arpMetadataBundle,
       );
     }
 
@@ -339,6 +362,11 @@ async function storeConversationImpl(
                 entities: entityNames,
                 topics: topicNames,
                 summary: seg.text,
+                ...(arpProjectId ? { project_id: arpProjectId } : {}),
+                ...(arpTags && arpTags.length > 0 ? { tags_csv: arpTags.join(',') } : {}),
+                ...(arpClassification ? { classification: arpClassification } : {}),
+                ...(arpConnectionId ? { connection_id: arpConnectionId } : {}),
+                ...(arpSourceDid ? { source_did: arpSourceDid } : {}),
               });
             } catch {
               // Segment embedding is best-effort
@@ -419,7 +447,8 @@ async function storeConversationImpl(
   // ── Step 3b: Real-time fact extraction (best-effort) ─────────────────
   try {
     await extractFactsRealtime(
-      root, fullText, entityNames, sourcePath, conversationId, timestamp, sourceType
+      root, fullText, entityNames, sourcePath, conversationId, timestamp, sourceType,
+      arpMetadataBundle,
     );
   } catch {
     // Fact extraction is best-effort — never blocks conversation storage
@@ -439,6 +468,11 @@ async function storeConversationImpl(
         entities: entityNames,
         topics: topicNames,
         summary: input.response.slice(0, 300),
+        ...(arpProjectId ? { project_id: arpProjectId } : {}),
+        ...(arpTags && arpTags.length > 0 ? { tags_csv: arpTags.join(',') } : {}),
+        ...(arpClassification ? { classification: arpClassification } : {}),
+        ...(arpConnectionId ? { connection_id: arpConnectionId } : {}),
+        ...(arpSourceDid ? { source_did: arpSourceDid } : {}),
       });
       logger.debug('Indexed conversation in embeddings', { conversationId });
     }

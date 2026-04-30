@@ -31,6 +31,16 @@ export interface TimelineEvent {
   source_path: string;
   entities: string[];
   topics: string[];
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // See @kybernesis/arp-spec :: AgentResourceMetadata. All optional;
+  // pre-existing rows have nulls. New writes during ARP conversations
+  // SHOULD populate connection_id + source_did + classification at
+  // minimum so typed handlers can filter scope-correctly.
+  project_id?: string;
+  tags?: string[];
+  classification?: 'public' | 'internal' | 'confidential' | 'pii';
+  connection_id?: string;
+  source_did?: string;
 }
 
 export interface TimelineQuery {
@@ -206,6 +216,29 @@ function runMigrations(database: Database.Database): void {
     database.exec(`ALTER TABLE timeline_events ADD COLUMN last_accessed TEXT`);
   }
 
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // Schema vocabulary defined in @kybernesis/arp-spec :: AgentResourceMetadata.
+  // tags_json already exists above and is reused as the canonical
+  // ARP `tags` column. project_id / classification / connection_id /
+  // source_did added here so timeline events stamped during an ARP
+  // conversation are filterable by the same dimensions facts already
+  // are.
+  if (!columnNames.has('project_id')) {
+    database.exec(`ALTER TABLE timeline_events ADD COLUMN project_id TEXT`);
+    database.exec(`CREATE INDEX IF NOT EXISTS idx_timeline_project ON timeline_events(project_id)`);
+  }
+  if (!columnNames.has('classification')) {
+    database.exec(`ALTER TABLE timeline_events ADD COLUMN classification TEXT`);
+    database.exec(`CREATE INDEX IF NOT EXISTS idx_timeline_classification ON timeline_events(classification)`);
+  }
+  if (!columnNames.has('connection_id')) {
+    database.exec(`ALTER TABLE timeline_events ADD COLUMN connection_id TEXT`);
+    database.exec(`CREATE INDEX IF NOT EXISTS idx_timeline_connection ON timeline_events(connection_id)`);
+  }
+  if (!columnNames.has('source_did')) {
+    database.exec(`ALTER TABLE timeline_events ADD COLUMN source_did TEXT`);
+  }
+
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_timeline_tier ON timeline_events(tier);
     CREATE INDEX IF NOT EXISTS idx_timeline_priority ON timeline_events(priority DESC);
@@ -233,12 +266,17 @@ export async function addToTimeline(
 
   const entitiesJson = JSON.stringify(event.entities || []);
   const topicsJson = JSON.stringify(event.topics || []);
+  // ── ARP unification — pass-through agent-resource metadata ──────────
+  const tagsJson = event.tags ? JSON.stringify(event.tags) : null;
 
   try {
     const result = database
       .prepare(
-        `INSERT INTO timeline_events (type, timestamp, end_timestamp, title, summary, source_path, entities_json, topics_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO timeline_events
+           (type, timestamp, end_timestamp, title, summary, source_path,
+            entities_json, topics_json,
+            project_id, tags_json, classification, connection_id, source_did)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(source_path) DO UPDATE SET
            type = excluded.type,
            timestamp = excluded.timestamp,
@@ -246,7 +284,12 @@ export async function addToTimeline(
            title = excluded.title,
            summary = excluded.summary,
            entities_json = excluded.entities_json,
-           topics_json = excluded.topics_json`
+           topics_json = excluded.topics_json,
+           project_id = COALESCE(excluded.project_id, timeline_events.project_id),
+           tags_json = COALESCE(excluded.tags_json, timeline_events.tags_json),
+           classification = COALESCE(excluded.classification, timeline_events.classification),
+           connection_id = COALESCE(excluded.connection_id, timeline_events.connection_id),
+           source_did = COALESCE(excluded.source_did, timeline_events.source_did)`
       )
       .run(
         event.type,
@@ -256,7 +299,12 @@ export async function addToTimeline(
         event.summary || '',
         event.source_path,
         entitiesJson,
-        topicsJson
+        topicsJson,
+        event.project_id ?? null,
+        tagsJson,
+        event.classification ?? null,
+        event.connection_id ?? null,
+        event.source_did ?? null
       );
 
     logger.debug(`Added to timeline: ${event.title}`, {
@@ -542,7 +590,14 @@ export async function addConversationToTimeline(
   title: string,
   summary: string,
   entities: string[],
-  topics: string[]
+  topics: string[],
+  arpMetadata?: {
+    project_id?: string;
+    tags?: string[];
+    classification?: 'public' | 'internal' | 'confidential' | 'pii';
+    connection_id?: string;
+    source_did?: string;
+  }
 ): Promise<number> {
   return addToTimeline(root, {
     type: 'conversation',
@@ -553,6 +608,7 @@ export async function addConversationToTimeline(
     source_path: sourcePath,
     entities,
     topics,
+    ...(arpMetadata ?? {}),
   });
 }
 

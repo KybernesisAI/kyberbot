@@ -42,7 +42,20 @@ export async function extractFactsRealtime(
   sourcePath: string,
   conversationId: string,
   timestamp: string,
-  sourceType: string = 'chat'
+  sourceType: string = 'chat',
+  // ── ARP unification (Phase A) — agent-resource metadata ───────────
+  // Defined in @kybernesis/arp-spec :: AgentResourceMetadata. Stamped
+  // onto every fact extracted from this conversation so typed
+  // /api/arp/* handlers can filter by project_id / classification /
+  // connection_id at query time. All optional — pass through whatever
+  // context the caller has.
+  arpMetadata?: {
+    project_id?: string;
+    tags?: string[];
+    classification?: 'public' | 'internal' | 'confidential' | 'pii';
+    connection_id?: string;
+    source_did?: string;
+  }
 ): Promise<number> {
   // Guard: skip short conversations or those with no entities
   if (text.length < 50 || entities.length === 0) {
@@ -108,6 +121,11 @@ export async function extractFactsRealtime(
         confidence,
         category: category as FactCategory,
         source_type: 'ai-extraction',
+        ...(arpMetadata?.project_id ? { project_id: arpMetadata.project_id } : {}),
+        ...(arpMetadata?.tags ? { tags: arpMetadata.tags } : {}),
+        ...(arpMetadata?.classification ? { classification: arpMetadata.classification } : {}),
+        ...(arpMetadata?.connection_id ? { connection_id: arpMetadata.connection_id } : {}),
+        ...(arpMetadata?.source_did ? { source_did: arpMetadata.source_did } : {}),
       };
 
       // Detect temporal expressions and set automatic expiry

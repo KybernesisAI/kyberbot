@@ -50,6 +50,18 @@ export interface FactInput {
   category: FactCategory;
   expires_at?: string;  // ISO 8601 — temporal facts expire automatically
   source_type?: string; // 'user-correction' | 'user-direct' | 'chat' | 'heartbeat' | 'ai-extraction'
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // Defined in @kybernesis/arp-spec :: AgentResourceMetadata. All
+  // optional. When set, ARP-typed handlers (notes.search, knowledge
+  // .query, etc.) filter by these dimensions at query time; the
+  // policy engine on the cloud side gates whether the request happens
+  // at all, but the data layer is the source of truth for what's
+  // actually scoped.
+  project_id?: string;
+  tags?: string[];
+  classification?: 'public' | 'internal' | 'confidential' | 'pii';
+  connection_id?: string;
+  source_did?: string;
 }
 
 export interface StoredFact extends FactInput {
@@ -133,6 +145,33 @@ export async function ensureFactsTable(root: string): Promise<void> {
     db.exec(`ALTER TABLE facts ADD COLUMN last_reinforced_at TEXT`);
   }
 
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // Schema vocabulary defined in @kybernesis/arp-spec :: AgentResourceMetadata.
+  // These columns make ARP scope policies enforceable at the data layer:
+  // typed /api/arp/* handlers filter by project_id / tags / classification
+  // / connection_id at query time so a peer can never see a row outside
+  // their declared scope, even if their request claims it's in scope.
+  // All optional — pre-existing rows have nulls and match policies that
+  // don't constrain the dimension. New rows MAY populate any subset.
+  if (!colNames.has('project_id')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN project_id TEXT`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_project ON facts(project_id)`);
+  }
+  if (!colNames.has('tags_json')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN tags_json TEXT DEFAULT '[]'`);
+  }
+  if (!colNames.has('classification')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN classification TEXT`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_classification ON facts(classification)`);
+  }
+  if (!colNames.has('connection_id')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN connection_id TEXT`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_connection ON facts(connection_id)`);
+  }
+  if (!colNames.has('source_did')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN source_did TEXT`);
+  }
+
   // Create standalone FTS5 table for fact search (no content= mapping to avoid column issues)
   try {
     db.exec(`
@@ -168,8 +207,9 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
 
   const result = db.prepare(`
     INSERT OR REPLACE INTO facts
-      (content, source_path, source_conversation_id, entities_json, timestamp, confidence, category, expires_at, source_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (content, source_path, source_conversation_id, entities_json, timestamp, confidence, category, expires_at, source_type,
+       project_id, tags_json, classification, connection_id, source_did)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fact.content,
     fact.source_path,
@@ -180,6 +220,11 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
     fact.category,
     fact.expires_at || null,
     fact.source_type || 'chat',
+    fact.project_id ?? null,
+    fact.tags ? JSON.stringify(fact.tags) : '[]',
+    fact.classification ?? null,
+    fact.connection_id ?? null,
+    fact.source_did ?? null,
   );
 
   const factId = result.lastInsertRowid as number;
@@ -196,6 +241,11 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
         entities: fact.entities,
         topics: [fact.category],
         summary: fact.content,
+        ...(fact.project_id ? { project_id: fact.project_id } : {}),
+        ...(fact.tags && fact.tags.length > 0 ? { tags_csv: fact.tags.join(',') } : {}),
+        ...(fact.classification ? { classification: fact.classification } : {}),
+        ...(fact.connection_id ? { connection_id: fact.connection_id } : {}),
+        ...(fact.source_did ? { source_did: fact.source_did } : {}),
       });
     }
   } catch {

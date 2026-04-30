@@ -74,8 +74,36 @@ function ensureDatabase(root: string): Database.Database {
 
   // Migration: add claude_session_id column if not present
   const cols = newDb.prepare(`PRAGMA table_info(sessions)`).all() as Array<{ name: string }>;
-  if (!cols.some(c => c.name === 'claude_session_id')) {
+  const colNames = new Set(cols.map(c => c.name));
+  if (!colNames.has('claude_session_id')) {
     newDb.exec(`ALTER TABLE sessions ADD COLUMN claude_session_id TEXT`);
+  }
+
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // Schema vocabulary defined in @kybernesis/arp-spec :: AgentResourceMetadata.
+  // Sessions are the natural tagging level for messages — every message
+  // within a session shares the same context (peer, project, connection).
+  // Set these once at session creation; the messages_for_session helpers
+  // can JOIN through session_id when an ARP endpoint needs to filter by
+  // them. ARP-originated sessions get connection_id + source_did stamped
+  // by the cloud-bridge adapter; project_id / tags / classification get
+  // populated when the user (or the LLM) declares context.
+  if (!colNames.has('project_id')) {
+    newDb.exec(`ALTER TABLE sessions ADD COLUMN project_id TEXT`);
+    newDb.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)`);
+  }
+  if (!colNames.has('tags_json')) {
+    newDb.exec(`ALTER TABLE sessions ADD COLUMN tags_json TEXT DEFAULT '[]'`);
+  }
+  if (!colNames.has('classification')) {
+    newDb.exec(`ALTER TABLE sessions ADD COLUMN classification TEXT`);
+  }
+  if (!colNames.has('connection_id')) {
+    newDb.exec(`ALTER TABLE sessions ADD COLUMN connection_id TEXT`);
+    newDb.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_connection ON sessions(connection_id)`);
+  }
+  if (!colNames.has('source_did')) {
+    newDb.exec(`ALTER TABLE sessions ADD COLUMN source_did TEXT`);
   }
 
   databases.set(root, newDb);
