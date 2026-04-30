@@ -92,6 +92,22 @@ export function applyResponseObligations<T extends Record<string, unknown>>(
       case 'rate_limit':
         // Handled outside the response-payload pipeline.
         break;
+      case 'summarize_only': {
+        // Truncate `content` fields on items to at most max_words words
+        // before they leave the agent. This is a coarse implementation —
+        // the cedar intent is "give a summary, not raw content"; a true
+        // LLM-driven summary lives in a future pass. Truncation
+        // satisfies the no-leak invariant: the peer can't see beyond
+        // the cap.
+        const max = typeof ob.params['max_words'] === 'number'
+          ? (ob.params['max_words'] as number)
+          : null;
+        if (max === null || max <= 0) break;
+        const before = JSON.stringify(working);
+        working = truncateContentWords(working, max) as T;
+        if (JSON.stringify(working) !== before) redacted = true;
+        break;
+      }
       case 'require_principal_confirmation':
         // Out-of-band UX (a step-up prompt to the agent's principal).
         // Honoring this requires a UI hook KyberBot doesn't have yet;
@@ -160,6 +176,39 @@ export function applyRateLimit(opts: {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Walk the response payload and truncate any string-valued `content` field
+ * to `maxWords` whitespace-delimited tokens. Items in `items[]` are walked
+ * recursively. The truncation is a coarse stand-in for real summarisation
+ * — sufficient to satisfy the obligation's no-leak invariant (peer can't
+ * see beyond the cap) while a proper LLM-summary path is built.
+ */
+function truncateContentWords(obj: Record<string, unknown>, maxWords: number): Record<string, unknown> {
+  function clipString(s: string): string {
+    const tokens = s.split(/\s+/);
+    if (tokens.length <= maxWords) return s;
+    return tokens.slice(0, maxWords).join(' ') + '…';
+  }
+  function walk(value: unknown, key: string | null): unknown {
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string') {
+      return key === 'content' ? clipString(value) : value;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v) => walk(v, key));
+    }
+    if (typeof value === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out[k] = walk(v, k);
+      }
+      return out;
+    }
+    return value;
+  }
+  return walk(obj, null) as Record<string, unknown>;
+}
 
 function stripFields(obj: Record<string, unknown>, fields: string[]): Record<string, unknown> {
   // Supports dotted paths (`event.attendees`) for nested redaction.
