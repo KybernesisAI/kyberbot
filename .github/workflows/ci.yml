@@ -63,8 +63,8 @@ jobs:
         run: pnpm build
       - name: CLI smoke (--version)
         run: node packages/cli/dist/index.js --version
-      - name: CLI import smoke
-        run: node -e "import('./packages/cli/dist/index.js').then(() => console.log('cli import OK'))"
+      - name: CLI smoke (--help)
+        run: node packages/cli/dist/index.js --help
 
   test:
     # Non-gating in R3 — coverage tightens in R4 (KYB-64).
