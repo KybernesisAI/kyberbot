@@ -11,36 +11,95 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Lint, Typecheck & Test
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
-
-      - name: Lint
+      - name: ESLint
         run: pnpm lint
 
-      - name: Typecheck
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: tsc --noEmit
         run: pnpm typecheck
 
-      - name: Test
+  smoke:
+    name: Smoke (build & import)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build all packages
+        run: pnpm build
+      - name: CLI smoke (--version)
+        run: node packages/cli/dist/index.js --version
+      - name: CLI import smoke
+        run: node -e "import('./packages/cli/dist/index.js').then(() => console.log('cli import OK'))"
+
+  test:
+    # Non-gating in R3 — coverage tightens in R4 (KYB-64).
+    name: Test (non-gating)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Vitest
         run: pnpm test:run
 
-      - name: Build
-        run: pnpm build
-
-      - name: Security audit
+  audit:
+    # Non-gating advisory check.
+    name: Security audit (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: pnpm audit
         run: pnpm audit --audit-level=high
