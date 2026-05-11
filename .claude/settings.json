@@ -3,5 +3,8 @@
     "type": "command",
     "command": ".claude/scripts/statusline.sh",
     "refreshInterval": 1
+  },
+  "enabledPlugins": {
+    "als@als-marketplace-stable": true
   }
 }
