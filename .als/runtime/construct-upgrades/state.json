@@ -1,0 +1,15 @@
+{
+  "schema": "als-construct-upgrade-runtime-state@1",
+  "system_root": "/Users/ianwinscom/kyb/.als-update-staging-df2c6a56-b31e-46a9-be9c-f442e01c3eb2",
+  "constructs": {
+    "statusline": {
+      "applied_version": 1,
+      "updated_at": "2026-05-11T06:21:25.653Z"
+    },
+    "dashboard": {
+      "applied_version": 1,
+      "updated_at": "2026-05-11T06:21:25.654Z"
+    }
+  },
+  "updated_at": "2026-05-11T06:21:25.654Z"
+}

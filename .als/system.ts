@@ -1,7 +1,7 @@
-import { defineSystem } from "./authoring.ts";
+import { defineSystem } from "als:authoring";
 
 export const system = defineSystem({
-  "als_version": 1,
+  "als_version": 3,
   "system_id": "kyberbot",
   "modules": {
     "kyberbot-factory": {

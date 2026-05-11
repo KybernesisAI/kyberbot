@@ -1,0 +1,14 @@
+{
+  "name": "delamain-dispatcher",
+  "version": "0.1.0",
+  "description": "Generic watcher + dispatcher for deployed Delamain bundles",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest",
+    "@openai/codex-sdk": "latest",
+    "yaml": "^2.7.0"
+  }
+}

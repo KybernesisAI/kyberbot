@@ -1,4 +1,4 @@
-import { defineModule } from "../../../authoring.ts";
+import { defineModule } from "als:authoring";
 
 export const module = defineModule({
   "dependencies": [],

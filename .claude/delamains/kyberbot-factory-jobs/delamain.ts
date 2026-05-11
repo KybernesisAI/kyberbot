@@ -1,4 +1,4 @@
-import { defineDelamain } from "../../../../../authoring.ts";
+import { defineDelamain } from "als:authoring";
 
 export const delamain = defineDelamain({
   "phases": [

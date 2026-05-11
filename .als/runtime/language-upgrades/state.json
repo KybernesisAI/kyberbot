@@ -1,0 +1,156 @@
+{
+  "schema": "als-language-upgrade-runtime-state@1",
+  "system_root": "/Users/ianwinscom/kyb/.als-update-staging-df2c6a56-b31e-46a9-be9c-f442e01c3eb2",
+  "target_als_version": 3,
+  "current_hop_index": 2,
+  "hops": [
+    {
+      "hop_id": "v1-to-v2",
+      "recipe_path": "/Users/ianwinscom/.claude/plugins/cache/als-marketplace-stable/als/0.11.0/language-upgrades/recipes/v1-to-v2/recipe.yaml",
+      "bundle_root": "/Users/ianwinscom/.claude/plugins/cache/als-marketplace-stable/als/0.11.0/language-upgrades/recipes/v1-to-v2",
+      "from_als_version": 1,
+      "to_als_version": 2,
+      "summary": "Seed installed Delamain dispatcher constructs, archive bundled dispatcher trees, and flip the system to ALS v2.",
+      "status": "completed",
+      "steps": [
+        {
+          "step_id": "cleanup-tracked-runtime-ephemera",
+          "type": "script",
+          "category": "must-run",
+          "status": "completed",
+          "attempt_count": 1,
+          "started_at": "2026-05-11T06:21:24.889Z",
+          "completed_at": "2026-05-11T06:21:25.339Z",
+          "error_code": null,
+          "diagnostic": null,
+          "provided_checks": [],
+          "skipped_reason": null,
+          "operator_response": null
+        },
+        {
+          "step_id": "rewrite-dispatcher-layout",
+          "type": "script",
+          "category": "must-run",
+          "status": "completed",
+          "attempt_count": 1,
+          "started_at": "2026-05-11T06:21:25.340Z",
+          "completed_at": "2026-05-11T06:21:25.501Z",
+          "error_code": null,
+          "diagnostic": null,
+          "provided_checks": [],
+          "skipped_reason": null,
+          "operator_response": null
+        }
+      ]
+    },
+    {
+      "hop_id": "v2-to-v3",
+      "recipe_path": "/Users/ianwinscom/.claude/plugins/cache/als-marketplace-stable/als/0.11.0/language-upgrades/recipes/v2-to-v3/recipe.yaml",
+      "bundle_root": "/Users/ianwinscom/.claude/plugins/cache/als-marketplace-stable/als/0.11.0/language-upgrades/recipes/v2-to-v3",
+      "from_als_version": 2,
+      "to_als_version": 3,
+      "summary": "Rewrite authored entrypoints to ALS-reserved authoring imports, remove the legacy authoring shim, and flip the system to ALS v3.",
+      "status": "completed",
+      "steps": [
+        {
+          "step_id": "rewrite-authoring-contract",
+          "type": "script",
+          "category": "must-run",
+          "status": "completed",
+          "attempt_count": 1,
+          "started_at": "2026-05-11T06:21:25.502Z",
+          "completed_at": "2026-05-11T06:21:25.649Z",
+          "error_code": null,
+          "diagnostic": null,
+          "provided_checks": [],
+          "skipped_reason": null,
+          "operator_response": null
+        }
+      ]
+    }
+  ],
+  "satisfied_checks": [],
+  "telemetry": [
+    {
+      "type": "hop_started",
+      "at": "2026-05-11T06:21:24.888Z",
+      "hop_id": "v1-to-v2",
+      "step_id": null,
+      "message": "Starting v1-to-v2.",
+      "error_code": null
+    },
+    {
+      "type": "step_started",
+      "at": "2026-05-11T06:21:24.889Z",
+      "hop_id": "v1-to-v2",
+      "step_id": "cleanup-tracked-runtime-ephemera",
+      "message": "Starting step 'cleanup-tracked-runtime-ephemera'.",
+      "error_code": null
+    },
+    {
+      "type": "step_completed",
+      "at": "2026-05-11T06:21:25.339Z",
+      "hop_id": "v1-to-v2",
+      "step_id": "cleanup-tracked-runtime-ephemera",
+      "message": "Completed step 'cleanup-tracked-runtime-ephemera'.",
+      "error_code": null
+    },
+    {
+      "type": "step_started",
+      "at": "2026-05-11T06:21:25.340Z",
+      "hop_id": "v1-to-v2",
+      "step_id": "rewrite-dispatcher-layout",
+      "message": "Starting step 'rewrite-dispatcher-layout'.",
+      "error_code": null
+    },
+    {
+      "type": "step_completed",
+      "at": "2026-05-11T06:21:25.501Z",
+      "hop_id": "v1-to-v2",
+      "step_id": "rewrite-dispatcher-layout",
+      "message": "Completed step 'rewrite-dispatcher-layout'.",
+      "error_code": null
+    },
+    {
+      "type": "hop_completed",
+      "at": "2026-05-11T06:21:25.502Z",
+      "hop_id": "v1-to-v2",
+      "step_id": null,
+      "message": "Completed v1-to-v2.",
+      "error_code": null
+    },
+    {
+      "type": "hop_started",
+      "at": "2026-05-11T06:21:25.502Z",
+      "hop_id": "v2-to-v3",
+      "step_id": null,
+      "message": "Starting v2-to-v3.",
+      "error_code": null
+    },
+    {
+      "type": "step_started",
+      "at": "2026-05-11T06:21:25.502Z",
+      "hop_id": "v2-to-v3",
+      "step_id": "rewrite-authoring-contract",
+      "message": "Starting step 'rewrite-authoring-contract'.",
+      "error_code": null
+    },
+    {
+      "type": "step_completed",
+      "at": "2026-05-11T06:21:25.649Z",
+      "hop_id": "v2-to-v3",
+      "step_id": "rewrite-authoring-contract",
+      "message": "Completed step 'rewrite-authoring-contract'.",
+      "error_code": null
+    },
+    {
+      "type": "hop_completed",
+      "at": "2026-05-11T06:21:25.651Z",
+      "hop_id": "v2-to-v3",
+      "step_id": null,
+      "message": "Completed v2-to-v3.",
+      "error_code": null
+    }
+  ],
+  "updated_at": "2026-05-11T06:21:25.651Z"
+}
