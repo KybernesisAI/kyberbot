@@ -20,6 +20,11 @@ export default tseslint.config(
       'no-empty': 'warn',
       'no-regex-spaces': 'warn',
       'no-unassigned-vars': 'warn',
+      'preserve-caught-error': 'warn',
+      'no-useless-escape': 'warn',
+      'prefer-const': 'warn',
+      'require-yield': 'warn',
+      '@typescript-eslint/no-require-imports': 'warn',
     },
   },
 );
