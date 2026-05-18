@@ -514,6 +514,11 @@ export async function getFactsForEntity(
 /**
  * Mark a fact as superseded by a newer fact.
  * Sets is_latest=0 and records which fact replaced it.
+ *
+ * Also mirrors the link to Arcana via `command.markFactSuperseded` (module
+ * #11). Mirror is best-effort: requires both local facts to already have
+ * `arcana_fact_id` populated (i.e., they were mirrored at recordFact time);
+ * skips silently if either is null.
  */
 export async function markFactSuperseded(
   root: string,
@@ -522,6 +527,16 @@ export async function markFactSuperseded(
 ): Promise<void> {
   const db = await getTimelineDb(root);
 
+  // Look up arcana_fact_id for both facts BEFORE the local UPDATE — the read
+  // is cheap and lets us skip the mirror cleanly when either side hasn't
+  // mirrored.
+  const oldRow = db
+    .prepare('SELECT arcana_fact_id FROM facts WHERE id = ?')
+    .get(oldFactId) as { arcana_fact_id: string | null } | undefined;
+  const newRow = db
+    .prepare('SELECT arcana_fact_id FROM facts WHERE id = ?')
+    .get(newFactId) as { arcana_fact_id: string | null } | undefined;
+
   db.prepare(`
     UPDATE facts
     SET is_latest = 0, superseded_by = ?
@@ -529,4 +544,26 @@ export async function markFactSuperseded(
   `).run(newFactId, oldFactId);
 
   logger.debug('Marked fact as superseded', { oldFactId, newFactId });
+
+  if (oldRow?.arcana_fact_id && newRow?.arcana_fact_id) {
+    const arcana = getArcanaInstance();
+    if (arcana) {
+      try {
+        await arcana.command.markFactSuperseded(oldRow.arcana_fact_id, newRow.arcana_fact_id);
+      } catch (err) {
+        if (err instanceof NotImplementedError) {
+          logger.debug('Arcana command.markFactSuperseded still a stub; skipping mirror', {
+            oldFactId,
+            newFactId,
+          });
+        } else {
+          logger.warn('Arcana markFactSuperseded mirror failed; local update proceeds', {
+            error: String(err),
+            oldFactId,
+            newFactId,
+          });
+        }
+      }
+    }
+  }
 }

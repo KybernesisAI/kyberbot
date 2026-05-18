@@ -1250,7 +1250,63 @@ export async function createContradiction(
       VALUES (?, ?, ?, ?, ?, ?)
     `)
     .run(entityId, factAId, factBId, factA, factB, description);
+
+  // Module #11: best-effort mirror to Arcana via command.storeContradiction.
+  // Arcana keys contradictions by Fact ids (no entity_id, no content snapshots);
+  // KyberBot's denormalised content + entity_id stay local. Mirror is skipped
+  // if either fact didn't mirror (no arcana_fact_id). Dynamic import to keep
+  // entity-graph.ts's static dep graph local-DB-only.
+  await mirrorContradictionToArcana(root, factAId, factBId, description);
+
   return result.lastInsertRowid as number;
+}
+
+async function mirrorContradictionToArcana(
+  root: string,
+  factAId: number,
+  factBId: number,
+  rationale: string,
+): Promise<void> {
+  const arcana = getArcanaInstance();
+  if (!arcana) return;
+
+  try {
+    const { getTimelineDb } = await import('./timeline.js');
+    const db = await getTimelineDb(root);
+    const aRow = db
+      .prepare('SELECT arcana_fact_id FROM facts WHERE id = ?')
+      .get(factAId) as { arcana_fact_id: string | null } | undefined;
+    const bRow = db
+      .prepare('SELECT arcana_fact_id FROM facts WHERE id = ?')
+      .get(factBId) as { arcana_fact_id: string | null } | undefined;
+
+    if (!aRow?.arcana_fact_id || !bRow?.arcana_fact_id) {
+      logger.debug('Skipping Arcana contradiction mirror — one or both facts not mirrored', {
+        factAId,
+        factBId,
+      });
+      return;
+    }
+
+    await arcana.command.storeContradiction({
+      factAId: aRow.arcana_fact_id,
+      factBId: bRow.arcana_fact_id,
+      rationale,
+    });
+  } catch (err) {
+    if (err instanceof NotImplementedError) {
+      logger.debug('Arcana command.storeContradiction still a stub; skipping mirror', {
+        factAId,
+        factBId,
+      });
+      return;
+    }
+    logger.warn('Arcana storeContradiction mirror failed; local insert proceeds', {
+      error: String(err),
+      factAId,
+      factBId,
+    });
+  }
 }
 
 export async function getOpenContradictions(
