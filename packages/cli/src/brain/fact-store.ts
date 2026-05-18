@@ -3,16 +3,22 @@
  *
  * Module #4 of the Arcana adoption (see docs/arcana-adoption.md).
  *
- * KyberBot's "facts" are sentence-shaped (free-text content + entities
- * array), not relational triples. They mirror to Arcana via
- * `ingest.storeMemory` — Arcana's Memory model fits sentence shape —
- * NOT `command.recordFact`, which is for true (entity, attribute, value)
- * triples. See ADR 003 in the Arcana repo for the rationale.
+ * Per Arcana's ADR 004 (which supersedes ADR 003): the corrected `FactSchema`
+ * makes `fact` (sentence form) required and `attribute`/`value` (triple
+ * decomposition) optional. KyberBot's sentence-shaped facts ARE Facts under
+ * that schema — they just lack the optional decomposition. So this module
+ * mirrors via `command.recordFact` (not `ingest.storeMemory`).
  *
  * Local SQLite `facts` table remains the interface-layer index (richer
  * schema: source_path upsert, FTS, category/ARP filtering, is_latest /
  * superseded_by lineage). Each store mirrors to Arcana; the returned
- * memory id is stored in `facts.arcana_memory_id`.
+ * fact id is stored in `facts.arcana_fact_id`.
+ *
+ * Note: Arcana's `command.correctFact` (the supersede-on-rewrite primitive)
+ * is still a v0.1 stub. Until it lands, the "duplicate source_path" path
+ * keeps the prior `arcana_fact_id` link in libsql and skips re-recording in
+ * Arcana — the Arcana fact stays at its original content. When `correctFact`
+ * is implemented we'll branch like timeline does for `updateMemory`.
  */
 
 import { getTimelineDb } from './timeline.js';
@@ -21,7 +27,7 @@ import { createLogger } from '../logger.js';
 import { indexDocument, isChromaAvailable } from './embeddings.js';
 import { getArcanaInstance } from './arcana-singleton.js';
 import { NotImplementedError } from '@kybernesisai/arcana-core';
-import type { Memory } from '@kybernesisai/arcana-contracts';
+import type { FactSourceType, Scopes } from '@kybernesisai/arcana-contracts';
 
 const logger = createLogger('fact-store');
 
@@ -182,12 +188,23 @@ export async function ensureFactsTable(root: string): Promise<void> {
     db.exec(`ALTER TABLE facts ADD COLUMN source_did TEXT`);
   }
 
-  // Arcana adoption — FK to the Memory mirrored into Arcana via
-  // ingest.storeMemory. Nullable: pre-existing rows have no Arcana mirror,
-  // and the mirror is skipped while the Arcana singleton is uninitialised.
-  if (!colNames.has('arcana_memory_id')) {
-    db.exec(`ALTER TABLE facts ADD COLUMN arcana_memory_id TEXT`);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_arcana_memory ON facts(arcana_memory_id)`);
+  // Arcana adoption — FK to the Fact mirrored into Arcana via
+  // command.recordFact (per ADR 004). Nullable: pre-existing rows have no
+  // Arcana mirror, and the mirror is skipped while the Arcana singleton is
+  // uninitialised or when entities[] is empty (Arcana's Fact requires a
+  // subject entity).
+  //
+  // History: this column was originally `arcana_memory_id` (when fact-store
+  // mirrored via ingest.storeMemory under ADR 003). ADR 004 superseded that
+  // direction; the column is renamed in place. Older DBs run the migration
+  // below; fresh DBs only see arcana_fact_id.
+  if (colNames.has('arcana_memory_id') && !colNames.has('arcana_fact_id')) {
+    db.exec(`ALTER TABLE facts RENAME COLUMN arcana_memory_id TO arcana_fact_id`);
+    db.exec(`DROP INDEX IF EXISTS idx_facts_arcana_memory`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_arcana_fact ON facts(arcana_fact_id)`);
+  } else if (!colNames.has('arcana_fact_id')) {
+    db.exec(`ALTER TABLE facts ADD COLUMN arcana_fact_id TEXT`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_arcana_fact ON facts(arcana_fact_id)`);
   }
 
   // Create standalone FTS5 table for fact search (no content= mapping to avoid column issues)
@@ -218,50 +235,71 @@ export async function ensureFactsTable(root: string): Promise<void> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Map KyberBot's source_type vocabulary onto Arcana's narrower MemorySource
- * enum. Arcana's enum doesn't have a slot for 'ai-extraction' /
- * 'user-correction' / 'user-direct' / 'heartbeat' — the source_type detail
- * is preserved as a tag (`source-type:<kbSourceType>`) so it isn't lost.
+ * Map KyberBot's source_type vocabulary onto Arcana's narrower FactSourceType
+ * enum (`'terminal' | 'chat' | 'ai-extraction' | 'upload' | 'connector'`).
+ *
+ * KyberBot's source_type values (defined in callsites, not a strict enum):
+ *   - 'chat'             — channel input. Maps to 'chat'.
+ *   - 'user-direct'      — user typed at the terminal. Maps to 'terminal'.
+ *   - 'user-correction'  — user corrected a prior fact at the terminal. Maps to 'terminal'.
+ *   - 'ai-extraction'    — Haiku/Sonnet auto-extracted. Maps to 'ai-extraction'.
+ *   - 'heartbeat'        — extracted during a heartbeat run. Maps to 'ai-extraction'.
+ *   - default / unknown  → 'ai-extraction' (safe default; most production facts).
  */
-function mapFactSourceTypeToArcanaSource(kbSourceType?: string): Memory['source'] {
-  if (kbSourceType === 'chat') return 'chat';
-  return 'cli';
+function mapFactSourceTypeToArcanaSource(kbSourceType?: string): FactSourceType {
+  switch (kbSourceType) {
+    case 'chat': return 'chat';
+    case 'user-direct':
+    case 'user-correction':
+      return 'terminal';
+    case 'ai-extraction':
+    case 'heartbeat':
+      return 'ai-extraction';
+    default:
+      return 'ai-extraction';
+  }
 }
 
 /**
- * Best-effort mirror of a KyberBot fact into Arcana's Memory store.
- * Returns the new memory id, or null if Arcana is unavailable / still
- * stubbed / mirror fails. Failures never block the local fact write.
+ * Best-effort mirror of a KyberBot fact into Arcana's Fact store.
+ * Returns the new fact id, or null if Arcana is unavailable / still stubbed
+ * / mirror fails / fact has no entities (Arcana's Fact requires a subject).
+ * Failures never block the local fact write.
+ *
+ * The Fact subject is the first entity in KyberBot's `entities[]` list.
+ * Multi-entity sentence-facts get only their primary subject in Arcana;
+ * the full entity list still lives in the local row.
  */
 async function mirrorFactToArcana(fact: FactInput): Promise<string | null> {
   const arcana = getArcanaInstance();
   if (!arcana) return null;
 
-  const tags: string[] = [
-    `fact:category:${fact.category}`,
-    `source-type:${fact.source_type ?? 'chat'}`,
-    ...(fact.entities ?? []).map(e => `entity:${e}`),
-    ...(fact.tags ?? []),
-  ];
+  const subject = fact.entities?.[0];
+  if (!subject) {
+    logger.debug('Skipping Arcana fact mirror — no subject entity', {
+      source_path: fact.source_path,
+    });
+    return null;
+  }
 
-  const scopes: NonNullable<Memory['scopes']> = {};
+  const scopes: Scopes = {};
   if (fact.project_id) scopes.project_id = fact.project_id;
   if (fact.classification) scopes.classification = fact.classification;
   if (fact.connection_id) scopes.connection_id = fact.connection_id;
   if (fact.source_did) scopes.source_did = fact.source_did;
 
   try {
-    return await arcana.ingest.storeMemory({
-      content: fact.content,
-      title: fact.content.slice(0, 80),
-      summary: fact.content,
-      tags,
-      source: mapFactSourceTypeToArcanaSource(fact.source_type),
-      scopes: Object.keys(scopes).length > 0 ? scopes : undefined,
+    return await arcana.command.recordFact({
+      fact: fact.content,
+      entity: subject,
+      confidence: fact.confidence,
+      sourceType: mapFactSourceTypeToArcanaSource(fact.source_type),
+      ...(fact.expires_at ? { expiresAt: fact.expires_at } : {}),
+      ...(Object.keys(scopes).length > 0 ? { scopes } : {}),
     });
   } catch (err) {
     if (err instanceof NotImplementedError) {
-      logger.debug('Arcana ingest.storeMemory still a stub; skipping fact mirror', {
+      logger.debug('Arcana command.recordFact still a stub; skipping fact mirror', {
         source_path: fact.source_path,
       });
       return null;
@@ -285,12 +323,21 @@ async function mirrorFactToArcana(fact: FactInput): Promise<string | null> {
 export async function storeFact(root: string, fact: FactInput): Promise<number> {
   const db = await getTimelineDb(root);
 
-  const arcanaMemoryId = await mirrorFactToArcana(fact);
+  // Look up the existing Arcana fact id for this source_path so a re-write
+  // can carry it forward (until command.correctFact lands, this means the
+  // Arcana fact stays at its original content while the local row updates —
+  // documented in the module header).
+  const existingRow = db
+    .prepare('SELECT arcana_fact_id FROM facts WHERE source_path = ?')
+    .get(fact.source_path) as { arcana_fact_id: string | null } | undefined;
+  const existingArcanaFactId = existingRow?.arcana_fact_id ?? null;
+
+  const arcanaFactId = existingArcanaFactId ?? await mirrorFactToArcana(fact);
 
   const result = db.prepare(`
     INSERT OR REPLACE INTO facts
       (content, source_path, source_conversation_id, entities_json, timestamp, confidence, category, expires_at, source_type,
-       project_id, tags_json, classification, connection_id, source_did, arcana_memory_id)
+       project_id, tags_json, classification, connection_id, source_did, arcana_fact_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fact.content,
@@ -307,7 +354,7 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
     fact.classification ?? null,
     fact.connection_id ?? null,
     fact.source_did ?? null,
-    arcanaMemoryId,
+    arcanaFactId,
   );
 
   const factId = result.lastInsertRowid as number;

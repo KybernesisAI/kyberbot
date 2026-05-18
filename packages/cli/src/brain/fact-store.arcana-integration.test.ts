@@ -61,8 +61,8 @@ beforeEach(async () => {
   db.exec(`DROP TABLE IF EXISTS facts_fts`);
 });
 
-describe('fact-store ↔ Arcana dual-write integration', () => {
-  it('mirrors a new fact into Arcana and stores the memory id locally', async () => {
+describe('fact-store ↔ Arcana dual-write integration (ADR 004 — command.recordFact)', () => {
+  it('mirrors a new fact into Arcana and stores the fact id locally', async () => {
     const id = await storeFact(root, {
       content: 'Alice prefers oat milk in her coffee',
       source_path: '/int/alice-oat',
@@ -77,64 +77,69 @@ describe('fact-store ↔ Arcana dual-write integration', () => {
 
     const db = await getTimelineDb(root);
     const row = db
-      .prepare('SELECT arcana_memory_id FROM facts WHERE id = ?')
-      .get(id) as { arcana_memory_id: string | null };
+      .prepare('SELECT arcana_fact_id FROM facts WHERE id = ?')
+      .get(id) as { arcana_fact_id: string | null };
 
-    expect(row.arcana_memory_id).not.toBeNull();
-    expect(typeof row.arcana_memory_id).toBe('string');
+    expect(row.arcana_fact_id).not.toBeNull();
+    expect(typeof row.arcana_fact_id).toBe('string');
 
-    const memory = await structured.getMemory(row.arcana_memory_id!);
-    expect(memory).not.toBeNull();
-    expect(memory!.content).toBe('Alice prefers oat milk in her coffee');
-    expect(memory!.source).toBe('chat');
+    const facts = await structured.getFactsForEntity('Alice');
+    expect(facts).toHaveLength(1);
+    expect(facts[0].id).toBe(row.arcana_fact_id);
+    expect(facts[0].fact).toBe('Alice prefers oat milk in her coffee');
+    expect(facts[0].entity).toBe('Alice');
+    expect(facts[0].sourceType).toBe('chat');
+    expect(facts[0].confidence).toBe(0.85);
   });
 
-  it('maps non-chat source_type values to "cli" and preserves the original via tag', async () => {
+  it('uses the first entity in entities[] as the Arcana Fact subject', async () => {
     const id = await storeFact(root, {
-      content: 'Bob mentioned the deadline in standup',
-      source_path: '/int/bob-deadline',
+      content: 'Bob works at Acme',
+      source_path: '/int/bob-acme',
       source_conversation_id: 'int-2',
-      entities: ['Bob'],
+      entities: ['Bob', 'Acme'],
       timestamp: '2026-05-18T10:05:00Z',
-      confidence: 0.7,
-      category: 'event',
-      source_type: 'ai-extraction',
+      confidence: 0.9,
+      category: 'biographical',
+      source_type: 'user-direct',
     });
+    expect(id).toBeGreaterThan(0);
 
-    const db = await getTimelineDb(root);
-    const row = db.prepare('SELECT arcana_memory_id FROM facts WHERE id = ?').get(id) as { arcana_memory_id: string };
-    const memory = await structured.getMemory(row.arcana_memory_id);
+    const bobFacts = await structured.getFactsForEntity('Bob');
+    expect(bobFacts).toHaveLength(1);
+    expect(bobFacts[0].fact).toBe('Bob works at Acme');
+    expect(bobFacts[0].sourceType).toBe('terminal');
 
-    expect(memory!.source).toBe('cli');
-    expect(memory!.tags).toContain('source-type:ai-extraction');
+    // Acme is NOT a separate Arcana Fact — only the first entity becomes the subject.
+    const acmeFacts = await structured.getFactsForEntity('Acme');
+    expect(acmeFacts).toHaveLength(0);
   });
 
-  it('folds category and entities into Arcana tags', async () => {
-    const id = await storeFact(root, {
-      content: 'Carol joined Acme in March',
-      source_path: '/int/carol-acme',
-      source_conversation_id: 'int-3',
-      entities: ['Carol', 'Acme'],
-      timestamp: '2026-05-18T10:10:00Z',
-      confidence: 0.8,
-      category: 'biographical',
-      source_type: 'chat',
-      tags: ['custom-tag'],
-    });
+  it('maps source_type values onto Arcana FactSourceType', async () => {
+    const cases = [
+      { kbSource: 'chat', arcanaSource: 'chat' as const, entity: 'SourceChat' },
+      { kbSource: 'user-direct', arcanaSource: 'terminal' as const, entity: 'SourceUserDirect' },
+      { kbSource: 'user-correction', arcanaSource: 'terminal' as const, entity: 'SourceUserCorrection' },
+      { kbSource: 'ai-extraction', arcanaSource: 'ai-extraction' as const, entity: 'SourceAiExtraction' },
+      { kbSource: 'heartbeat', arcanaSource: 'ai-extraction' as const, entity: 'SourceHeartbeat' },
+    ];
 
-    const db = await getTimelineDb(root);
-    const row = db.prepare('SELECT arcana_memory_id FROM facts WHERE id = ?').get(id) as { arcana_memory_id: string };
-    const memory = await structured.getMemory(row.arcana_memory_id);
+    for (const { kbSource, arcanaSource, entity } of cases) {
+      await storeFact(root, {
+        content: `${entity} test fact`,
+        source_path: `/int/source-map-${kbSource}`,
+        source_conversation_id: `int-src-${kbSource}`,
+        entities: [entity],
+        timestamp: '2026-05-18T10:10:00Z',
+        confidence: 0.7,
+        category: 'general',
+        source_type: kbSource,
+      });
 
-    expect(memory!.tags).toEqual(
-      expect.arrayContaining([
-        'fact:category:biographical',
-        'source-type:chat',
-        'entity:Carol',
-        'entity:Acme',
-        'custom-tag',
-      ]),
-    );
+      const facts = await structured.getFactsForEntity(entity);
+      expect(facts).toHaveLength(1);
+      expect(facts[0].sourceType).toBe(arcanaSource);
+    }
   });
 
   it('passes ARP scope fields through to Arcana scopes (snake_case)', async () => {
@@ -152,12 +157,11 @@ describe('fact-store ↔ Arcana dual-write integration', () => {
       connection_id: 'conn-abc',
       source_did: 'did:example:xyz',
     });
+    expect(id).toBeGreaterThan(0);
 
-    const db = await getTimelineDb(root);
-    const row = db.prepare('SELECT arcana_memory_id FROM facts WHERE id = ?').get(id) as { arcana_memory_id: string };
-    const memory = await structured.getMemory(row.arcana_memory_id);
-
-    expect(memory!.scopes).toEqual({
+    const facts = await structured.getFactsForEntity('Atlas');
+    expect(facts).toHaveLength(1);
+    expect(facts[0].scopes).toEqual({
       project_id: 'proj-atlas',
       classification: 'internal',
       connection_id: 'conn-abc',
@@ -165,13 +169,94 @@ describe('fact-store ↔ Arcana dual-write integration', () => {
     });
   });
 
+  it('passes expires_at through to Arcana Fact', async () => {
+    const id = await storeFact(root, {
+      content: 'Carol is in Tokyo this week',
+      source_path: '/int/carol-tokyo',
+      source_conversation_id: 'int-temp',
+      entities: ['Carol'],
+      timestamp: '2026-05-18T10:20:00Z',
+      confidence: 0.7,
+      category: 'temporal',
+      expires_at: '2026-05-25T00:00:00Z',
+    });
+    expect(id).toBeGreaterThan(0);
+
+    const facts = await structured.getFactsForEntity('Carol');
+    expect(facts[0].expiresAt).toBe('2026-05-25T00:00:00Z');
+  });
+
+  it('skips the Arcana mirror when entities[] is empty', async () => {
+    const beforeCount = (await structured.listMemories()).length; // pre-state probe (memories untouched)
+    const id = await storeFact(root, {
+      content: 'an entity-less fact',
+      source_path: '/int/no-entity',
+      source_conversation_id: 'int-noent',
+      entities: [],
+      timestamp: '2026-05-18T10:25:00Z',
+      confidence: 0.6,
+      category: 'general',
+      source_type: 'chat',
+    });
+    expect(id).toBeGreaterThan(0);
+
+    const db = await getTimelineDb(root);
+    const row = db.prepare('SELECT arcana_fact_id FROM facts WHERE id = ?').get(id) as { arcana_fact_id: string | null };
+    expect(row.arcana_fact_id).toBeNull();
+
+    // Memories not touched (fact-store doesn't mirror to memories anymore)
+    const afterCount = (await structured.listMemories()).length;
+    expect(afterCount).toBe(beforeCount);
+  });
+
+  it('re-write to same source_path keeps the existing arcana_fact_id (until correctFact lands)', async () => {
+    const sourcePath = '/int/rewrite-stable-id';
+
+    const firstId = await storeFact(root, {
+      content: 'Dave likes tea',
+      source_path: sourcePath,
+      source_conversation_id: 'int-rw-1',
+      entities: ['Dave'],
+      timestamp: '2026-05-18T10:30:00Z',
+      confidence: 0.7,
+      category: 'preference',
+      source_type: 'chat',
+    });
+    expect(firstId).toBeGreaterThan(0);
+
+    const db = await getTimelineDb(root);
+    const firstRow = db.prepare('SELECT arcana_fact_id FROM facts WHERE source_path = ?').get(sourcePath) as { arcana_fact_id: string };
+    const firstFactId = firstRow.arcana_fact_id;
+    expect(firstFactId).not.toBeNull();
+
+    await storeFact(root, {
+      content: 'Dave prefers coffee now',
+      source_path: sourcePath,
+      source_conversation_id: 'int-rw-2',
+      entities: ['Dave'],
+      timestamp: '2026-05-18T10:31:00Z',
+      confidence: 0.8,
+      category: 'preference',
+      source_type: 'chat',
+    });
+
+    const secondRow = db.prepare('SELECT arcana_fact_id FROM facts WHERE source_path = ?').get(sourcePath) as { arcana_fact_id: string };
+    expect(secondRow.arcana_fact_id).toBe(firstFactId);
+
+    // The Arcana fact still has the original content — correctFact isn't
+    // implemented yet, so re-writes don't propagate to Arcana.
+    const facts = await structured.getFactsForEntity('Dave');
+    expect(facts).toHaveLength(1);
+    expect(facts[0].fact).toBe('Dave likes tea');
+  });
+
   it('preserves local row contract — id is numeric and the fact lives in libsql even when Arcana mirror succeeds', async () => {
     const id = await storeFact(root, {
       content: 'local contract',
       source_path: '/int/local-contract',
-      source_conversation_id: 'int-5',
-      entities: ['Local'],
-      timestamp: '2026-05-18T10:20:00Z',
+      source_conversation_id: 'int-local',
+      entities: ['LocalSubject'],
+      timestamp: '2026-05-18T10:35:00Z',
       confidence: 0.7,
       category: 'general',
     });
