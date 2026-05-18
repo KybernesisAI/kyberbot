@@ -149,6 +149,51 @@ describe('timeline ↔ Arcana dual-write integration', () => {
     expect(memory!.content).toBe('Title-only event');
   });
 
+  it('on re-write to the same source_path, updates the existing Arcana memory in place (no orphan)', async () => {
+    const sourcePath = '/integration/upsert-no-orphan';
+
+    await addToTimeline(root, {
+      type: 'note',
+      timestamp: '2026-05-18T10:30:00Z',
+      title: 'Original title',
+      summary: 'Original summary',
+      source_path: sourcePath,
+      entities: ['Orig'],
+      topics: ['original'],
+    });
+
+    const db = await getTimelineDb(root);
+    const firstRow = db
+      .prepare('SELECT arcana_memory_id FROM timeline_events WHERE source_path = ?')
+      .get(sourcePath) as { arcana_memory_id: string };
+    const firstMemoryId = firstRow.arcana_memory_id;
+    expect(firstMemoryId).not.toBeNull();
+
+    await addToTimeline(root, {
+      type: 'note',
+      timestamp: '2026-05-18T10:31:00Z',
+      title: 'Updated title',
+      summary: 'Updated summary',
+      source_path: sourcePath,
+      entities: ['UpdatedEntity'],
+      topics: ['updated'],
+    });
+
+    const secondRow = db
+      .prepare('SELECT arcana_memory_id FROM timeline_events WHERE source_path = ?')
+      .get(sourcePath) as { arcana_memory_id: string };
+    expect(secondRow.arcana_memory_id).toBe(firstMemoryId);
+
+    const memory = await structured.getMemory(firstMemoryId);
+    expect(memory).not.toBeNull();
+    expect(memory!.title).toBe('Updated title');
+    expect(memory!.summary).toBe('Updated summary');
+    expect(memory!.tags).toEqual(
+      expect.arrayContaining(['type:note', 'entity:UpdatedEntity', 'topic:updated']),
+    );
+    expect(memory!.tags).not.toEqual(expect.arrayContaining(['entity:Orig']));
+  });
+
   it('preserves local row contract (id is numeric, getEventByPath works)', async () => {
     const id = await addToTimeline(root, {
       type: 'transcript',

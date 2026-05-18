@@ -245,11 +245,20 @@ export async function initializeTimeline(root: string): Promise<void> {
 }
 
 /**
- * Best-effort write-through to Arcana's kernel memory. Returns the new
- * memory id, or null if Arcana is unavailable / still stubbed. Failures are
- * logged but never block the local timeline write.
+ * Best-effort write-through to Arcana's kernel memory. Returns the resolved
+ * memory id (existing or newly-minted), or null if Arcana is unavailable /
+ * still stubbed. Failures are logged but never block the local timeline
+ * write.
+ *
+ * Branches on `existingArcanaMemoryId`:
+ * - non-null → `command.updateMemory(id, fields)` — Arcana memory mutates
+ *   in place. Returns the same id. No orphan accumulation. (ADR 005)
+ * - null     → `ingest.storeMemory(...)` — new canonical memory minted.
  */
-async function mirrorToArcana(event: Omit<TimelineEvent, 'id'>): Promise<string | null> {
+async function mirrorToArcana(
+  event: Omit<TimelineEvent, 'id'>,
+  existingArcanaMemoryId: string | null,
+): Promise<string | null> {
   const arcana = getArcanaInstance();
   if (!arcana) return null;
 
@@ -267,27 +276,44 @@ async function mirrorToArcana(event: Omit<TimelineEvent, 'id'>): Promise<string 
   if (event.connection_id) scopes.connection_id = event.connection_id;
   if (event.source_did) scopes.source_did = event.source_did;
 
+  const content = event.summary || event.title;
+  const source: Memory['source'] = event.type === 'conversation' ? 'chat' : 'cli';
+  const scopesField = Object.keys(scopes).length > 0 ? scopes : undefined;
+
   try {
+    if (existingArcanaMemoryId) {
+      await arcana.command.updateMemory(existingArcanaMemoryId, {
+        content,
+        title: event.title,
+        summary: event.summary,
+        tags,
+        source,
+        scopes: scopesField,
+      });
+      return existingArcanaMemoryId;
+    }
+
     return await arcana.ingest.storeMemory({
-      content: event.summary || event.title,
+      content,
       title: event.title,
       summary: event.summary,
       tags,
-      source: event.type === 'conversation' ? 'chat' : 'cli',
-      scopes: Object.keys(scopes).length > 0 ? scopes : undefined,
+      source,
+      scopes: scopesField,
     });
   } catch (err) {
     if (err instanceof NotImplementedError) {
-      logger.debug('Arcana ingest.storeMemory still a stub; skipping mirror', {
+      logger.debug('Arcana memory mirror still a stub; skipping', {
         source_path: event.source_path,
+        update: existingArcanaMemoryId !== null,
       });
-      return null;
+      return existingArcanaMemoryId;
     }
     logger.warn('Arcana mirror failed; local timeline write proceeds', {
       error: String(err),
       source_path: event.source_path,
     });
-    return null;
+    return existingArcanaMemoryId;
   }
 }
 
@@ -297,7 +323,14 @@ export async function addToTimeline(
 ): Promise<number> {
   const database = await ensureDatabase(root);
 
-  const arcanaMemoryId = await mirrorToArcana(event);
+  // Look up the existing Arcana memory id for this source_path so the mirror
+  // can do an in-place updateMemory rather than minting a new memory and
+  // orphaning the previous one (DVR-UT-006 / ADR 005).
+  const existingRow = database
+    .prepare('SELECT arcana_memory_id FROM timeline_events WHERE source_path = ?')
+    .get(event.source_path) as { arcana_memory_id: string | null } | undefined;
+
+  const arcanaMemoryId = await mirrorToArcana(event, existingRow?.arcana_memory_id ?? null);
 
   const entitiesJson = JSON.stringify(event.entities || []);
   const topicsJson = JSON.stringify(event.topics || []);
