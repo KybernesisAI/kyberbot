@@ -21,6 +21,9 @@ import {
 import { extractRelationships } from './relationship-extractor.js';
 import { indexDocument, isChromaAvailable } from './embeddings.js';
 import { extractFactsRealtime } from './fact-extractor.js';
+import { getArcanaInstance } from './arcana-singleton.js';
+import { NotImplementedError } from '@kybernesisai/arcana-core';
+import type { Memory } from '@kybernesisai/arcana-contracts';
 
 const logger = createLogger('brain');
 
@@ -196,6 +199,82 @@ function channelToSourceType(channel: string): string {
   }
 }
 
+/**
+ * Map KyberBot's channel onto Arcana's narrower MemorySource enum.
+ * Per Arcana's 21:30 ANSWER for module #10:
+ *   - inbound chat channels (telegram/whatsapp/web/default) → 'chat'
+ *   - terminal (user-direct) → 'cli'
+ *   - heartbeat → 'connector' (auto-summarizer firing on a schedule —
+ *     same conceptual class as a Slack/email connector, not an explicit
+ *     `kyberbot brain index` invocation which would be 'cli').
+ */
+function channelToArcanaMemorySource(channel: string): Memory['source'] {
+  switch (channel) {
+    case 'terminal': return 'cli';
+    case 'heartbeat': return 'connector';
+    case 'telegram':
+    case 'whatsapp':
+    case 'web':
+    default: return 'chat';
+  }
+}
+
+/**
+ * Module #10: mint a single canonical Arcana Memory holding the full
+ * conversation text. The returned id is threaded into addConversationToTimeline
+ * so the timeline row links to this Memory rather than minting a duplicate
+ * (summary-only) one. Best-effort — Arcana failures never block local storage.
+ */
+async function mirrorConversationToArcana(input: {
+  fullText: string;
+  title: string;
+  summary: string;
+  channel: string;
+  entityNames: string[];
+  topicNames: string[];
+  arpMetadata: {
+    project_id?: string;
+    tags?: string[];
+    classification?: 'public' | 'internal' | 'confidential' | 'pii';
+    connection_id?: string;
+    source_did?: string;
+  };
+}): Promise<string | null> {
+  const arcana = getArcanaInstance();
+  if (!arcana) return null;
+
+  const tags: string[] = ['type:conversation'];
+  for (const e of input.entityNames) tags.push(`entity:${e}`);
+  for (const t of input.topicNames) tags.push(`topic:${t}`);
+  for (const t of input.arpMetadata.tags ?? []) tags.push(t);
+
+  const scopes: NonNullable<Memory['scopes']> = {};
+  if (input.arpMetadata.project_id) scopes.project_id = input.arpMetadata.project_id;
+  if (input.arpMetadata.classification) scopes.classification = input.arpMetadata.classification;
+  if (input.arpMetadata.connection_id) scopes.connection_id = input.arpMetadata.connection_id;
+  if (input.arpMetadata.source_did) scopes.source_did = input.arpMetadata.source_did;
+
+  try {
+    return await arcana.ingest.storeMemory({
+      content: input.fullText,
+      title: input.title,
+      summary: input.summary,
+      tags,
+      source: channelToArcanaMemorySource(input.channel),
+      scopes: Object.keys(scopes).length > 0 ? scopes : undefined,
+    });
+  } catch (err) {
+    if (err instanceof NotImplementedError) {
+      logger.debug('Arcana ingest.storeMemory still a stub; conversation mirror skipped');
+      return null;
+    }
+    logger.warn('Arcana conversation mirror failed; local storage proceeds', {
+      error: String(err),
+    });
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -324,12 +403,28 @@ async function storeConversationImpl(
       logger.debug('Deduplicated timeline entry', { title: fullTitle, channel: input.channel });
       // Skip creating new timeline entry but continue to entity graph + embeddings
     } else {
+      // Module #10: mint the canonical Arcana Memory with FULL conversation
+      // text BEFORE creating the timeline row, then thread its id through so
+      // addConversationToTimeline links to this Memory rather than minting a
+      // duplicate (summary-only) one. See Arcana ADR 005-adjacent ANSWER at
+      // 21:30 for the architecture decision.
+      const arcanaMemoryId = await mirrorConversationToArcana({
+        fullText,
+        title: fullTitle,
+        summary: timelineSummary,
+        channel: input.channel,
+        entityNames,
+        topicNames,
+        arpMetadata: arpMetadataBundle,
+      });
+
       await addConversationToTimeline(
         root, conversationId, sourcePath, timestamp, undefined,
         fullTitle,
         timelineSummary,
         entityNames, topicNames,
         arpMetadataBundle,
+        arcanaMemoryId ?? undefined,
       );
     }
 

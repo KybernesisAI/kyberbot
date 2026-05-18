@@ -44,6 +44,12 @@ export interface TimelineEvent {
   classification?: 'public' | 'internal' | 'confidential' | 'pii';
   connection_id?: string;
   source_did?: string;
+  // ── Arcana adoption: caller-supplied Memory id (module #10) ─────────
+  // When the caller already owns the canonical Arcana Memory (store-conversation
+  // mints one with full content before calling addConversationToTimeline),
+  // they pass the memoryId here. addToTimeline then SKIPS its own mirror and
+  // just records the link. Avoids one-conversation-two-Memories duplication.
+  arcana_memory_id?: string;
 }
 
 export interface TimelineQuery {
@@ -323,14 +329,22 @@ export async function addToTimeline(
 ): Promise<number> {
   const database = await ensureDatabase(root);
 
-  // Look up the existing Arcana memory id for this source_path so the mirror
-  // can do an in-place updateMemory rather than minting a new memory and
-  // orphaning the previous one (DVR-UT-006 / ADR 005).
-  const existingRow = database
-    .prepare('SELECT arcana_memory_id FROM timeline_events WHERE source_path = ?')
-    .get(event.source_path) as { arcana_memory_id: string | null } | undefined;
-
-  const arcanaMemoryId = await mirrorToArcana(event, existingRow?.arcana_memory_id ?? null);
+  // Resolution order for the Arcana memory id this row links to:
+  //   1. Caller-supplied (event.arcana_memory_id) — they already minted the
+  //      canonical Memory upstream (e.g., store-conversation owns the write
+  //      with full content; module #10). Skip the mirror entirely.
+  //   2. Existing row's arcana_memory_id for this source_path — re-write
+  //      flows through command.updateMemory in place (DVR-UT-006 / ADR 005).
+  //   3. Null — mint a new Memory via ingest.storeMemory.
+  let arcanaMemoryId: string | null;
+  if (event.arcana_memory_id) {
+    arcanaMemoryId = event.arcana_memory_id;
+  } else {
+    const existingRow = database
+      .prepare('SELECT arcana_memory_id FROM timeline_events WHERE source_path = ?')
+      .get(event.source_path) as { arcana_memory_id: string | null } | undefined;
+    arcanaMemoryId = await mirrorToArcana(event, existingRow?.arcana_memory_id ?? null);
+  }
 
   const entitiesJson = JSON.stringify(event.entities || []);
   const topicsJson = JSON.stringify(event.topics || []);
@@ -639,7 +653,12 @@ export async function addConversationToTimeline(
     classification?: 'public' | 'internal' | 'confidential' | 'pii';
     connection_id?: string;
     source_did?: string;
-  }
+  },
+  // Module #10: store-conversation may have already minted the canonical
+  // Arcana Memory with full content (segments + parent text) BEFORE calling
+  // here. When set, addToTimeline links to this id rather than minting a new
+  // (summary-only) Memory and producing duplicates.
+  arcanaMemoryId?: string,
 ): Promise<number> {
   return addToTimeline(root, {
     type: 'conversation',
@@ -651,6 +670,7 @@ export async function addConversationToTimeline(
     entities,
     topics,
     ...(arpMetadata ?? {}),
+    ...(arcanaMemoryId ? { arcana_memory_id: arcanaMemoryId } : {}),
   });
 }
 
