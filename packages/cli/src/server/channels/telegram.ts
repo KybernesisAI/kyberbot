@@ -119,6 +119,53 @@ export class TelegramChannel implements Channel {
         return;
       }
 
+      // ── /model — show or switch the interactive Claude model ───────────
+      if (text.startsWith('/model')) {
+        const arg = text.slice('/model'.length).trim().toLowerCase();
+        const identityPath = join(this.root, 'identity.yaml');
+        const VALID = ['opus', 'sonnet', 'haiku'] as const;
+        type Model = (typeof VALID)[number];
+
+        let identity: { claude?: { model?: string } } & Record<string, unknown>;
+        try {
+          identity = yaml.load(readFileSync(identityPath, 'utf-8')) as typeof identity;
+        } catch (e) {
+          await ctx.reply(`Could not read identity.yaml: ${String(e)}`);
+          return;
+        }
+        const current = identity?.claude?.model ?? 'sonnet';
+
+        if (!arg) {
+          await ctx.reply(
+            `🧠 Current model: *${current}*\n\nSwitch with /model opus, /model sonnet, or /model haiku.`,
+            { parse_mode: 'Markdown' },
+          );
+          return;
+        }
+        if (!(VALID as readonly string[]).includes(arg)) {
+          await ctx.reply(
+            `Unknown model: \`${arg}\`. Valid: ${VALID.join(', ')}`,
+            { parse_mode: 'Markdown' },
+          );
+          return;
+        }
+        if (arg === current) {
+          await ctx.reply(`Already on *${current}*.`, { parse_mode: 'Markdown' });
+          return;
+        }
+        identity.claude = { ...(identity.claude ?? {}), model: arg as Model };
+        try {
+          writeFileSync(identityPath, yaml.dump(identity));
+          await ctx.reply(
+            `🧠 Model switched: *${current}* → *${arg}*. Takes effect on next message.`,
+            { parse_mode: 'Markdown' },
+          );
+        } catch (e) {
+          await ctx.reply(`Failed to write identity.yaml: ${String(e)}`);
+        }
+        return;
+      }
+
       // ── Route message ──────────────────────────────────────────────────
       const message: ChannelMessage = {
         id: String(ctx.message.message_id),
