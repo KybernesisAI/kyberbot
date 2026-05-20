@@ -34,16 +34,57 @@ describe('bootArcana', () => {
     await expect(handle.stop()).resolves.toBeUndefined();
   });
 
-  it('boots Arcana with structured + vector(undefined when chroma absent) + embed + llm when key is set', async () => {
-    process.env.OPENAI_API_KEY = 'sk-test-bootarcana';
-    // ChromaDB is unlikely to be reachable in this test environment — boot
-    // should degrade by passing vector: undefined to initArcana, not throw.
+  it('treats a whitespace-only OPENAI_API_KEY as unset (EC-013)', async () => {
+    process.env.OPENAI_API_KEY = '   ';
     const handle = await bootArcana(root);
-    expect(handle.status()).toBe('running');
-    expect(getArcanaInstance()).not.toBeNull();
-
-    await handle.stop();
+    expect(handle.status()).toBe('disabled');
     expect(getArcanaInstance()).toBeNull();
+  });
+
+  it('boots Arcana and passes vector: undefined when ChromaDB is unreachable (UT-007 / EC-004)', async () => {
+    process.env.OPENAI_API_KEY = 'sk-test-bootarcana';
+    // Force the degradation path deterministically — don't rely on whether
+    // the dev machine happens to have Docker/ChromaDB running.
+    const chromaMod = await import('./providers/chromadb-vector-store.js');
+    const spy = vi.spyOn(chromaMod, 'createChromaDBVectorStore').mockReturnValue({
+      connect: vi.fn().mockRejectedValue(new Error('mocked: ChromaDB unreachable')),
+      disconnect: vi.fn(),
+      upsert: vi.fn(),
+      query: vi.fn(),
+      delete: vi.fn(),
+    });
+
+    try {
+      const handle = await bootArcana(root);
+      expect(handle.status()).toBe('running');
+      const arcana = getArcanaInstance();
+      expect(arcana).not.toBeNull();
+      expect(arcana?.providers.vector).toBeUndefined();
+      expect(arcana?.providers.structured).toBeDefined();
+      await handle.stop();
+      expect(getArcanaInstance()).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('serialises concurrent initArcana calls (EC-015 — fleet-mode race)', async () => {
+    const { initArcana } = await import('./arcana-singleton.js');
+    const { createFakeStructuredStore } = await import('@kybernesis/arcana-testkit');
+    const { createFakeVectorStore } = await import('@kybernesis/arcana-testkit');
+    const { createFakeEmbeddingProvider } = await import('@kybernesis/arcana-testkit');
+    const { createFakeLLMProvider } = await import('@kybernesis/arcana-testkit');
+
+    const structured = createFakeStructuredStore();
+    await structured.connect();
+
+    // Fire two init calls before the first resolves. With the in-flight guard
+    // they must both resolve to the same instance; without it, the second call
+    // would dispose the first's providers mid-flight and produce a fresh one.
+    const opts = { structured, vector: createFakeVectorStore(), embed: createFakeEmbeddingProvider(), llm: createFakeLLMProvider() };
+    const [a, b] = await Promise.all([initArcana(opts), initArcana(opts)]);
+    expect(a).toBe(b);
+    expect(getArcanaInstance()).toBe(a);
   });
 
   it('stop() disposes the singleton even on repeat invocation', async () => {

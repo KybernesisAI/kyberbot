@@ -15,15 +15,24 @@ const logger = createLogger('arcana-singleton');
 
 let instance: Arcana | null = null;
 let providers: ArcanaOptions | null = null;
+// Serialises concurrent init attempts so that two callers (e.g. shared-process
+// fleet mode booting two agents at once) cannot race the dispose-then-reinit
+// sequence and leave one set of providers half-torn-down. The first call
+// installs the in-flight promise; later concurrent callers await the same one.
+let initInFlight: Promise<Arcana> | null = null;
 
 export async function initArcana(opts: ArcanaOptions): Promise<Arcana> {
-  if (instance) {
-    logger.warn('initArcana called while an instance already exists — disposing previous instance first');
-    await disposeArcana();
-  }
-  providers = opts;
-  instance = createArcana(opts);
-  return instance;
+  if (initInFlight) return initInFlight;
+  initInFlight = (async () => {
+    if (instance) {
+      logger.warn('initArcana called while an instance already exists — disposing previous instance first');
+      await disposeArcana();
+    }
+    providers = opts;
+    instance = createArcana(opts);
+    return instance;
+  })().finally(() => { initInFlight = null; });
+  return initInFlight;
 }
 
 export function getArcanaInstance(): Arcana | null {
@@ -49,4 +58,5 @@ export async function disposeArcana(): Promise<void> {
 export function resetArcanaForTests(): void {
   instance = null;
   providers = null;
+  initInFlight = null;
 }
