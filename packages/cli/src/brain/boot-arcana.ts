@@ -10,10 +10,9 @@
 import { join } from 'node:path';
 import type { VectorStore } from '@kybernesis/arcana-contracts';
 import { createLibsqlStructuredStore } from '@kybernesis/arcana-provider-libsql';
-import { createChromaDBVectorStore } from './providers/chromadb-vector-store.js';
+import { createSqliteVecVectorStore } from '@kybernesis/arcana-provider-sqlite-vec';
 import { createOpenAIEmbeddingProvider } from './providers/openai-embedding-provider.js';
 import { createClaudeLLMProvider } from './providers/claude-llm-provider.js';
-import { getCollectionNameForRoot } from './embeddings.js';
 import { initArcana, disposeArcana } from './arcana-singleton.js';
 import { createLogger } from '../logger.js';
 import type { ServiceHandle } from '../types.js';
@@ -43,10 +42,16 @@ export async function bootArcana(root: string): Promise<ServiceHandle> {
   // libsql handle before propagating — otherwise a watchdog respawn would
   // race the leaked connection for the same .db file.
   try {
-    const collectionName = getCollectionNameForRoot(root);
+    const embed = createOpenAIEmbeddingProvider();
+    const llm = createClaudeLLMProvider();
+
+    // sqlite-vec stores its index in a sibling .db file. Kept separate from
+    // arcana.db so a vector reindex (model swap, dimension change, corruption)
+    // can wipe vectors without touching the structured store.
+    const vecDbPath = join(root, 'data', 'arcana-vec.db');
     let vector: VectorStore | undefined;
     try {
-      const v = createChromaDBVectorStore({ collectionName });
+      const v = createSqliteVecVectorStore(vecDbPath, { dimensions: embed.dimensions });
       await v.connect();
       vector = v;
     } catch (err) {
@@ -54,9 +59,6 @@ export async function bootArcana(root: string): Promise<ServiceHandle> {
         error: err instanceof Error ? err.message : String(err),
       });
     }
-
-    const embed = createOpenAIEmbeddingProvider();
-    const llm = createClaudeLLMProvider();
 
     await initArcana({ structured, vector, embed, llm });
 

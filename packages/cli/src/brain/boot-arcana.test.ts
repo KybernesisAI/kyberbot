@@ -7,6 +7,16 @@ vi.mock('../logger.js', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
+// Wrap the real sqlite-vec factory in a vi.fn so individual tests can override
+// it for the failure path (UT-007 / EC-004). Default behaviour is the real impl.
+vi.mock('@kybernesis/arcana-provider-sqlite-vec', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@kybernesis/arcana-provider-sqlite-vec')>();
+  return {
+    ...actual,
+    createSqliteVecVectorStore: vi.fn(actual.createSqliteVecVectorStore),
+  };
+});
+
 import { bootArcana } from './boot-arcana.js';
 import { getArcanaInstance, resetArcanaForTests } from './arcana-singleton.js';
 
@@ -41,31 +51,27 @@ describe('bootArcana', () => {
     expect(getArcanaInstance()).toBeNull();
   });
 
-  it('boots Arcana and passes vector: undefined when ChromaDB is unreachable (UT-007 / EC-004)', async () => {
+  it('boots Arcana and passes vector: undefined when the vector store fails to connect (UT-007 / EC-004)', async () => {
     process.env.OPENAI_API_KEY = 'sk-test-bootarcana';
-    // Force the degradation path deterministically — don't rely on whether
-    // the dev machine happens to have Docker/ChromaDB running.
-    const chromaMod = await import('./providers/chromadb-vector-store.js');
-    const spy = vi.spyOn(chromaMod, 'createChromaDBVectorStore').mockReturnValue({
-      connect: vi.fn().mockRejectedValue(new Error('mocked: ChromaDB unreachable')),
+    // Force the degradation path deterministically — override the mocked
+    // factory for this single call.
+    const vecMod = await import('@kybernesis/arcana-provider-sqlite-vec');
+    vi.mocked(vecMod.createSqliteVecVectorStore).mockReturnValueOnce({
+      connect: vi.fn().mockRejectedValue(new Error('mocked: sqlite-vec unreachable')),
       disconnect: vi.fn(),
       upsert: vi.fn(),
       query: vi.fn(),
       delete: vi.fn(),
     });
 
-    try {
-      const handle = await bootArcana(root);
-      expect(handle.status()).toBe('running');
-      const arcana = getArcanaInstance();
-      expect(arcana).not.toBeNull();
-      expect(arcana?.providers.vector).toBeUndefined();
-      expect(arcana?.providers.structured).toBeDefined();
-      await handle.stop();
-      expect(getArcanaInstance()).toBeNull();
-    } finally {
-      spy.mockRestore();
-    }
+    const handle = await bootArcana(root);
+    expect(handle.status()).toBe('running');
+    const arcana = getArcanaInstance();
+    expect(arcana).not.toBeNull();
+    expect(arcana?.providers.vector).toBeUndefined();
+    expect(arcana?.providers.structured).toBeDefined();
+    await handle.stop();
+    expect(getArcanaInstance()).toBeNull();
   });
 
   it('serialises concurrent initArcana calls (EC-015 — fleet-mode race)', async () => {
