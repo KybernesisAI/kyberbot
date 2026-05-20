@@ -157,7 +157,20 @@ export function createRunCommand(): Command {
         });
 
         // ─────────────────────────────────────────────────────────────
-        // Service 2: Server (Express + brain API + channels)
+        // Service 2: Arcana (structured store + vector + embed + LLM)
+        // ─────────────────────────────────────────────────────────────
+
+        registerService({
+          name: 'Arcana',
+          enabled: true,
+          start: async () => {
+            const { bootArcana } = await import('../brain/boot-arcana.js');
+            return bootArcana(root);
+          },
+        });
+
+        // ─────────────────────────────────────────────────────────────
+        // Service 3: Server (Express + brain API + channels)
         // ─────────────────────────────────────────────────────────────
 
         registerService({

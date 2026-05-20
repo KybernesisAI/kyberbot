@@ -1,28 +1,20 @@
 /**
- * KyberBot — Entity Graph Index (Arcana dual-write wrapper)
+ * KyberBot — Entity Graph Index
  *
- * Module #2 of the Arcana adoption (see docs/arcana-adoption.md).
+ * Links entities across conversations to answer questions like
+ * "What do I know about John?" by tracking:
+ * - Entities (people, companies, projects, places, topics)
+ * - Entity mentions in conversations
+ * - Entity co-occurrence relationships
  *
- * Local libsql `entities` + `entity_relations` + `entity_mentions` tables
- * remain the interface-layer index (richer schema: aliases, mentions,
- * strength, sleep-pipeline state). Each entity create/delete and each
- * first-time relation mirrors to Arcana via the kernel command zone
- * (`upsertEntity` / `deleteEntity` / `linkNodes`).
- *
- * Reads stay local. Sleep-pipeline support methods (entity profiles,
- * contradictions, insights, reasoning queue) remain local-only — they
- * migrate when their respective consumer modules (#6, #11, #12) land.
+ * Uses SQLite for persistence.
  */
 
 import Database from 'libsql';
-import { randomUUID } from 'crypto';
 import { openWithRecovery } from './db-recovery.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import { createLogger } from '../logger.js';
-import { getArcanaInstance } from './arcana-singleton.js';
-import { NotImplementedError } from '@kybernesis/arcana-core';
-import type { Entity as ArcanaEntity, NodeRef } from '@kybernesis/arcana-contracts';
 
 const logger = createLogger('entity-graph');
 
@@ -41,8 +33,6 @@ export interface Entity {
   first_seen: string;
   last_seen: string;
   mention_count: number;
-  /** Stable UUID mirroring this row into Arcana's kernel. Populated on creation; null for rows that pre-date the Arcana mirror. */
-  arcana_entity_id?: string;
 }
 
 export interface EntityMention {
@@ -230,19 +220,6 @@ function runEntityMigrations(database: Database.Database): void {
   }
   if (!relColNames.has('last_verified')) {
     database.exec(`ALTER TABLE entity_relations ADD COLUMN last_verified TEXT`);
-  }
-
-  // Arcana adoption — FK to the canonical row mirrored into Arcana via
-  // command.upsertEntity / command.linkNodes. Nullable: pre-existing rows
-  // have no Arcana mirror, and dual-write may skip Arcana when the
-  // singleton is uninitialised (test/local-only modes).
-  if (!entityColNames.has('arcana_entity_id')) {
-    database.exec(`ALTER TABLE entities ADD COLUMN arcana_entity_id TEXT`);
-    database.exec(`CREATE INDEX IF NOT EXISTS idx_entities_arcana_id ON entities(arcana_entity_id)`);
-  }
-  if (!relColNames.has('arcana_edge_id')) {
-    database.exec(`ALTER TABLE entity_relations ADD COLUMN arcana_edge_id TEXT`);
-    database.exec(`CREATE INDEX IF NOT EXISTS idx_relations_arcana_edge ON entity_relations(arcana_edge_id)`);
   }
 
   database.exec(`
@@ -469,9 +446,6 @@ export async function deleteEntity(
   });
 
   del();
-
-  await mirrorEntityDeleteToArcana(entity.arcana_entity_id ?? null);
-
   logger.info(`Deleted entity "${entity.name}" (${entityId})`, { reason });
 }
 
@@ -492,107 +466,6 @@ function normalizeEntityName(name: string): string {
 /** Escape LIKE metacharacters (%, _) for safe use in parameterized LIKE queries. */
 function escapeLike(value: string): string {
   return value.replace(/[%_\\]/g, ch => `\\${ch}`);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ARCANA MIRROR HELPERS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Best-effort mirror of a KyberBot entity into Arcana's kernel via
- * `command.upsertEntity`. NotImplementedError + arbitrary failures are
- * caught + logged; the local row is the source of truth either way.
- */
-async function mirrorEntityToArcana(e: {
-  arcana_entity_id: string;
-  name: string;
-  type: EntityType;
-  mention_count: number;
-}): Promise<void> {
-  const arcana = getArcanaInstance();
-  if (!arcana) return;
-
-  const payload: ArcanaEntity = {
-    id: e.arcana_entity_id,
-    name: e.name,
-    type: e.type,
-    mentionCount: e.mention_count,
-  };
-
-  try {
-    await arcana.command.upsertEntity(payload);
-  } catch (err) {
-    if (err instanceof NotImplementedError) {
-      logger.debug('Arcana command.upsertEntity still a stub; skipping mirror', { name: e.name });
-      return;
-    }
-    logger.warn('Arcana upsertEntity mirror failed; local entity write proceeds', {
-      error: String(err),
-      name: e.name,
-    });
-  }
-}
-
-/**
- * Best-effort mirror of an entity-deletion to Arcana.
- */
-async function mirrorEntityDeleteToArcana(arcanaEntityId: string | null): Promise<void> {
-  if (!arcanaEntityId) return;
-  const arcana = getArcanaInstance();
-  if (!arcana) return;
-
-  try {
-    await arcana.command.deleteEntity(arcanaEntityId);
-  } catch (err) {
-    if (err instanceof NotImplementedError) {
-      logger.debug('Arcana command.deleteEntity still a stub; skipping mirror', { id: arcanaEntityId });
-      return;
-    }
-    logger.warn('Arcana deleteEntity mirror failed; local delete proceeds', {
-      error: String(err),
-      id: arcanaEntityId,
-    });
-  }
-}
-
-/**
- * Best-effort mirror of an entity↔entity edge via Arcana's `command.linkNodes`.
- * Returns the new edge id (UUID) for storage in `entity_relations.arcana_edge_id`,
- * or null on failure / no instance / NotImplementedError.
- *
- * Mirrored only on first link creation. Strength accumulation on duplicate
- * KyberBot links stays local — Arcana's confidence is set once at creation.
- */
-async function mirrorLinkToArcana(
-  fromArcanaId: string | null,
-  toArcanaId: string | null,
-  relation: string,
-  opts: { confidence?: number; rationale?: string; method?: string } = {},
-): Promise<string | null> {
-  if (!fromArcanaId || !toArcanaId) return null;
-  const arcana = getArcanaInstance();
-  if (!arcana) return null;
-
-  const from: NodeRef = { type: 'entity', id: fromArcanaId };
-  const to: NodeRef = { type: 'entity', id: toArcanaId };
-
-  try {
-    return await arcana.command.linkNodes(from, to, relation, {
-      confidence: opts.confidence ?? 1.0,
-      rationale: opts.rationale,
-      method: opts.method ?? 'consumer-mirror',
-    });
-  } catch (err) {
-    if (err instanceof NotImplementedError) {
-      logger.debug('Arcana command.linkNodes still a stub; skipping mirror', { relation });
-      return null;
-    }
-    logger.warn('Arcana linkNodes mirror failed; local edge write proceeds', {
-      error: String(err),
-      relation,
-    });
-    return null;
-  }
 }
 
 export async function findOrCreateEntity(
@@ -625,46 +498,22 @@ export async function findOrCreateEntity(
       )
       .run(timestamp, existing.id);
 
-    const updatedMentionCount = existing.mention_count + 1;
-
-    // Sync mention_count to Arcana on every find. Cheap (no embedding /
-    // chunking happens in upsertEntity), keeps the kernel's view current.
-    if (existing.arcana_entity_id) {
-      await mirrorEntityToArcana({
-        arcana_entity_id: existing.arcana_entity_id,
-        name: existing.name,
-        type: existing.type,
-        mention_count: updatedMentionCount,
-      });
-    }
-
     return {
       ...existing,
       aliases: JSON.parse(existing.aliases as unknown as string),
       last_seen: timestamp,
-      mention_count: updatedMentionCount,
+      mention_count: existing.mention_count + 1,
     };
   }
 
-  const arcanaEntityId = randomUUID();
   const result = database
     .prepare(
-      `INSERT INTO entities (name, normalized_name, aliases, type, first_seen, last_seen, mention_count, arcana_entity_id)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+      `INSERT INTO entities (name, normalized_name, aliases, type, first_seen, last_seen, mention_count)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`
     )
-    .run(name, normalizedName, '[]', type, timestamp, timestamp, arcanaEntityId);
+    .run(name, normalizedName, '[]', type, timestamp, timestamp);
 
-  await mirrorEntityToArcana({
-    arcana_entity_id: arcanaEntityId,
-    name,
-    type,
-    mention_count: 1,
-  });
-
-  logger.debug(`Created entity: ${name} (${type})`, {
-    id: result.lastInsertRowid,
-    arcana_entity_id: arcanaEntityId,
-  });
+  logger.debug(`Created entity: ${name} (${type})`, { id: result.lastInsertRowid });
 
   return {
     id: result.lastInsertRowid as number,
@@ -675,7 +524,6 @@ export async function findOrCreateEntity(
     first_seen: timestamp,
     last_seen: timestamp,
     mention_count: 1,
-    arcana_entity_id: arcanaEntityId,
   };
 }
 
@@ -741,10 +589,6 @@ export async function linkEntities(
 
   const [id1, id2] = sourceId < targetId ? [sourceId, targetId] : [targetId, sourceId];
 
-  const existing = database
-    .prepare('SELECT arcana_edge_id FROM entity_relations WHERE source_id = ? AND target_id = ?')
-    .get(id1, id2) as { arcana_edge_id: string | null } | undefined;
-
   database
     .prepare(
       `INSERT INTO entity_relations (source_id, target_id, relationship, strength)
@@ -752,24 +596,6 @@ export async function linkEntities(
        ON CONFLICT(source_id, target_id) DO UPDATE SET strength = strength + 1`
     )
     .run(id1, id2, relationship);
-
-  if (!existing) {
-    const fromArcanaId = lookupArcanaEntityId(database, id1);
-    const toArcanaId = lookupArcanaEntityId(database, id2);
-    const edgeId = await mirrorLinkToArcana(fromArcanaId, toArcanaId, relationship);
-    if (edgeId) {
-      database
-        .prepare('UPDATE entity_relations SET arcana_edge_id = ? WHERE source_id = ? AND target_id = ?')
-        .run(edgeId, id1, id2);
-    }
-  }
-}
-
-function lookupArcanaEntityId(database: Database.Database, localId: number): string | null {
-  const row = database
-    .prepare('SELECT arcana_entity_id FROM entities WHERE id = ?')
-    .get(localId) as { arcana_entity_id: string | null } | undefined;
-  return row?.arcana_entity_id ?? null;
 }
 
 export async function linkEntitiesWithType(
@@ -798,10 +624,6 @@ export async function linkEntitiesWithType(
   const method = options.method ?? 'ai-extraction';
   const now = new Date().toISOString();
 
-  const existing = database
-    .prepare('SELECT arcana_edge_id FROM entity_relations WHERE source_id = ? AND target_id = ?')
-    .get(id1, id2) as { arcana_edge_id: string | null } | undefined;
-
   database
     .prepare(
       `INSERT INTO entity_relations (source_id, target_id, relationship, strength, confidence, method, rationale, last_verified)
@@ -817,21 +639,6 @@ export async function linkEntitiesWithType(
          last_verified = excluded.last_verified`
     )
     .run(id1, id2, options.relationship, confidence, method, options.rationale || null, now);
-
-  if (!existing) {
-    const fromArcanaId = lookupArcanaEntityId(database, id1);
-    const toArcanaId = lookupArcanaEntityId(database, id2);
-    const edgeId = await mirrorLinkToArcana(fromArcanaId, toArcanaId, options.relationship, {
-      confidence,
-      rationale: options.rationale,
-      method,
-    });
-    if (edgeId) {
-      database
-        .prepare('UPDATE entity_relations SET arcana_edge_id = ? WHERE source_id = ? AND target_id = ?')
-        .run(edgeId, id1, id2);
-    }
-  }
 
   logger.debug(`Linked entities with type: ${options.relationship}`, {
     sourceId: id1,
@@ -1250,63 +1057,7 @@ export async function createContradiction(
       VALUES (?, ?, ?, ?, ?, ?)
     `)
     .run(entityId, factAId, factBId, factA, factB, description);
-
-  // Module #11: best-effort mirror to Arcana via command.storeContradiction.
-  // Arcana keys contradictions by Fact ids (no entity_id, no content snapshots);
-  // KyberBot's denormalised content + entity_id stay local. Mirror is skipped
-  // if either fact didn't mirror (no arcana_fact_id). Dynamic import to keep
-  // entity-graph.ts's static dep graph local-DB-only.
-  await mirrorContradictionToArcana(root, factAId, factBId, description);
-
   return result.lastInsertRowid as number;
-}
-
-async function mirrorContradictionToArcana(
-  root: string,
-  factAId: number,
-  factBId: number,
-  rationale: string,
-): Promise<void> {
-  const arcana = getArcanaInstance();
-  if (!arcana) return;
-
-  try {
-    const { getTimelineDb } = await import('./timeline.js');
-    const db = await getTimelineDb(root);
-    const aRow = db
-      .prepare('SELECT arcana_fact_id FROM facts WHERE id = ?')
-      .get(factAId) as { arcana_fact_id: string | null } | undefined;
-    const bRow = db
-      .prepare('SELECT arcana_fact_id FROM facts WHERE id = ?')
-      .get(factBId) as { arcana_fact_id: string | null } | undefined;
-
-    if (!aRow?.arcana_fact_id || !bRow?.arcana_fact_id) {
-      logger.debug('Skipping Arcana contradiction mirror — one or both facts not mirrored', {
-        factAId,
-        factBId,
-      });
-      return;
-    }
-
-    await arcana.command.storeContradiction({
-      factAId: aRow.arcana_fact_id,
-      factBId: bRow.arcana_fact_id,
-      rationale,
-    });
-  } catch (err) {
-    if (err instanceof NotImplementedError) {
-      logger.debug('Arcana command.storeContradiction still a stub; skipping mirror', {
-        factAId,
-        factBId,
-      });
-      return;
-    }
-    logger.warn('Arcana storeContradiction mirror failed; local insert proceeds', {
-      error: String(err),
-      factAId,
-      factBId,
-    });
-  }
 }
 
 export async function getOpenContradictions(

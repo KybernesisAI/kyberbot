@@ -1,18 +1,10 @@
 /**
- * KyberBot — Timeline Index (Arcana dual-write wrapper)
+ * KyberBot — Timeline Index
  *
- * v0.1 of the Arcana adoption (see ~/dev/kybernesis/arcana/docs/adoption/kyberbot.md):
- * - Local libsql `timeline_events` table remains the interface-layer index
- *   (typed events, source_path upsert, FTS, ARP filtering, date-range queries).
- * - Each write also calls `arcana.ingest.storeMemory(...)` when an Arcana
- *   instance is wired; the returned memory id is stored in `arcana_memory_id`.
- * - If Arcana is unavailable (singleton not initialised) or returns a
- *   NotImplementedError, the local write still succeeds — Arcana adoption is
- *   incremental and KyberBot must keep working.
+ * Enables temporal queries like "What did I discuss last Tuesday?"
+ * by indexing all events with timestamps and full-text search.
  *
- * Reads stay local. Arcana doesn't expose timeline-shaped queries at the
- * kernel level (typed events / source_path / FTS / date range are consumer
- * concerns).
+ * Uses SQLite with FTS5 for full-text search.
  */
 
 import Database from 'libsql';
@@ -20,11 +12,12 @@ import { openWithRecovery } from './db-recovery.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import { createLogger } from '../logger.js';
-import { getArcanaInstance } from './arcana-singleton.js';
-import { NotImplementedError } from '@kybernesis/arcana-core';
-import type { Memory } from '@kybernesis/arcana-contracts';
 
 const logger = createLogger('timeline');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export type EventType = 'conversation' | 'idea' | 'file' | 'transcript' | 'note' | 'intake';
 
@@ -38,18 +31,16 @@ export interface TimelineEvent {
   source_path: string;
   entities: string[];
   topics: string[];
-  // ── ARP unification (Phase A) ───────────────────────────────────────
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // See @kybernesis/arp-spec :: AgentResourceMetadata. All optional;
+  // pre-existing rows have nulls. New writes during ARP conversations
+  // SHOULD populate connection_id + source_did + classification at
+  // minimum so typed handlers can filter scope-correctly.
   project_id?: string;
   tags?: string[];
   classification?: 'public' | 'internal' | 'confidential' | 'pii';
   connection_id?: string;
   source_did?: string;
-  // ── Arcana adoption: caller-supplied Memory id (module #10) ─────────
-  // When the caller already owns the canonical Arcana Memory (store-conversation
-  // mints one with full content before calling addConversationToTimeline),
-  // they pass the memoryId here. addToTimeline then SKIPS its own mirror and
-  // just records the link. Avoids one-conversation-two-Memories duplication.
-  arcana_memory_id?: string;
 }
 
 export interface TimelineQuery {
@@ -72,8 +63,16 @@ export interface TimelineStats {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATABASE MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const databases = new Map<string, Database.Database>();
 
+/**
+ * Reset the timeline DB connection(s). If root is given, closes only that
+ * root's connection. If no root, closes all (backward compat for eval/tests).
+ */
 export function resetTimelineDb(root?: string): void {
   if (root) {
     const existing = databases.get(root);
@@ -152,6 +151,13 @@ async function ensureDatabase(root: string): Promise<Database.Database> {
   return newDb;
 }
 
+/**
+ * Early builds declared timeline_fts with `content=timeline_events` but FTS
+ * column names (`entities`, `topics`) didn't match base-table columns
+ * (`entities_json`, `topics_json`), leaving FTS unqueryable. Detect the
+ * broken shape, drop it, and repopulate a contentless FTS from the rows we
+ * already have.
+ */
 function rebuildBrokenTimelineFts(database: Database.Database): void {
   let needsRebuild = false;
   try {
@@ -210,7 +216,13 @@ function runMigrations(database: Database.Database): void {
     database.exec(`ALTER TABLE timeline_events ADD COLUMN last_accessed TEXT`);
   }
 
-  // ARP fields
+  // ── ARP unification (Phase A) — agent-resource metadata ─────────────
+  // Schema vocabulary defined in @kybernesis/arp-spec :: AgentResourceMetadata.
+  // tags_json already exists above and is reused as the canonical
+  // ARP `tags` column. project_id / classification / connection_id /
+  // source_did added here so timeline events stamped during an ARP
+  // conversation are filterable by the same dimensions facts already
+  // are.
   if (!columnNames.has('project_id')) {
     database.exec(`ALTER TABLE timeline_events ADD COLUMN project_id TEXT`);
     database.exec(`CREATE INDEX IF NOT EXISTS idx_timeline_project ON timeline_events(project_id)`);
@@ -225,14 +237,6 @@ function runMigrations(database: Database.Database): void {
   }
   if (!columnNames.has('source_did')) {
     database.exec(`ALTER TABLE timeline_events ADD COLUMN source_did TEXT`);
-  }
-
-  // Arcana adoption — FK to the Memory mirrored into Arcana via ingest.storeMemory.
-  // Nullable: pre-existing rows have no Arcana mirror, and dual-write may skip
-  // Arcana while the kernel method is still a v0.1 stub.
-  if (!columnNames.has('arcana_memory_id')) {
-    database.exec(`ALTER TABLE timeline_events ADD COLUMN arcana_memory_id TEXT`);
-    database.exec(`CREATE INDEX IF NOT EXISTS idx_timeline_arcana_memory ON timeline_events(arcana_memory_id)`);
   }
 
   database.exec(`
@@ -250,78 +254,9 @@ export async function initializeTimeline(root: string): Promise<void> {
   await ensureDatabase(root);
 }
 
-/**
- * Best-effort write-through to Arcana's kernel memory. Returns the resolved
- * memory id (existing or newly-minted), or null if Arcana is unavailable /
- * still stubbed. Failures are logged but never block the local timeline
- * write.
- *
- * Branches on `existingArcanaMemoryId`:
- * - non-null → `command.updateMemory(id, fields)` — Arcana memory mutates
- *   in place. Returns the same id. No orphan accumulation. (ADR 005)
- * - null     → `ingest.storeMemory(...)` — new canonical memory minted.
- */
-async function mirrorToArcana(
-  event: Omit<TimelineEvent, 'id'>,
-  existingArcanaMemoryId: string | null,
-): Promise<string | null> {
-  const arcana = getArcanaInstance();
-  if (!arcana) return null;
-
-  // Map KyberBot's typed-event vocabulary into Arcana's flat tag namespace.
-  // Per the adoption playbook: `type:foo`, `entity:Foo`, `topic:Foo` are the
-  // convention until/unless Memory grows first-class typed-event support.
-  const tags: string[] = [`type:${event.type}`];
-  for (const e of event.entities ?? []) tags.push(`entity:${e}`);
-  for (const t of event.topics ?? []) tags.push(`topic:${t}`);
-  for (const t of event.tags ?? []) tags.push(t);
-
-  const scopes: NonNullable<Memory['scopes']> = {};
-  if (event.project_id) scopes.project_id = event.project_id;
-  if (event.classification) scopes.classification = event.classification;
-  if (event.connection_id) scopes.connection_id = event.connection_id;
-  if (event.source_did) scopes.source_did = event.source_did;
-
-  const content = event.summary || event.title;
-  const source: Memory['source'] = event.type === 'conversation' ? 'chat' : 'cli';
-  const scopesField = Object.keys(scopes).length > 0 ? scopes : undefined;
-
-  try {
-    if (existingArcanaMemoryId) {
-      await arcana.command.updateMemory(existingArcanaMemoryId, {
-        content,
-        title: event.title,
-        summary: event.summary,
-        tags,
-        source,
-        scopes: scopesField,
-      });
-      return existingArcanaMemoryId;
-    }
-
-    return await arcana.ingest.storeMemory({
-      content,
-      title: event.title,
-      summary: event.summary,
-      tags,
-      source,
-      scopes: scopesField,
-    });
-  } catch (err) {
-    if (err instanceof NotImplementedError) {
-      logger.debug('Arcana memory mirror still a stub; skipping', {
-        source_path: event.source_path,
-        update: existingArcanaMemoryId !== null,
-      });
-      return existingArcanaMemoryId;
-    }
-    logger.warn('Arcana mirror failed; local timeline write proceeds', {
-      error: String(err),
-      source_path: event.source_path,
-    });
-    return existingArcanaMemoryId;
-  }
-}
+// ═══════════════════════════════════════════════════════════════════════════════
+// EVENT OPERATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export async function addToTimeline(
   root: string,
@@ -329,25 +264,9 @@ export async function addToTimeline(
 ): Promise<number> {
   const database = await ensureDatabase(root);
 
-  // Resolution order for the Arcana memory id this row links to:
-  //   1. Caller-supplied (event.arcana_memory_id) — they already minted the
-  //      canonical Memory upstream (e.g., store-conversation owns the write
-  //      with full content; module #10). Skip the mirror entirely.
-  //   2. Existing row's arcana_memory_id for this source_path — re-write
-  //      flows through command.updateMemory in place (DVR-UT-006 / ADR 005).
-  //   3. Null — mint a new Memory via ingest.storeMemory.
-  let arcanaMemoryId: string | null;
-  if (event.arcana_memory_id) {
-    arcanaMemoryId = event.arcana_memory_id;
-  } else {
-    const existingRow = database
-      .prepare('SELECT arcana_memory_id FROM timeline_events WHERE source_path = ?')
-      .get(event.source_path) as { arcana_memory_id: string | null } | undefined;
-    arcanaMemoryId = await mirrorToArcana(event, existingRow?.arcana_memory_id ?? null);
-  }
-
   const entitiesJson = JSON.stringify(event.entities || []);
   const topicsJson = JSON.stringify(event.topics || []);
+  // ── ARP unification — pass-through agent-resource metadata ──────────
   const tagsJson = event.tags ? JSON.stringify(event.tags) : null;
 
   try {
@@ -356,9 +275,8 @@ export async function addToTimeline(
         `INSERT INTO timeline_events
            (type, timestamp, end_timestamp, title, summary, source_path,
             entities_json, topics_json,
-            project_id, tags_json, classification, connection_id, source_did,
-            arcana_memory_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            project_id, tags_json, classification, connection_id, source_did)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(source_path) DO UPDATE SET
            type = excluded.type,
            timestamp = excluded.timestamp,
@@ -371,8 +289,7 @@ export async function addToTimeline(
            tags_json = COALESCE(excluded.tags_json, timeline_events.tags_json),
            classification = COALESCE(excluded.classification, timeline_events.classification),
            connection_id = COALESCE(excluded.connection_id, timeline_events.connection_id),
-           source_did = COALESCE(excluded.source_did, timeline_events.source_did),
-           arcana_memory_id = COALESCE(excluded.arcana_memory_id, timeline_events.arcana_memory_id)`
+           source_did = COALESCE(excluded.source_did, timeline_events.source_did)`
       )
       .run(
         event.type,
@@ -387,14 +304,12 @@ export async function addToTimeline(
         tagsJson,
         event.classification ?? null,
         event.connection_id ?? null,
-        event.source_did ?? null,
-        arcanaMemoryId,
+        event.source_did ?? null
       );
 
     logger.debug(`Added to timeline: ${event.title}`, {
       id: result.lastInsertRowid,
       type: event.type,
-      arcana_memory_id: arcanaMemoryId,
     });
 
     return result.lastInsertRowid as number;
@@ -419,6 +334,10 @@ export async function removeFromTimeline(
 
   return result.changes > 0;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// QUERY OPERATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export async function queryTimeline(
   root: string,
@@ -501,6 +420,10 @@ export async function queryTimeline(
   }));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONVENIENCE QUERIES
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export async function getRecentActivity(root: string, limit = 20): Promise<TimelineEvent[]> {
   return queryTimeline(root, { limit });
 }
@@ -559,6 +482,14 @@ export async function getEventByPath(root: string, sourcePath: string): Promise<
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DEDUPLICATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Find a recent timeline event with a matching title within the given time window.
+ * Used to deduplicate repetitive entries (e.g., heartbeat task executions).
+ */
 export async function findRecentDuplicate(
   root: string,
   title: string,
@@ -567,6 +498,7 @@ export async function findRecentDuplicate(
   const database = await ensureDatabase(root);
   const cutoff = new Date(Date.now() - withinHours * 60 * 60 * 1000).toISOString();
 
+  // Normalize: strip channel prefix and truncation suffix for comparison
   const normalized = title.replace(/^\[.*?\]\s*/, '').replace(/\.{3}$/, '').trim().toLowerCase();
 
   const rows = database.prepare(`
@@ -586,6 +518,10 @@ export async function findRecentDuplicate(
   return null;
 }
 
+/**
+ * Increment the access count and update last_accessed on a timeline event.
+ * Used when deduplicating repeated entries.
+ */
 export async function incrementTimelineEventCount(
   root: string,
   eventId: number
@@ -598,6 +534,10 @@ export async function incrementTimelineEventCount(
     WHERE id = ?
   `).run(eventId);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export async function getTimelineStats(root: string): Promise<TimelineStats> {
   const database = await ensureDatabase(root);
@@ -637,6 +577,10 @@ export async function getTimelineStats(root: string): Promise<TimelineStats> {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export async function addConversationToTimeline(
   root: string,
   conversationId: string,
@@ -653,12 +597,7 @@ export async function addConversationToTimeline(
     classification?: 'public' | 'internal' | 'confidential' | 'pii';
     connection_id?: string;
     source_did?: string;
-  },
-  // Module #10: store-conversation may have already minted the canonical
-  // Arcana Memory with full content (segments + parent text) BEFORE calling
-  // here. When set, addToTimeline links to this id rather than minting a new
-  // (summary-only) Memory and producing duplicates.
-  arcanaMemoryId?: string,
+  }
 ): Promise<number> {
   return addToTimeline(root, {
     type: 'conversation',
@@ -670,7 +609,6 @@ export async function addConversationToTimeline(
     entities,
     topics,
     ...(arpMetadata ?? {}),
-    ...(arcanaMemoryId ? { arcana_memory_id: arcanaMemoryId } : {}),
   });
 }
 

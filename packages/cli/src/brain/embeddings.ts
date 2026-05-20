@@ -56,7 +56,7 @@ export interface SearchResult {
  * If root is given, uses getIdentityForRoot (multi-agent safe).
  * Falls back to getIdentity() or 'kyberbot_data'.
  */
-function getCollectionNameForRoot(root?: string): string {
+export function getCollectionNameForRoot(root?: string): string {
   try {
     const identity = root ? getIdentityForRoot(root) : getIdentity();
     if (identity.agent_name) {
