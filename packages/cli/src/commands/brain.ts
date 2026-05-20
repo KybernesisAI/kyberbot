@@ -304,5 +304,33 @@ export function createBrainCommand(): Command {
       }
     });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // kyberbot brain arcana-parity
+  // ─────────────────────────────────────────────────────────────────────────
+
+  cmd
+    .command('arcana-parity')
+    .description('Side-by-side comparison of legacy stores vs the Arcana mirror')
+    .option('--detail <n>', 'Show last N recent writes with arcana_memory_id presence', '0')
+    .option('--json', 'Machine-readable output', false)
+    .action(async (options: { detail: string; json: boolean }) => {
+      try {
+        const root = getRoot();
+        const { inspectParity, formatParityReport } = await import('../brain/arcana-parity.js');
+        const report = inspectParity(root, {
+          detail: parseInt(options.detail) || 0,
+        });
+        if (options.json) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          console.log(formatParityReport(report));
+        }
+      } catch (error) {
+        logger.error('Arcana parity check failed', { error: String(error) });
+        console.error(chalk.red(`Error: ${error}`));
+        process.exit(1);
+      }
+    });
+
   return cmd;
 }
