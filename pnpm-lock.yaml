@@ -7,7 +7,6 @@ settings:
 overrides:
   flatted: '>=3.4.2'
   music-metadata: '>=11.12.3'
-  '@kybernesis/arcana-contracts': file:../arcana/packages/arcana-contracts
 
 importers:
 
@@ -44,14 +43,14 @@ importers:
         specifier: ^7.10.1
         version: 7.10.1(@types/node@22.19.15)
       '@kybernesis/arcana-contracts':
-        specifier: file:../../../arcana/packages/arcana-contracts
-        version: file:../arcana/packages/arcana-contracts
+        specifier: ^0.1.1
+        version: 0.1.1
       '@kybernesis/arcana-core':
-        specifier: file:../../../arcana/packages/arcana-core
-        version: file:../arcana/packages/arcana-core
+        specifier: ^0.1.1
+        version: 0.1.1
       '@kybernesis/arcana-provider-libsql':
-        specifier: file:../../../arcana/packages/arcana-provider-libsql
-        version: file:../arcana/packages/arcana-provider-libsql
+        specifier: ^0.1.1
+        version: 0.1.1
       '@kybernesis/arp-spec':
         specifier: ^0.2.1
         version: 0.2.1
@@ -99,8 +98,8 @@ importers:
         version: 10.0.0
     devDependencies:
       '@kybernesis/arcana-testkit':
-        specifier: file:../../../arcana/packages/arcana-testkit
-        version: file:../arcana/packages/arcana-testkit
+        specifier: ^0.1.1
+        version: 0.1.1
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
@@ -757,17 +756,17 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@kybernesis/arcana-contracts@file:../arcana/packages/arcana-contracts':
-    resolution: {directory: ../arcana/packages/arcana-contracts, type: directory}
+  '@kybernesis/arcana-contracts@0.1.1':
+    resolution: {integrity: sha512-mQrTZqK01xAptQLeQWLaa+NAWEUo9XEca00DYuDQU1/sqHK5uAJqxHY53S3jmCxeO9JHuaGSuD+6oPEMewZFgw==}
 
-  '@kybernesis/arcana-core@file:../arcana/packages/arcana-core':
-    resolution: {directory: ../arcana/packages/arcana-core, type: directory}
+  '@kybernesis/arcana-core@0.1.1':
+    resolution: {integrity: sha512-zZni57HTCe+p1V36dpz8at9owxbs7NfIg3Fj+j1SCDLk/1/zJztY5kKNZR3eSOMFDI8vnQuFxyAi5hdSXEH5/w==}
 
-  '@kybernesis/arcana-provider-libsql@file:../arcana/packages/arcana-provider-libsql':
-    resolution: {directory: ../arcana/packages/arcana-provider-libsql, type: directory}
+  '@kybernesis/arcana-provider-libsql@0.1.1':
+    resolution: {integrity: sha512-GOlu3T5H5+MIKMVrTlduJOKSf/koVQiP75D37eXH7osGOTTLGgC3DvxLGh8wcmuHWm8HiCBiUwPFCs2CfFG4dQ==}
 
-  '@kybernesis/arcana-testkit@file:../arcana/packages/arcana-testkit':
-    resolution: {directory: ../arcana/packages/arcana-testkit, type: directory}
+  '@kybernesis/arcana-testkit@0.1.1':
+    resolution: {integrity: sha512-UqE98EEpyMBO+ltUT9nyp9WddV3whXsaXyEzlqvn2kyofc51+mPRdVR8Vig2NbEJpkNp5B8GvPTbNcSD+CcPTA==}
 
   '@kybernesis/arp-spec@0.2.1':
     resolution: {integrity: sha512-1+zjfITmxEubnOEMJwWi3PusDnKOb68HgWXDd+t10glMgc8M2V/dT/VDjse9jaACdtSLyc+FlV11Z9FP0iMc2w==}
@@ -3886,23 +3885,23 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@kybernesis/arcana-contracts@file:../arcana/packages/arcana-contracts':
+  '@kybernesis/arcana-contracts@0.1.1':
     dependencies:
       zod: 3.25.76
 
-  '@kybernesis/arcana-core@file:../arcana/packages/arcana-core':
+  '@kybernesis/arcana-core@0.1.1':
     dependencies:
-      '@kybernesis/arcana-contracts': file:../arcana/packages/arcana-contracts
+      '@kybernesis/arcana-contracts': 0.1.1
       zod: 3.25.76
 
-  '@kybernesis/arcana-provider-libsql@file:../arcana/packages/arcana-provider-libsql':
+  '@kybernesis/arcana-provider-libsql@0.1.1':
     dependencies:
-      '@kybernesis/arcana-contracts': file:../arcana/packages/arcana-contracts
+      '@kybernesis/arcana-contracts': 0.1.1
       libsql: 0.5.29
 
-  '@kybernesis/arcana-testkit@file:../arcana/packages/arcana-testkit':
+  '@kybernesis/arcana-testkit@0.1.1':
     dependencies:
-      '@kybernesis/arcana-contracts': file:../arcana/packages/arcana-contracts
+      '@kybernesis/arcana-contracts': 0.1.1
 
   '@kybernesis/arp-spec@0.2.1':
     dependencies:

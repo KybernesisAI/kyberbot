@@ -28,8 +28,7 @@
   "pnpm": {
     "overrides": {
       "flatted": ">=3.4.2",
-      "music-metadata": ">=11.12.3",
-      "@kybernesis/arcana-contracts": "file:../arcana/packages/arcana-contracts"
+      "music-metadata": ">=11.12.3"
     },
     "auditConfig": {
       "ignoreCves": [
