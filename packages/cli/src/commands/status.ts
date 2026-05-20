@@ -30,6 +30,28 @@ async function probeHttp(url: string, timeoutMs: number = 3000): Promise<boolean
   }
 }
 
+/**
+ * Fetch the live orchestrator's service registry via /health. Returns null if
+ * the server isn't reachable — caller falls back to filesystem heuristics.
+ * The live registry is authoritative: it knows which services were actually
+ * registered (e.g. Arcana, Watched Folders) and whether --no-X flags
+ * disabled them at boot, neither of which heuristics can tell.
+ */
+async function fetchLiveServices(port: number): Promise<ServiceStatus[] | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch(`http://localhost:${port}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!response.ok) return null;
+    const body = await response.json() as { services?: Array<{ name: string; status: ServiceStatus['status'] }> };
+    if (!Array.isArray(body.services)) return null;
+    return body.services.map(s => ({ name: s.name, status: s.status }));
+  } catch {
+    return null;
+  }
+}
+
 function probeDockerContainer(name: string): boolean {
   try {
     const result = execSync(`docker ps --filter "name=${name}" --format "{{.Names}}"`, {
@@ -63,39 +85,63 @@ export function createStatusCommand(): Command {
           ? new URL(process.env.CHROMA_URL).port
           : '8001';
 
-        const [serverUp, chromaUp] = await Promise.all([
+        const [serverUp, chromaUp, liveServices] = await Promise.all([
           probeHttp(`http://localhost:${port}/health`),
           probeHttp(`http://localhost:${chromaPort}/api/v2/heartbeat`),
+          fetchLiveServices(port),
         ]);
 
-        const chromaContainer = probeDockerContainer('kyberbot-chromadb');
-        const sleepDbExists = existsSync(join(root, 'data', 'sleep.db'));
-        const heartbeatExists = existsSync(join(root, 'HEARTBEAT.md'));
+        let statuses: ServiceStatus[];
 
-        const statuses: ServiceStatus[] = [
-          {
-            name: 'ChromaDB',
-            status: chromaUp ? 'running' : chromaContainer ? 'starting' : 'stopped',
-            extra: chromaUp ? `port ${chromaPort}` : undefined,
-          },
-          {
-            name: 'Server',
-            status: serverUp ? 'running' : 'stopped',
-            extra: serverUp ? `port ${port}` : undefined,
-          },
-          {
-            name: 'Heartbeat',
-            status: serverUp && heartbeatExists ? 'running' : 'stopped',
-          },
-          {
-            name: 'Sleep Agent',
-            status: serverUp && sleepDbExists ? 'running' : 'stopped',
-          },
-          {
-            name: 'Channels',
-            status: serverUp ? 'running' : 'stopped',
-          },
-        ];
+        if (liveServices) {
+          // Authoritative: orchestrator's live registry. Includes Arcana,
+          // Watched Folders, and honours --no-* boot flags.
+          const chromaPortStr = chromaUp ? `port ${chromaPort}` : undefined;
+          statuses = liveServices.map(s => ({
+            ...s,
+            extra: s.name === 'ChromaDB' ? chromaPortStr
+                 : s.name === 'Server' ? `port ${port}`
+                 : undefined,
+          }));
+        } else {
+          // Fallback: server not reachable, guess from filesystem evidence.
+          // Inherently approximate — sleep.db existing doesn't mean sleep is
+          // running right now, just that it has run at some point.
+          const chromaContainer = probeDockerContainer('kyberbot-chromadb');
+          const sleepDbExists = existsSync(join(root, 'data', 'sleep.db'));
+          const heartbeatExists = existsSync(join(root, 'HEARTBEAT.md'));
+          const arcanaDbExists = existsSync(join(root, 'data', 'arcana.db'));
+
+          statuses = [
+            {
+              name: 'ChromaDB',
+              status: chromaUp ? 'running' : chromaContainer ? 'starting' : 'stopped',
+              extra: chromaUp ? `port ${chromaPort}` : undefined,
+            },
+            {
+              name: 'Arcana',
+              status: arcanaDbExists ? 'stopped' : 'stopped',
+              extra: arcanaDbExists ? 'db exists, server offline' : undefined,
+            },
+            {
+              name: 'Server',
+              status: serverUp ? 'running' : 'stopped',
+              extra: serverUp ? `port ${port}` : undefined,
+            },
+            {
+              name: 'Heartbeat',
+              status: serverUp && heartbeatExists ? 'running' : 'stopped',
+            },
+            {
+              name: 'Sleep Agent',
+              status: serverUp && sleepDbExists ? 'running' : 'stopped',
+            },
+            {
+              name: 'Channels',
+              status: serverUp ? 'running' : 'stopped',
+            },
+          ];
+        }
 
         if (options.json) {
           console.log(JSON.stringify({
