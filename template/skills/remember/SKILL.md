@@ -1,7 +1,7 @@
 ---
 name: remember
 description: "Persist important information from this conversation to long-term memory. Use proactively whenever the user mentions a person, project, company, decision, meeting, deadline, preference, or any fact that future sessions should know about. Also use when the user says remember this, store this, note this, keep track of, or don't forget."
-allowed-tools: Bash(kyberbot remember *)
+allowed-tools: Bash(kyberbot:remember:*)
 ---
 
 # Remember

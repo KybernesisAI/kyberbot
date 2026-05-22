@@ -1,7 +1,7 @@
 ---
 name: heartbeat-task
 description: "Add, update, or remove recurring tasks in HEARTBEAT.md. Use when the user says remind me to, check every, run daily, do this weekly, every morning, schedule a recurring, set up a check for, or describes any task that should happen on a regular cadence."
-allowed-tools: Read, Edit, Write, Glob, Bash(kyberbot *)
+allowed-tools: Read Edit Write Glob Bash(kyberbot:*)
 ---
 
 # Heartbeat Task

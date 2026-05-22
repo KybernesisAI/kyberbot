@@ -1,7 +1,7 @@
 ---
 name: recall
 description: "Look up what the agent knows about a person, project, company, place, or topic from the entity graph and timeline. Use proactively whenever the user mentions someone by name, references a project or company, asks about past interactions, or says who is, what do we know about, tell me about, or recall."
-allowed-tools: Bash(kyberbot recall *), Bash(kyberbot timeline *), Bash(kyberbot search *)
+allowed-tools: Bash(kyberbot:recall:*) Bash(kyberbot:timeline:*) Bash(kyberbot:search:*)
 ---
 
 # Recall — Primary Memory Retrieval

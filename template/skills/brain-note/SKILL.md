@@ -1,7 +1,7 @@
 ---
 name: brain-note
 description: "Save long-form knowledge, research findings, architecture decisions, reference material, or structured notes to the brain/ directory for persistent retrieval. Use when the user shares detailed information that doesn't fit a single memory, discusses architecture or design decisions, provides reference material, shares meeting notes or research, or says save this to the brain, write this down, document this, or take notes on."
-allowed-tools: Read, Write, Edit, Glob, Bash(kyberbot brain *), Bash(kyberbot remember *)
+allowed-tools: Read Write Edit Glob Bash(kyberbot:brain:*) Bash(kyberbot:remember:*)
 ---
 
 # Brain Note

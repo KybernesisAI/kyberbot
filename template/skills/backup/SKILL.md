@@ -1,10 +1,12 @@
 ---
 name: backup
 description: "Back up all agent data to GitHub — SQLite databases, Claude Code memory, identity, skills, brain notes. Use when the user says backup, back up, save everything, push to github, or snapshot. Also used by heartbeat for automated backups."
-version: 1.0.0
-requires_env: []
-has_setup: false
-allowed-tools: Bash(kyberbot backup *)
+compatibility: "Requires git, a configured GitHub remote, and `kyberbot backup setup` to have been run first."
+allowed-tools: Bash(kyberbot:backup:*)
+metadata:
+  version: "1.0.0"
+  requires_env: []
+  has_setup: false
 ---
 
 # Backup
