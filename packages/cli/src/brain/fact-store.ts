@@ -263,20 +263,20 @@ function mapFactSourceTypeToArcanaSource(kbSourceType?: string): FactSourceType 
 /**
  * Best-effort mirror of a KyberBot fact into Arcana's Fact store.
  * Returns the new fact id, or null if Arcana is unavailable / still stubbed
- * / mirror fails / fact has no entities (Arcana's Fact requires a subject).
- * Failures never block the local fact write.
+ * / mirror fails / fact has no entities. Failures never block the local
+ * fact write.
  *
- * The Fact subject is the first entity in KyberBot's `entities[]` list.
- * Multi-entity sentence-facts get only their primary subject in Arcana;
- * the full entity list still lives in the local row.
+ * Per Arcana v1.0.0 (ADR 013): the full `entities` array is denormalised
+ * into the Fact row, `category` is required, and `sourcePath` +
+ * `sourceConversationId` backlinks light up Layer 0 fact-FTS at retrieval.
  */
 async function mirrorFactToArcana(fact: FactInput): Promise<string | null> {
   const arcana = getArcanaInstance();
   if (!arcana) return null;
 
-  const subject = fact.entities?.[0];
-  if (!subject) {
-    logger.debug('Skipping Arcana fact mirror — no subject entity', {
+  const entities = (fact.entities ?? []).filter(e => typeof e === 'string' && e.length > 0);
+  if (entities.length === 0) {
+    logger.debug('Skipping Arcana fact mirror — no entities', {
       source_path: fact.source_path,
     });
     return null;
@@ -291,9 +291,12 @@ async function mirrorFactToArcana(fact: FactInput): Promise<string | null> {
   try {
     return await arcana.command.recordFact({
       fact: fact.content,
-      entity: subject,
+      entities,
+      category: fact.category,
       confidence: fact.confidence,
       sourceType: mapFactSourceTypeToArcanaSource(fact.source_type),
+      ...(fact.source_path ? { sourcePath: fact.source_path } : {}),
+      ...(fact.source_conversation_id ? { sourceConversationId: fact.source_conversation_id } : {}),
       ...(fact.expires_at ? { expiresAt: fact.expires_at } : {}),
       ...(Object.keys(scopes).length > 0 ? { scopes } : {}),
     });

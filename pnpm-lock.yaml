@@ -43,17 +43,17 @@ importers:
         specifier: ^7.10.1
         version: 7.10.1(@types/node@22.19.15)
       '@kybernesis/arcana-contracts':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^1.0.0
+        version: 1.0.0
       '@kybernesis/arcana-core':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^1.0.0
+        version: 1.0.0
       '@kybernesis/arcana-provider-libsql':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^1.0.0
+        version: 1.0.0
       '@kybernesis/arcana-provider-sqlite-vec':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^1.0.0
+        version: 1.0.0
       '@kybernesis/arp-spec':
         specifier: ^0.2.1
         version: 0.2.1
@@ -101,8 +101,8 @@ importers:
         version: 10.0.0
     devDependencies:
       '@kybernesis/arcana-testkit':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^1.0.0
+        version: 1.0.0
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
@@ -759,20 +759,20 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@kybernesis/arcana-contracts@0.3.0':
-    resolution: {integrity: sha512-ETLKvKNv/7WfEkqHoMEwJD/QSqv5dzwqKsW8D5DTN1cTXd2EmOmuaSfqUkQAi36kxlrWjSIzX+nytVRbpamKRg==}
+  '@kybernesis/arcana-contracts@1.0.0':
+    resolution: {integrity: sha512-Vyw/3zHexcI1A53IZ0OjvAkG0lcEvAYxKEt2mfbfwy8QtBEbcaSQyKukjYlSp77d9hDoyq6YTorKTiEAq/XE/w==}
 
-  '@kybernesis/arcana-core@0.3.0':
-    resolution: {integrity: sha512-po4cZdLN4emWmUaFDRxcBvKpVfnrDNrFG5Hdh8fhQdiFDsWmmVwIxHLPZDLjiq7vqatwflc0dYAkDV1dT36B/g==}
+  '@kybernesis/arcana-core@1.0.0':
+    resolution: {integrity: sha512-mMeplkbExpDLtpT/LRfCuHAka8++3uZ6djrcRnSsvRXlC36R4N5WfywhD4Z/RD7HeU7juJ23dmC6zVSRu+fTEA==}
 
-  '@kybernesis/arcana-provider-libsql@0.3.0':
-    resolution: {integrity: sha512-LGrJ+3i5U/mPbxfxYZ9aeUzr/ydnjbJVt2pMlaDrIc+KQycFgSWAPh3C4PtisOUDJng8WZ4FU3qPTtxswSSqUw==}
+  '@kybernesis/arcana-provider-libsql@1.0.0':
+    resolution: {integrity: sha512-8VQrLYZkIbnU1s9AVE4aQO8sajkXgIBmZIlKJnDGu0mqG4rJWBzdweNl8Wv7dbefm+mM/I6r/L4RzCxUK38xcA==}
 
-  '@kybernesis/arcana-provider-sqlite-vec@0.3.0':
-    resolution: {integrity: sha512-P7tCOR/eAigtkiCtSuVkqwUs0k71SbRDRwMLt4OPX9vt403LS5rO4QH+Zy/wt3c2Ke6wOIx0Sn5Q+FnHVKVO1A==}
+  '@kybernesis/arcana-provider-sqlite-vec@1.0.0':
+    resolution: {integrity: sha512-4rbwSs3h70NKnddMC0x7Ne2ks9315Sapax7VLAHARFAvdn0PQk9MhaVEfYcrIG4wKy9kiF7X5JRaY5Ri/YLCoA==}
 
-  '@kybernesis/arcana-testkit@0.3.0':
-    resolution: {integrity: sha512-9iew8G5/wtM9PrZ7hU0Io4BDAp6VCWkAKNzFjcjNkfwG1UuYDiTB3Kc4tBBm98hulSlRvYz5r0Wxne0xzeUqpw==}
+  '@kybernesis/arcana-testkit@1.0.0':
+    resolution: {integrity: sha512-IZA1EV3M5cDe6CO9qUrWX8gAcCGeQ9ctybBHoWVFCI8M94lrFSx2X31gNNbutOxm7AzHaTLPwl8J5gtccctDAg==}
 
   '@kybernesis/arp-spec@0.2.1':
     resolution: {integrity: sha512-1+zjfITmxEubnOEMJwWi3PusDnKOb68HgWXDd+t10glMgc8M2V/dT/VDjse9jaACdtSLyc+FlV11Z9FP0iMc2w==}
@@ -4022,29 +4022,29 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@kybernesis/arcana-contracts@0.3.0':
+  '@kybernesis/arcana-contracts@1.0.0':
     dependencies:
       zod: 3.25.76
 
-  '@kybernesis/arcana-core@0.3.0':
+  '@kybernesis/arcana-core@1.0.0':
     dependencies:
-      '@kybernesis/arcana-contracts': 0.3.0
+      '@kybernesis/arcana-contracts': 1.0.0
       zod: 3.25.76
 
-  '@kybernesis/arcana-provider-libsql@0.3.0':
+  '@kybernesis/arcana-provider-libsql@1.0.0':
     dependencies:
-      '@kybernesis/arcana-contracts': 0.3.0
+      '@kybernesis/arcana-contracts': 1.0.0
       libsql: 0.5.29
 
-  '@kybernesis/arcana-provider-sqlite-vec@0.3.0':
+  '@kybernesis/arcana-provider-sqlite-vec@1.0.0':
     dependencies:
-      '@kybernesis/arcana-contracts': 0.3.0
+      '@kybernesis/arcana-contracts': 1.0.0
       better-sqlite3: 12.10.0
       sqlite-vec: 0.1.9
 
-  '@kybernesis/arcana-testkit@0.3.0':
+  '@kybernesis/arcana-testkit@1.0.0':
     dependencies:
-      '@kybernesis/arcana-contracts': 0.3.0
+      '@kybernesis/arcana-contracts': 1.0.0
 
   '@kybernesis/arp-spec@0.2.1':
     dependencies:

@@ -332,5 +332,38 @@ export function createBrainCommand(): Command {
       }
     });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // kyberbot brain arcana-fact-parity
+  // ─────────────────────────────────────────────────────────────────────────
+
+  cmd
+    .command('arcana-fact-parity')
+    .description('factRetrieval parity: KB fact-retrieval vs Arcana factRetrieval over shared fixtures')
+    .option('--top-n <n>', 'Top-N comparison depth', '10')
+    .option('--threshold <t>', 'Pass threshold (0..1)', '1.0')
+    .option('--json', 'Machine-readable output', false)
+    .action(async (options: { topN: string; threshold: string; json: boolean }) => {
+      try {
+        const { runFactRetrievalParity, formatFactRetrievalParityReport } =
+          await import('../brain/fact-retrieval-parity.js');
+        const run = await runFactRetrievalParity({
+          topN: parseInt(options.topN) || 10,
+          threshold: parseFloat(options.threshold) || 1.0,
+        });
+        if (options.json) {
+          console.log(JSON.stringify(run, null, 2));
+        } else {
+          console.log(formatFactRetrievalParityReport(run));
+        }
+        if (!run.report.passes) {
+          process.exitCode = 2;
+        }
+      } catch (error) {
+        logger.error('Arcana factRetrieval parity check failed', { error: String(error) });
+        console.error(chalk.red(`Error: ${error}`));
+        process.exit(1);
+      }
+    });
+
   return cmd;
 }
