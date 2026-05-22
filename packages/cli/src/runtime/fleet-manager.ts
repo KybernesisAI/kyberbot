@@ -20,6 +20,7 @@ import { getMetrics, errorMiddleware } from '../monitoring.js';
 import { startTunnel, getTunnelUrl } from '../services/tunnel.js';
 import { ServiceHandle } from '../types.js';
 import { mountWebUi } from '../server/agent-router.js';
+import { resolveBindHost } from '../server/bind-host.js';
 import { createOrchestrationRouter } from '../server/orchestration-api.js';
 import { createApiV1Router } from '../server/api/v1/router.js';
 
@@ -334,9 +335,10 @@ export class FleetManager {
 
     // Start server
     this.server = http.createServer(this.app);
+    const bind = resolveBindHost();
     await new Promise<void>((resolve) => {
-      this.server!.listen(port, () => {
-        logger.info(`Fleet server listening on port ${port}`);
+      this.server!.listen(port, bind.host, () => {
+        logger.info(`Fleet server listening on ${bind.host}:${port}`);
         logger.info(`Agents: ${[...this.agents.keys()].join(', ')}`);
 
         if (this.agents.size === 1) {
@@ -393,8 +395,8 @@ export class FleetManager {
         agentApp.use(errorMiddleware);
 
         const agentServer = http.createServer(agentApp);
-        agentServer.listen(agentPort, () => {
-          logger.info(`Agent ${name} also listening on port ${agentPort}`);
+        agentServer.listen(agentPort, bind.host, () => {
+          logger.info(`Agent ${name} also listening on ${bind.host}:${agentPort}`);
         });
         this.agentServers.push(agentServer);
       } catch (error) {

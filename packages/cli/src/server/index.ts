@@ -11,6 +11,7 @@ import express from 'express';
 import { createLogger } from '../logger.js';
 import { getServerPort, getIdentity, getRoot } from '../config.js';
 import { authMiddleware, getApiToken } from '../middleware/auth.js';
+import { resolveBindHost } from './bind-host.js';
 import { createAgentRouter, mountWebUi } from './agent-router.js';
 import { ServiceHandle } from '../types.js';
 import { TelegramChannel } from './channels/telegram.js';
@@ -96,13 +97,17 @@ export async function startServer(options: {
       }
     });
 
-    server.listen(port, () => {
-      logger.info(`Server listening on port ${port}`);
+    const bind = resolveBindHost();
+    server.listen(port, bind.host, () => {
+      logger.info(`Server listening on ${bind.host}:${port}`);
 
-      if (process.env.KYBERBOT_API_TOKEN) {
+      const hasToken = Boolean(process.env.KYBERBOT_API_TOKEN);
+      if (hasToken) {
         logger.info('API authentication enabled');
+      } else if (bind.exposed) {
+        logger.warn(`API authentication DISABLED and bound to ${bind.host} — brain endpoints are reachable on every interface this host exposes. Set KYBERBOT_API_TOKEN in .env, or unset KYBERBOT_BIND_HOST to revert to loopback-only.`);
       } else {
-        logger.warn('API authentication DISABLED — brain endpoints are publicly accessible on this network. Set KYBERBOT_API_TOKEN in .env to secure them.');
+        logger.info('API authentication disabled — loopback-only (127.0.0.1)');
       }
 
       logger.info(`Web UI: http://localhost:${port}/ui`);

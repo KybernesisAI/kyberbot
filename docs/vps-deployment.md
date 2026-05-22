@@ -143,16 +143,28 @@ The WhatsApp session is stored in `data/whatsapp-auth/` and persists across rest
 
 ---
 
-## Firewall
+## Firewall and bind host
 
-| Port | Purpose | Needs to Be Open? |
-|------|---------|-------------------|
-| 3456 | KyberBot REST API | Only if you want external access to brain endpoints |
+| Port | Purpose | Reachable externally by default? |
+|------|---------|----------------------------------|
+| 3456 | KyberBot REST API | **No** — bound to `127.0.0.1` |
 | 8000 | ChromaDB | No — only accessed locally |
 
-Telegram and WhatsApp both use outbound connections, so no inbound ports are required for messaging.
+Telegram and WhatsApp both use outbound connections, so no inbound ports are required for messaging on a default install.
 
-If you do expose port 3456, set `KYBERBOT_API_TOKEN` in `.env` to secure the brain endpoints.
+### Exposing the REST API on a VPS
+
+As of the bind-host change, the server defaults to **loopback only**. To make it reachable from outside the host (e.g. for the desktop control panel running on a different machine, or for a fleet of agents spanning hosts), you must opt in:
+
+```bash
+# in ~/my-agent/.env
+KYBERBOT_API_TOKEN=<32+ char random secret>   # required when exposing
+KYBERBOT_BIND_HOST=0.0.0.0                    # or a specific interface
+```
+
+**Always set `KYBERBOT_API_TOKEN` when you override `KYBERBOT_BIND_HOST` to anything other than loopback.** Without the token, brain / execute / management endpoints are exposed unauthenticated and several of them are RCE-class (arbitrary `claude` subprocess, arbitrary file read). The startup log warns when an exposed bind is combined with a missing token, but the safe assumption is "token first, then expose."
+
+A reverse proxy on the same host (nginx, Caddy) is the recommended pattern — terminate TLS there, talk to `127.0.0.1:3456`, leave `KYBERBOT_BIND_HOST` unset. Only set the bind host when you genuinely need the process listening on an external interface.
 
 ---
 
