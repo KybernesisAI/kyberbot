@@ -125,14 +125,18 @@ async function searchFactsDirect(
   const results: ScoredFact[] = [];
 
   // ── FTS5 keyword search ────────────────────────────────────────────────────
+  // Strip non-alphanumeric (esp. hyphens — FTS5 parses unary `-` as token
+  // negation, so `post-mortem` became `post NOT mortem` and nulled real
+  // matches). Each token is then double-quoted so FTS5 treats it as a literal
+  // phrase. Mirrors @kybernesis/arcana-provider-libsql's `buildFtsQuery`.
   const words = query
     .toLowerCase()
-    .replace(/[?.,!'"]/g, '')
     .split(/\s+/)
+    .map(w => w.replace(/[^\p{L}\p{N}]/gu, ''))
     .filter(w => w.length >= 3);
 
   if (words.length > 0) {
-    const ftsQuery = words.join(' OR ');
+    const ftsQuery = words.map(w => `"${w}"`).join(' OR ');
     try {
       const ftsRows = db.prepare(`
         SELECT f.id, f.content, f.category, f.confidence, f.timestamp,
