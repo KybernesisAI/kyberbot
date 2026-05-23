@@ -1,4 +1,11 @@
 version: 2
+# Dependabot config for KyberBot.
+# Tracked in KYB-125: Automated weekly dep-update checks across Arcana, KyberBot, KyberCo.
+# - Weekly cadence (Monday) so review is batched, not noisy.
+# - Minor + patch grouped into combined PRs per ecosystem.
+# - Security advisories from GitHub flow through immediately as separate PRs
+#   (security updates are independent of the weekly schedule by design).
+# - Every PR is labelled `deps` so the weekly digest workflow can aggregate them.
 updates:
   - package-ecosystem: npm
     directory: /
@@ -6,15 +13,18 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    labels:
+      - deps
     groups:
-      dev-dependencies:
+      npm-dev:
         dependency-type: development
         update-types:
           - minor
           - patch
-      production-dependencies:
+      npm-prod:
         dependency-type: production
         update-types:
+          - minor
           - patch
 
   - package-ecosystem: github-actions
@@ -23,3 +33,9 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    labels:
+      - deps
+    groups:
+      github-actions:
+        patterns:
+          - "*"

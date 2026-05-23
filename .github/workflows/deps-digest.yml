@@ -1,0 +1,60 @@
+name: Weekly deps digest
+
+# KYB-125: After Dependabot fires (Monday morning UTC), aggregate every open PR
+# labelled `deps` into a single digest issue so review is batched per repo.
+# Runs Mondays 16:00 UTC (a few hours after Dependabot's default ~05:00 window).
+# Manually triggerable via workflow_dispatch.
+
+on:
+  schedule:
+    - cron: "0 16 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and post digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          week=$(date -u +%G-W%V)
+          title="Weekly deps digest — $week"
+
+          mapfile -t prs < <(gh pr list --repo "$REPO" --state open --label deps \
+            --json number,title,url,createdAt,author \
+            --jq '.[] | "- [#\(.number)](\(.url)) \(.title) — opened \(.createdAt[0:10]) by @\(.author.login)"')
+
+          {
+            echo "Automated weekly digest of open dependency PRs labelled \`deps\`."
+            echo
+            echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            if [ "${#prs[@]}" -eq 0 ]; then
+              echo "No open \`deps\` PRs this week."
+            else
+              echo "## Open \`deps\` PRs (${#prs[@]})"
+              echo
+              printf '%s\n' "${prs[@]}"
+            fi
+            echo
+            echo "---"
+            echo "Source: \`.github/workflows/deps-digest.yml\` · Tracked in KYB-125."
+          } > digest.md
+
+          existing=$(gh issue list --repo "$REPO" --state open --label deps-digest \
+            --search "$title in:title" --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$REPO" --body-file digest.md
+            echo "Updated digest issue #$existing"
+          else
+            gh issue create --repo "$REPO" --title "$title" --label deps-digest --body-file digest.md
+          fi
