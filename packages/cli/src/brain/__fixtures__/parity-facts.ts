@@ -1,25 +1,28 @@
 /**
- * Stable fact fixtures for the Arcana factRetrieval parity harness.
+ * Stable fixtures for Cortex read-parity harnesses.
  *
- * Both sides of the harness (KB fact-retrieval baseline + Arcana
- * factRetrieval candidate) seed from this same array so any divergence
- * in retrieval ordering reflects implementation difference, not data drift.
+ * PARITY_FACTS — for factRetrieval (Harness 1 baseline, Harness 2 getFactsForEntity).
+ * PARITY_ENTITIES — for entity-graph reads (listEntities, getNeighbors, getEntityProfile).
+ * PARITY_EDGES — entity-entity edges seeded via linkEntities.
+ * PARITY_MEMORIES — timeline events for hybridSearch.
+ * PARITY_QUERIES — queries for factRetrieval (Harness 1).
+ * PARITY_MEMORY_QUERIES — queries for hybridSearch (Harness 2).
+ * PARITY_ENTITY_QUERIES — entity names for per-entity read checks (Harness 2).
  *
  * Design notes:
- * - 32 facts spanning all 8 KB FactCategory values (≥3 per category).
- * - Entities deliberately reused across facts so entity-expansion and
- *   graph-bridge layers have structure to bite on (e.g. Alice ↔ Acme ↔ Bob).
- * - Two clusters: a "work" cluster (Alice, Bob, Acme, Postgres, Kubernetes)
- *   and a "personal" cluster (Alice, hiking, Yosemite). Alice bridges them
- *   so cross-cluster expansion is observable.
- * - Timestamps are deterministic — fixed 2026-04-01 .. 2026-04-30 spread.
- * - `id` is the stable suffix used to mint `source_path` + conversation_id;
- *   the harness uses it to address rows post-insertion.
+ * - Same two clusters: "work" (Alice, Bob, Acme, Postgres, Kubernetes) and
+ *   "personal" (Alice, David, Yosemite). Alice bridges them.
+ * - Entities, edges, and memories deliberately overlap with facts so
+ *   entity-expansion and graph-bridge layers have structure to exercise.
+ * - Timestamps deterministic — fixed 2026-04-01 .. 2026-04-30 spread.
+ * - `id` is the stable suffix used to address rows post-insertion.
  *
- * Related: docs/plans/2026-05-22-arcana-fact-retrieval-parity-harness.md
+ * Related: docs/plans/2026-05-24-data-parity-matrix.md
  */
 
 import type { FactCategory } from '../fact-store.js';
+import type { EntityType, RelationshipType } from '../entity-graph.js';
+import type { EventType } from '../timeline.js';
 
 export interface ParityFactFixture {
   id: string;
@@ -94,4 +97,140 @@ export const PARITY_QUERIES: ReadonlyArray<ParityQueryFixture> = [
   { id: 'q-bob-prefs',     query: 'What does Bob prefer for infra' },
   { id: 'q-events-april',  query: 'What events happened at Acme in April' },
   { id: 'q-carol-role',    query: 'Carol marketing role and timeline' },
+];
+
+// ── Harness 2 fixtures — entity graph + memory reads ────────────────────────
+
+export interface ParityEntityFixture {
+  id: string;
+  name: string;
+  type: EntityType;
+  timestamp: string;
+}
+
+export const PARITY_ENTITIES: ReadonlyArray<ParityEntityFixture> = [
+  { id: 'ent-alice',      name: 'Alice',      type: 'person',  timestamp: '2026-04-01T09:00:00Z' },
+  { id: 'ent-bob',        name: 'Bob',        type: 'person',  timestamp: '2026-04-01T09:00:00Z' },
+  { id: 'ent-carol',      name: 'Carol',      type: 'person',  timestamp: '2026-04-01T09:00:00Z' },
+  { id: 'ent-david',      name: 'David',      type: 'person',  timestamp: '2026-04-01T09:00:00Z' },
+  { id: 'ent-acme',       name: 'Acme',       type: 'company', timestamp: '2026-04-01T09:00:00Z' },
+  { id: 'ent-postgres',   name: 'Postgres',   type: 'topic',   timestamp: '2026-04-01T09:00:00Z' },
+  { id: 'ent-kubernetes', name: 'Kubernetes', type: 'topic',   timestamp: '2026-04-01T09:00:00Z' },
+  { id: 'ent-yosemite',   name: 'Yosemite',   type: 'place',   timestamp: '2026-04-01T09:00:00Z' },
+];
+
+export interface ParityEdgeFixture {
+  id: string;
+  sourceFixtureId: string;
+  targetFixtureId: string;
+  relationship: RelationshipType;
+}
+
+export const PARITY_EDGES: ReadonlyArray<ParityEdgeFixture> = [
+  { id: 'edge-alice-acme',       sourceFixtureId: 'ent-alice',      targetFixtureId: 'ent-acme',       relationship: 'works_at'     },
+  { id: 'edge-bob-acme',         sourceFixtureId: 'ent-bob',        targetFixtureId: 'ent-acme',       relationship: 'works_at'     },
+  { id: 'edge-carol-acme',       sourceFixtureId: 'ent-carol',      targetFixtureId: 'ent-acme',       relationship: 'works_at'     },
+  { id: 'edge-bob-alice',        sourceFixtureId: 'ent-bob',        targetFixtureId: 'ent-alice',      relationship: 'reports_to'   },
+  { id: 'edge-alice-david',      sourceFixtureId: 'ent-alice',      targetFixtureId: 'ent-david',      relationship: 'related_to'   },
+  { id: 'edge-bob-carol',        sourceFixtureId: 'ent-bob',        targetFixtureId: 'ent-carol',      relationship: 'partners_with' },
+  { id: 'edge-acme-kubernetes',  sourceFixtureId: 'ent-acme',       targetFixtureId: 'ent-kubernetes', relationship: 'uses'         },
+  { id: 'edge-bob-kubernetes',   sourceFixtureId: 'ent-bob',        targetFixtureId: 'ent-kubernetes', relationship: 'uses'         },
+];
+
+export interface ParityMemoryFixture {
+  id: string;
+  title: string;
+  summary: string;
+  type: EventType;
+  timestamp: string;
+  entities: string[];
+  topics: string[];
+}
+
+export const PARITY_MEMORIES: ReadonlyArray<ParityMemoryFixture> = [
+  {
+    id: 'mem-1', type: 'conversation', timestamp: '2026-04-05T14:00:00Z',
+    title: 'Postgres migration planning',
+    summary: 'Alice led a planning session on migrating Acme analytics workloads from MySQL to Postgres before end of year. Agreed on phased cutover.',
+    entities: ['Alice', 'Acme', 'Postgres', 'MySQL'], topics: ['migration', 'database'],
+  },
+  {
+    id: 'mem-2', type: 'conversation', timestamp: '2026-04-11T16:00:00Z',
+    title: 'Kubernetes outage post-mortem',
+    summary: 'Bob and Alice conducted the post-mortem on the Kubernetes cluster outage. Root cause was a misconfigured node pool autoscaler. Checkout was down 23 minutes.',
+    entities: ['Bob', 'Alice', 'Kubernetes', 'Acme'], topics: ['incident', 'post-mortem'],
+  },
+  {
+    id: 'mem-3', type: 'conversation', timestamp: '2026-04-14T10:00:00Z',
+    title: 'Weekend hiking trip discussion',
+    summary: 'David and Alice are planning a Half Dome hike in Yosemite this summer. Discussed gear, trail permits, and logistics for the overnight trip.',
+    entities: ['Alice', 'David', 'Yosemite'], topics: ['hiking', 'travel'],
+  },
+  {
+    id: 'mem-4', type: 'note', timestamp: '2026-04-17T09:00:00Z',
+    title: 'Q3 planning offsite notes',
+    summary: 'Alice and Carol ran the Q3 planning offsite for Acme. Key themes: Postgres migration, Kubernetes reliability, Carol marketing roadmap with OKR targets.',
+    entities: ['Alice', 'Carol', 'Acme', 'Postgres', 'Kubernetes'], topics: ['planning', 'strategy'],
+  },
+  {
+    id: 'mem-5', type: 'conversation', timestamp: '2026-04-03T13:00:00Z',
+    title: 'Carol marketing kickoff',
+    summary: 'Carol held her first marketing all-hands at Acme. Introduced a data-driven roadmap approach with quarterly OKRs. Team is six people.',
+    entities: ['Carol', 'Acme'], topics: ['marketing', 'onboarding'],
+  },
+  {
+    id: 'mem-6', type: 'note', timestamp: '2026-04-15T11:00:00Z',
+    title: 'Architecture review session notes',
+    summary: 'Alice presented the platform architecture review. Covered the Postgres vs MySQL trade-offs for analytical workloads and the Kubernetes multi-cluster proposal.',
+    entities: ['Alice', 'Acme', 'Postgres', 'Kubernetes'], topics: ['architecture'],
+  },
+  {
+    id: 'mem-7', type: 'note', timestamp: '2026-04-20T09:00:00Z',
+    title: 'Kubernetes cluster upgrade plan',
+    summary: 'Bob documented the plan to upgrade the Kubernetes cluster to 1.30 to use native sidecar containers. Includes a maintenance window and rollback procedure.',
+    entities: ['Bob', 'Kubernetes'], topics: ['infrastructure', 'upgrade'],
+  },
+  {
+    id: 'mem-8', type: 'conversation', timestamp: '2026-04-22T18:00:00Z',
+    title: 'Yosemite trip logistics',
+    summary: 'Alice and David finalised logistics for the Yosemite hiking trip: permits, gear list, and camping spots. Trip planned for late July.',
+    entities: ['Alice', 'David', 'Yosemite'], topics: ['hiking', 'travel'],
+  },
+  {
+    id: 'mem-9', type: 'note', timestamp: '2026-04-18T10:00:00Z',
+    title: 'Bob and Carol launch playbook',
+    summary: 'Bob and Carol collaborated on the v3 release launch playbook for Acme. Carol owns demand gen; Bob owns deploy runbook.',
+    entities: ['Bob', 'Carol', 'Acme'], topics: ['launch', 'collaboration'],
+  },
+  {
+    id: 'mem-10', type: 'conversation', timestamp: '2026-04-16T15:00:00Z',
+    title: 'Database performance review',
+    summary: 'Alice and Bob reviewed Postgres query performance after the major-version upgrade. Index bloat was the main issue. Bob will run VACUUM ANALYZE on the analytics schema.',
+    entities: ['Alice', 'Bob', 'Postgres'], topics: ['database', 'performance'],
+  },
+];
+
+export interface ParityMemoryQueryFixture {
+  id: string;
+  query: string;
+}
+
+export const PARITY_MEMORY_QUERIES: ReadonlyArray<ParityMemoryQueryFixture> = [
+  { id: 'mq-postgres',    query: 'Postgres database migration planning' },
+  { id: 'mq-kube',        query: 'Kubernetes outage cluster incident' },
+  { id: 'mq-hiking',      query: 'hiking Yosemite Alice David weekend' },
+  { id: 'mq-planning',    query: 'Acme Q3 planning Carol strategy' },
+  { id: 'mq-arch-review', query: 'architecture review platform notes' },
+];
+
+export interface ParityEntityQueryFixture {
+  id: string;
+  entityName: string;
+}
+
+export const PARITY_ENTITY_QUERIES: ReadonlyArray<ParityEntityQueryFixture> = [
+  { id: 'eq-alice',      entityName: 'Alice'      },
+  { id: 'eq-bob',        entityName: 'Bob'        },
+  { id: 'eq-acme',       entityName: 'Acme'       },
+  { id: 'eq-kubernetes', entityName: 'Kubernetes' },
 ];

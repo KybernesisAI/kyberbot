@@ -396,5 +396,38 @@ export function createBrainCommand(): Command {
       }
     });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // kyberbot brain cortex-read-parity
+  // ─────────────────────────────────────────────────────────────────────────
+
+  cmd
+    .command('cortex-read-parity')
+    .description('Harness 2: hybridSearch / getFactsForEntity / listEntities / getNeighbors / getEntityProfile parity over shared fixtures')
+    .option('--top-n <n>', 'Top-N comparison depth', '10')
+    .option('--threshold <t>', 'Pass threshold (0..1)', '0.95')
+    .option('--json', 'Machine-readable output', false)
+    .action(async (options: { topN: string; threshold: string; json: boolean }) => {
+      try {
+        const { runReadParity, formatReadParityReport } =
+          await import('../brain/read-parity.js');
+        const run = await runReadParity({
+          topN: parseInt(options.topN) || 10,
+          threshold: parseFloat(options.threshold) || 0.95,
+        });
+        if (options.json) {
+          console.log(JSON.stringify(run, null, 2));
+        } else {
+          console.log(formatReadParityReport(run));
+        }
+        if (!run.passes) {
+          process.exitCode = 2;
+        }
+      } catch (error) {
+        logger.error('Cortex read-parity check failed', { error: String(error) });
+        console.error(chalk.red(`Error: ${error}`));
+        process.exit(1);
+      }
+    });
+
   return cmd;
 }
