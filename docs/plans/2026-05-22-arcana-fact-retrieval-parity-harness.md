@@ -1,12 +1,20 @@
 ---
 title: Arcana factRetrieval parity harness (v1.0.0)
-status: in-progress
+status: completed
 date: 2026-05-22
 owner: kyberbot
+completion-note: |
+  Built and run across Cortex versions 1.0 → 1.2.0 → 1.2.1 → 2.0.0 → 2.1.0 →
+  2.1.1 → 2.1.2. Landed at meanOverlap 0.877 with documented residuals
+  (one harness-seeding limitation + one accepted content-only scoring
+  divergence). CLI: `kyberbot brain cortex-fact-parity`.
+  See 2026-05-24-data-parity-matrix.md — this harness is now "Harness 2,
+  factRetrieval method" inside that umbrella plan.
 related:
   - .comms/arcana-kyberbot.md (2026-05-22 11:55 ARCANA → KBOT BREAKING)
   - 2026-05-21-arcana-parity-workstream-a-backfill.md
   - 2026-05-21-arcana-parity-workstream-b-constrained-ingestion.md
+  - 2026-05-24-data-parity-matrix.md (subsumes this plan)
 ---
 
 # Arcana factRetrieval parity harness (v1.0.0)
