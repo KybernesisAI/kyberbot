@@ -120,24 +120,36 @@ export const PARITY_SLEEP_MEMORIES: ReadonlyArray<ParitySleepMemoryFixture> = [
     summary: 'The original Acme platform architecture rationale. Service boundaries, deployment topology, on-call rotation.',
     entities: ['Acme', 'Alice', 'Bob'], topics: ['architecture'] },
 
-  // ── Deliberate near-duplicates (should consolidate) ──────────────────────
-  { id: 'sm-dup-1a', type: 'note', timestamp: at(10),
+  // ── Deliberate near-duplicates (should consolidate; threshold is 3) ──────
+  { id: 'sm-dup-1a', type: 'note', timestamp: at(12),
     title: 'Postgres maintenance window',
     summary: 'Postgres maintenance window scheduled Sunday 2am UTC. Bob owns. Expected duration 30 minutes.',
     entities: ['Bob', 'Postgres'], topics: ['maintenance'] },
 
-  { id: 'sm-dup-1b', type: 'note', timestamp: at(10),
+  { id: 'sm-dup-1b', type: 'note', timestamp: at(11),
     title: 'Postgres maintenance window',
     summary: 'Postgres maintenance window scheduled Sunday 2am UTC. Bob owns. Expected duration 30 minutes.',
     entities: ['Bob', 'Postgres'], topics: ['maintenance'],
     duplicateOf: 'sm-dup-1a' },
 
-  { id: 'sm-dup-2a', type: 'conversation', timestamp: at(5),
+  { id: 'sm-dup-1c', type: 'note', timestamp: at(10),
+    title: 'Postgres maintenance window',
+    summary: 'Postgres maintenance window scheduled Sunday 2am UTC. Bob owns. Expected duration 30 minutes.',
+    entities: ['Bob', 'Postgres'], topics: ['maintenance'],
+    duplicateOf: 'sm-dup-1a' },
+
+  { id: 'sm-dup-2a', type: 'conversation', timestamp: at(7),
     title: 'Alice on Q3 priorities',
     summary: 'Alice flagged Q3 priorities: ship Postgres migration, finalise marketing redesign, hire two engineers.',
     entities: ['Alice', 'Postgres'], topics: ['planning'] },
 
-  { id: 'sm-dup-2b', type: 'conversation', timestamp: at(5),
+  { id: 'sm-dup-2b', type: 'conversation', timestamp: at(6),
+    title: 'Alice on Q3 priorities',
+    summary: 'Alice flagged Q3 priorities: ship Postgres migration, finalise marketing redesign, hire two engineers.',
+    entities: ['Alice', 'Postgres'], topics: ['planning'],
+    duplicateOf: 'sm-dup-2a' },
+
+  { id: 'sm-dup-2c', type: 'conversation', timestamp: at(5),
     title: 'Alice on Q3 priorities',
     summary: 'Alice flagged Q3 priorities: ship Postgres migration, finalise marketing redesign, hire two engineers.',
     entities: ['Alice', 'Postgres'], topics: ['planning'],
