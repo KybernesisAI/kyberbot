@@ -2,7 +2,17 @@
 
 **Status:** approved, **awaiting Workstream B completion before starting**
 **Sequenced after:** [Workstream B — constrained ingestion](./2026-05-21-arcana-parity-workstream-b-constrained-ingestion.md)
-**Branch:** `arcana-adoption`
+**Branch:** `cortex-adoption` (renamed from `arcana-adoption`)
+
+## 2026-05-24 update — first real-data scope confirmed
+
+Harness 1 (write-parity content diff) ran against the test agent at `~/dev/ad/brains/.kyberbot/` and surfaced two specific backlogs this workstream needs to close:
+
+1. **316 facts already mirrored but with v0.x lossy content.** They have valid `arcana_fact_id` FKs and corresponding Cortex rows, but the Cortex side is missing `category` (defaults to `'general'` after backfill), `source_path`, `source_conversation_id`, and multi-entity arrays were collapsed to single-element arrays at v0.x mirror time. The 316 historical fact-mirror rows need re-mirroring with the cortex-adoption code (`mirrorFactToCortex` in `fact-store.ts:273` now writes full entities + category + source backlinks per v1.0.0+ shape).
+
+2. **31 entity rows with orphan `arcana_entity_id` FKs.** KB rows point to Cortex entity UUIDs that no longer exist (likely deleted by sleep-cycle entity-hygiene pruning without nulling the KB FK). Either null the KB FKs (treat as unmirrored, re-mirror in next pass), or restore the Cortex rows (more complex).
+
+These are concrete numbers from real data, not estimates. The earlier "~4,343 unmirrored facts" figure refers to facts that never got mirrored at all (no `arcana_fact_id`); these 316 are a separate category (mirrored-but-stale-shape). Backfill plan needs to handle both.
 
 ## Goal
 
