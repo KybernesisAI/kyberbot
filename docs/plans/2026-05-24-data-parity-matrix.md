@@ -1,12 +1,32 @@
 ---
 title: Data parity matrix — Cortex vs KyberBot, six cells to verify before migration
-status: parked-for-decision
+status: harness-1-done; harness-2-next
 date: 2026-05-24
+last-updated: 2026-05-24 (session 2)
 owner: kyberbot
 related:
-  - .comms/arcana-kyberbot.md (2026-05-24 KBOT → CORTEX GAPS)
+  - .comms/arcana-kyberbot.md (2026-05-24 KBOT → CORTEX GAPS + TWO FINDINGS)
   - 2026-05-24-kyberbot-full-refactor-to-cortex-native.md (the eventual migration this unblocks)
-  - 2026-05-24-parity-harness-full-shape-fixture.md (subsumed by this plan)
+  - 2026-05-24-handover-session-2.md (current session handover)
+---
+
+## Progress log
+
+**2026-05-24 (session 2) — Harness 1 done, run against real data, three findings.**
+
+- Harness 1 built: `kyberbot brain cortex-write-parity` (`packages/cli/src/brain/cortex-write-parity.ts`)
+- Verified end-to-end via two smoke scripts in `$CLAUDE_JOB_DIR` (happy path + drift injection)
+- Run against `~/dev/ad/brains/.kyberbot/`. Numbers as of session-end:
+  - facts: 316 mirrored, **0% match** (historical v0.x lossy mirror — workstream-A backfill territory)
+  - memories: 55 mirrored, **100% match**, BUT 62 orphan Cortex memories with no KB FK (and growing — see finding 3)
+  - entities: 244 mirrored, **87.3% match**, 31 missing (orphan KB FKs pointing to deleted Cortex entities)
+- Three findings escalated:
+  1. **Cortex provider has no v0.x → v1.0.0 facts-schema migration** (filed via 2026-05-24 GAP comms)
+  2. **Cortex provider's `created_at`-on-memories ALTER fails on existing tables** with `Cannot add a column with non-constant default` (filed via 2026-05-24 TWO FINDINGS comms)
+  3. **KyberBot sleep cycle creates orphan Cortex rows** — consolidate/entity-hygiene deletes KB rows without cascading to Cortex (filed via 2026-05-24 TWO FINDINGS comms; question to Cortex about whether their `maintain.startSleepSchedule` should handle this)
+
+**Sequencing reconfirmed: Harness 2 before Harness 3.** Sleep depends on reads — if reads diverge between KB and Cortex, sleep outcomes diverge in non-diagnosable ways. Read parity is the prerequisite for trustworthy sleep diffs. The matrix plan's original 1 → 2 → 3 order stands.
+
 ---
 
 # Data parity matrix — six cells to trust before migration
