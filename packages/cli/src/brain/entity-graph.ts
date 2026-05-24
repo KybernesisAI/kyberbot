@@ -20,9 +20,9 @@ import { openWithRecovery } from './db-recovery.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import { createLogger } from '../logger.js';
-import { getArcanaInstance } from './arcana-singleton.js';
-import { NotImplementedError } from '@kybernesis/arcana-core';
-import type { Entity as ArcanaEntity, NodeRef } from '@kybernesis/arcana-contracts';
+import { getCortexInstance } from './cortex-singleton.js';
+import { NotImplementedError } from '@kybernesis/cortex-core';
+import type { Entity as ArcanaEntity, NodeRef } from '@kybernesis/cortex-contracts';
 
 const logger = createLogger('entity-graph');
 
@@ -470,7 +470,7 @@ export async function deleteEntity(
 
   del();
 
-  await mirrorEntityDeleteToArcana(entity.arcana_entity_id ?? null);
+  await mirrorEntityDeleteToCortex(entity.arcana_entity_id ?? null);
 
   logger.info(`Deleted entity "${entity.name}" (${entityId})`, { reason });
 }
@@ -503,13 +503,13 @@ function escapeLike(value: string): string {
  * `command.upsertEntity`. NotImplementedError + arbitrary failures are
  * caught + logged; the local row is the source of truth either way.
  */
-async function mirrorEntityToArcana(e: {
+async function mirrorEntityToCortex(e: {
   arcana_entity_id: string;
   name: string;
   type: EntityType;
   mention_count: number;
 }): Promise<void> {
-  const arcana = getArcanaInstance();
+  const arcana = getCortexInstance();
   if (!arcana) return;
 
   const payload: ArcanaEntity = {
@@ -536,9 +536,9 @@ async function mirrorEntityToArcana(e: {
 /**
  * Best-effort mirror of an entity-deletion to Arcana.
  */
-async function mirrorEntityDeleteToArcana(arcanaEntityId: string | null): Promise<void> {
+async function mirrorEntityDeleteToCortex(arcanaEntityId: string | null): Promise<void> {
   if (!arcanaEntityId) return;
-  const arcana = getArcanaInstance();
+  const arcana = getCortexInstance();
   if (!arcana) return;
 
   try {
@@ -563,14 +563,14 @@ async function mirrorEntityDeleteToArcana(arcanaEntityId: string | null): Promis
  * Mirrored only on first link creation. Strength accumulation on duplicate
  * KyberBot links stays local — Arcana's confidence is set once at creation.
  */
-async function mirrorLinkToArcana(
+async function mirrorLinkToCortex(
   fromArcanaId: string | null,
   toArcanaId: string | null,
   relation: string,
   opts: { confidence?: number; rationale?: string; method?: string } = {},
 ): Promise<string | null> {
   if (!fromArcanaId || !toArcanaId) return null;
-  const arcana = getArcanaInstance();
+  const arcana = getCortexInstance();
   if (!arcana) return null;
 
   const from: NodeRef = { type: 'entity', id: fromArcanaId };
@@ -630,7 +630,7 @@ export async function findOrCreateEntity(
     // Sync mention_count to Arcana on every find. Cheap (no embedding /
     // chunking happens in upsertEntity), keeps the kernel's view current.
     if (existing.arcana_entity_id) {
-      await mirrorEntityToArcana({
+      await mirrorEntityToCortex({
         arcana_entity_id: existing.arcana_entity_id,
         name: existing.name,
         type: existing.type,
@@ -654,7 +654,7 @@ export async function findOrCreateEntity(
     )
     .run(name, normalizedName, '[]', type, timestamp, timestamp, arcanaEntityId);
 
-  await mirrorEntityToArcana({
+  await mirrorEntityToCortex({
     arcana_entity_id: arcanaEntityId,
     name,
     type,
@@ -756,7 +756,7 @@ export async function linkEntities(
   if (!existing) {
     const fromArcanaId = lookupArcanaEntityId(database, id1);
     const toArcanaId = lookupArcanaEntityId(database, id2);
-    const edgeId = await mirrorLinkToArcana(fromArcanaId, toArcanaId, relationship);
+    const edgeId = await mirrorLinkToCortex(fromArcanaId, toArcanaId, relationship);
     if (edgeId) {
       database
         .prepare('UPDATE entity_relations SET arcana_edge_id = ? WHERE source_id = ? AND target_id = ?')
@@ -821,7 +821,7 @@ export async function linkEntitiesWithType(
   if (!existing) {
     const fromArcanaId = lookupArcanaEntityId(database, id1);
     const toArcanaId = lookupArcanaEntityId(database, id2);
-    const edgeId = await mirrorLinkToArcana(fromArcanaId, toArcanaId, options.relationship, {
+    const edgeId = await mirrorLinkToCortex(fromArcanaId, toArcanaId, options.relationship, {
       confidence,
       rationale: options.rationale,
       method,
@@ -1256,18 +1256,18 @@ export async function createContradiction(
   // KyberBot's denormalised content + entity_id stay local. Mirror is skipped
   // if either fact didn't mirror (no arcana_fact_id). Dynamic import to keep
   // entity-graph.ts's static dep graph local-DB-only.
-  await mirrorContradictionToArcana(root, factAId, factBId, description);
+  await mirrorContradictionToCortex(root, factAId, factBId, description);
 
   return result.lastInsertRowid as number;
 }
 
-async function mirrorContradictionToArcana(
+async function mirrorContradictionToCortex(
   root: string,
   factAId: number,
   factBId: number,
   rationale: string,
 ): Promise<void> {
-  const arcana = getArcanaInstance();
+  const arcana = getCortexInstance();
   if (!arcana) return;
 
   try {

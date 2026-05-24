@@ -7,7 +7,7 @@
  */
 
 import OpenAI from 'openai';
-import type { EmbeddingProvider } from '@kybernesis/arcana-contracts';
+import type { EmbeddingProvider } from '@kybernesis/cortex-contracts';
 import { createLogger } from '../../logger.js';
 
 const logger = createLogger('openai-embedding-provider');

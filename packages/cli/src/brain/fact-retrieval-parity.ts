@@ -12,7 +12,7 @@
  *
  * Seeding strategy: stand up a temp KB fact-store AND a temp Arcana
  * singleton in a throwaway directory, then call KB's `storeFact` for each
- * fixture. `storeFact` dual-writes — its existing `mirrorFactToArcana` path
+ * fixture. `storeFact` dual-writes — its existing `mirrorFactToCortex` path
  * lands the same fact in Arcana and stamps `facts.arcana_fact_id` on the
  * KB row, giving us the cross-store id bridge for free.
  *
@@ -28,23 +28,23 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createLibsqlStructuredStore } from '@kybernesis/arcana-provider-libsql';
+import { createLibsqlStructuredStore } from '@kybernesis/cortex-provider-libsql';
 import {
   createFakeEmbeddingProvider,
   createFakeLLMProvider,
   createFakeVectorStore,
-} from '@kybernesis/arcana-testkit';
-import { runParityHarness, type ParityReport } from '@kybernesis/arcana-testkit';
+} from '@kybernesis/cortex-testkit';
+import { runParityHarness, type ParityReport } from '@kybernesis/cortex-testkit';
 
 import { ensureFactsTable, storeFact } from './fact-store.js';
 import { getTimelineDb } from './timeline.js';
 import { factFirstSearch } from './fact-retrieval.js';
 import {
-  initArcana,
-  disposeArcana,
-  getArcanaInstance,
-  resetArcanaForTests,
-} from './arcana-singleton.js';
+  initCortex,
+  disposeCortex,
+  getCortexInstance,
+  resetCortexForTests,
+} from './cortex-singleton.js';
 import { PARITY_FACTS, PARITY_QUERIES, type ParityQueryFixture } from './__fixtures__/parity-facts.js';
 import { createLogger } from '../logger.js';
 
@@ -79,7 +79,7 @@ export async function runFactRetrievalParity(
   // in — anything else means another part of the process already initialised
   // production providers, which would corrupt the harness AND leak fixtures
   // into prod.
-  if (getArcanaInstance()) {
+  if (getCortexInstance()) {
     await rm(tempRoot, { recursive: true, force: true });
     throw new Error(
       'Arcana singleton already initialised — refusing to overwrite. Run the parity harness in a standalone CLI invocation.'
@@ -90,13 +90,13 @@ export async function runFactRetrievalParity(
   await structured.connect();
 
   try {
-    await initArcana({
+    await initCortex({
       structured,
       vector: createFakeVectorStore(),
       embed: createFakeEmbeddingProvider(),
       llm: createFakeLLMProvider(),
     });
-    const arcana = getArcanaInstance();
+    const arcana = getCortexInstance();
     if (!arcana) throw new Error('Arcana singleton failed to initialise');
 
     await ensureFactsTable(tempRoot);
@@ -186,12 +186,12 @@ export async function runFactRetrievalParity(
       unmirroredFixtureIds,
     };
   } finally {
-    await disposeArcana().catch((err) => {
-      logger.warn('disposeArcana failed during parity teardown', {
+    await disposeCortex().catch((err) => {
+      logger.warn('disposeCortex failed during parity teardown', {
         error: err instanceof Error ? err.message : String(err),
       });
     });
-    resetArcanaForTests();
+    resetCortexForTests();
     await rm(tempRoot, { recursive: true, force: true }).catch(() => {});
   }
 }
@@ -199,7 +199,7 @@ export async function runFactRetrievalParity(
 export function formatFactRetrievalParityReport(run: FactRetrievalParityRun): string {
   const { report, fixtureCount, queryCount, unmirroredFixtureIds } = run;
   const lines: string[] = [];
-  lines.push('Arcana factRetrieval parity report');
+  lines.push('Cortex factRetrieval parity report');
   lines.push('─'.repeat(60));
   lines.push(`fixtures seeded: ${fixtureCount}`);
   lines.push(`queries run:     ${queryCount}`);

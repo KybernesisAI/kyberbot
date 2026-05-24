@@ -2,13 +2,13 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { StructuredStore } from '@kybernesis/arcana-contracts';
+import type { StructuredStore } from '@kybernesis/cortex-contracts';
 import {
   createFakeStructuredStore,
   createFakeVectorStore,
   createFakeEmbeddingProvider,
   createFakeLLMProvider,
-} from '@kybernesis/arcana-testkit/fakes';
+} from '@kybernesis/cortex-testkit/fakes';
 
 vi.mock('../logger.js', () => ({
   createLogger: () => ({
@@ -27,7 +27,7 @@ const {
   getEntityGraphDb,
   resetEntityGraphDb,
 } = await import('./entity-graph.js');
-const { initArcana, resetArcanaForTests } = await import('./arcana-singleton.js');
+const { initCortex, resetCortexForTests } = await import('./cortex-singleton.js');
 
 let root: string;
 let structured: StructuredStore;
@@ -38,7 +38,7 @@ beforeAll(async () => {
   structured = createFakeStructuredStore();
   await structured.connect();
 
-  await initArcana({
+  await initCortex({
     structured,
     vector: createFakeVectorStore(),
     embed: createFakeEmbeddingProvider(),
@@ -48,7 +48,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   resetEntityGraphDb(root);
-  resetArcanaForTests();
+  resetCortexForTests();
   await rm(root, { recursive: true, force: true });
 });
 

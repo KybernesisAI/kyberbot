@@ -2,13 +2,13 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { StructuredStore } from '@kybernesis/arcana-contracts';
+import type { StructuredStore } from '@kybernesis/cortex-contracts';
 import {
   createFakeStructuredStore,
   createFakeVectorStore,
   createFakeEmbeddingProvider,
   createFakeLLMProvider,
-} from '@kybernesis/arcana-testkit/fakes';
+} from '@kybernesis/cortex-testkit/fakes';
 
 // Mock embeddings — fact-store still calls indexDocument inline. Stub to no-op
 // so the test exercises only the SQLite + Arcana mirror path.
@@ -26,7 +26,7 @@ const {
   storeFact,
 } = await import('./fact-store.js');
 const { getTimelineDb, resetTimelineDb } = await import('./timeline.js');
-const { initArcana, resetArcanaForTests } = await import('./arcana-singleton.js');
+const { initCortex, resetCortexForTests } = await import('./cortex-singleton.js');
 
 let root: string;
 let structured: StructuredStore;
@@ -37,7 +37,7 @@ beforeAll(async () => {
 
   structured = createFakeStructuredStore();
   await structured.connect();
-  await initArcana({
+  await initCortex({
     structured,
     vector: createFakeVectorStore(),
     embed: createFakeEmbeddingProvider(),
@@ -47,7 +47,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   resetTimelineDb(root);
-  resetArcanaForTests();
+  resetCortexForTests();
   await rm(root, { recursive: true, force: true });
 });
 

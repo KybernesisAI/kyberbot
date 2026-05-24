@@ -7,7 +7,7 @@
  * client directly.
  */
 
-import type { LLMProvider, LLMCompleteOpts } from '@kybernesis/arcana-contracts';
+import type { LLMProvider, LLMCompleteOpts } from '@kybernesis/cortex-contracts';
 import { ClaudeClient, getClaudeClient } from '../../claude.js';
 
 export interface ClaudeLLMProviderOptions {

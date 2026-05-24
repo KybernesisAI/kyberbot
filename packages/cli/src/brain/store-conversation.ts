@@ -21,9 +21,9 @@ import {
 import { extractRelationships } from './relationship-extractor.js';
 import { indexDocument, isChromaAvailable } from './embeddings.js';
 import { extractFactsRealtime } from './fact-extractor.js';
-import { getArcanaInstance } from './arcana-singleton.js';
-import { NotImplementedError } from '@kybernesis/arcana-core';
-import type { Memory } from '@kybernesis/arcana-contracts';
+import { getCortexInstance } from './cortex-singleton.js';
+import { NotImplementedError } from '@kybernesis/cortex-core';
+import type { Memory } from '@kybernesis/cortex-contracts';
 
 const logger = createLogger('brain');
 
@@ -225,7 +225,7 @@ function channelToArcanaMemorySource(channel: string): Memory['source'] {
  * so the timeline row links to this Memory rather than minting a duplicate
  * (summary-only) one. Best-effort — Arcana failures never block local storage.
  */
-async function mirrorConversationToArcana(input: {
+async function mirrorConversationToCortex(input: {
   fullText: string;
   title: string;
   summary: string;
@@ -240,7 +240,7 @@ async function mirrorConversationToArcana(input: {
     source_did?: string;
   };
 }): Promise<string | null> {
-  const arcana = getArcanaInstance();
+  const arcana = getCortexInstance();
   if (!arcana) return null;
 
   const tags: string[] = ['type:conversation'];
@@ -408,7 +408,7 @@ async function storeConversationImpl(
       // addConversationToTimeline links to this Memory rather than minting a
       // duplicate (summary-only) one. See Arcana ADR 005-adjacent ANSWER at
       // 21:30 for the architecture decision.
-      const arcanaMemoryId = await mirrorConversationToArcana({
+      const arcanaMemoryId = await mirrorConversationToCortex({
         fullText,
         title: fullTitle,
         summary: timelineSummary,

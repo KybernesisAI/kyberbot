@@ -164,8 +164,8 @@ export function createRunCommand(): Command {
           name: 'Arcana',
           enabled: true,
           start: async () => {
-            const { bootArcana } = await import('../brain/boot-arcana.js');
-            return bootArcana(root);
+            const { bootCortex } = await import('../brain/boot-cortex.js');
+            return bootCortex(root);
           },
         });
 

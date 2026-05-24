@@ -25,9 +25,9 @@ import { getTimelineDb } from './timeline.js';
 import { createLogger } from '../logger.js';
 
 import { indexDocument, isChromaAvailable } from './embeddings.js';
-import { getArcanaInstance } from './arcana-singleton.js';
-import { NotImplementedError } from '@kybernesis/arcana-core';
-import type { FactSourceType, Scopes } from '@kybernesis/arcana-contracts';
+import { getCortexInstance } from './cortex-singleton.js';
+import { NotImplementedError } from '@kybernesis/cortex-core';
+import type { FactSourceType, Scopes } from '@kybernesis/cortex-contracts';
 
 const logger = createLogger('fact-store');
 
@@ -270,8 +270,8 @@ function mapFactSourceTypeToArcanaSource(kbSourceType?: string): FactSourceType 
  * into the Fact row, `category` is required, and `sourcePath` +
  * `sourceConversationId` backlinks light up Layer 0 fact-FTS at retrieval.
  */
-async function mirrorFactToArcana(fact: FactInput): Promise<string | null> {
-  const arcana = getArcanaInstance();
+async function mirrorFactToCortex(fact: FactInput): Promise<string | null> {
+  const arcana = getCortexInstance();
   if (!arcana) return null;
 
   const entities = (fact.entities ?? []).filter(e => typeof e === 'string' && e.length > 0);
@@ -335,7 +335,7 @@ export async function storeFact(root: string, fact: FactInput): Promise<number> 
     .get(fact.source_path) as { arcana_fact_id: string | null } | undefined;
   const existingArcanaFactId = existingRow?.arcana_fact_id ?? null;
 
-  const arcanaFactId = existingArcanaFactId ?? await mirrorFactToArcana(fact);
+  const arcanaFactId = existingArcanaFactId ?? await mirrorFactToCortex(fact);
 
   const result = db.prepare(`
     INSERT OR REPLACE INTO facts
@@ -549,7 +549,7 @@ export async function markFactSuperseded(
   logger.debug('Marked fact as superseded', { oldFactId, newFactId });
 
   if (oldRow?.arcana_fact_id && newRow?.arcana_fact_id) {
-    const arcana = getArcanaInstance();
+    const arcana = getCortexInstance();
     if (arcana) {
       try {
         await arcana.command.markFactSuperseded(oldRow.arcana_fact_id, newRow.arcana_fact_id);

@@ -305,18 +305,18 @@ export function createBrainCommand(): Command {
     });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // kyberbot brain arcana-parity
+  // kyberbot brain cortex-parity
   // ─────────────────────────────────────────────────────────────────────────
 
   cmd
-    .command('arcana-parity')
-    .description('Side-by-side comparison of legacy stores vs the Arcana mirror')
+    .command('cortex-parity')
+    .description('Side-by-side comparison of legacy stores vs the Cortex mirror')
     .option('--detail <n>', 'Show last N recent writes with arcana_memory_id presence', '0')
     .option('--json', 'Machine-readable output', false)
     .action(async (options: { detail: string; json: boolean }) => {
       try {
         const root = getRoot();
-        const { inspectParity, formatParityReport } = await import('../brain/arcana-parity.js');
+        const { inspectParity, formatParityReport } = await import('../brain/cortex-parity.js');
         const report = inspectParity(root, {
           detail: parseInt(options.detail) || 0,
         });
@@ -326,19 +326,19 @@ export function createBrainCommand(): Command {
           console.log(formatParityReport(report));
         }
       } catch (error) {
-        logger.error('Arcana parity check failed', { error: String(error) });
+        logger.error('Cortex parity check failed', { error: String(error) });
         console.error(chalk.red(`Error: ${error}`));
         process.exit(1);
       }
     });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // kyberbot brain arcana-fact-parity
+  // kyberbot brain cortex-fact-parity
   // ─────────────────────────────────────────────────────────────────────────
 
   cmd
-    .command('arcana-fact-parity')
-    .description('factRetrieval parity: KB fact-retrieval vs Arcana factRetrieval over shared fixtures')
+    .command('cortex-fact-parity')
+    .description('factRetrieval parity: KB fact-retrieval vs Cortex factRetrieval over shared fixtures')
     .option('--top-n <n>', 'Top-N comparison depth', '10')
     .option('--threshold <t>', 'Pass threshold (0..1)', '1.0')
     .option('--json', 'Machine-readable output', false)
@@ -359,7 +359,7 @@ export function createBrainCommand(): Command {
           process.exitCode = 2;
         }
       } catch (error) {
-        logger.error('Arcana factRetrieval parity check failed', { error: String(error) });
+        logger.error('Cortex factRetrieval parity check failed', { error: String(error) });
         console.error(chalk.red(`Error: ${error}`));
         process.exit(1);
       }

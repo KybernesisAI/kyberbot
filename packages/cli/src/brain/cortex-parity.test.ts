@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'libsql';
-import { inspectParity, formatParityReport } from './arcana-parity.js';
+import { inspectParity, formatParityReport } from './cortex-parity.js';
 
 interface TimelineRow { type?: string; mirrored?: boolean; ts?: string; sourcePath?: string }
 

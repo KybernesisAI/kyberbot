@@ -1,5 +1,5 @@
 /**
- * Arcana service boot — composes structured + vector + embed + llm providers,
+ * Cortex service boot — composes structured + vector + embed + llm providers,
  * initialises the singleton, and returns a ServiceHandle for the orchestrator.
  *
  * Extracted from run.ts so the wiring is testable in isolation and the
@@ -8,26 +8,26 @@
  */
 
 import { join } from 'node:path';
-import type { VectorStore } from '@kybernesis/arcana-contracts';
-import { createLibsqlStructuredStore } from '@kybernesis/arcana-provider-libsql';
-import { createSqliteVecVectorStore } from '@kybernesis/arcana-provider-sqlite-vec';
+import type { VectorStore } from '@kybernesis/cortex-contracts';
+import { createLibsqlStructuredStore } from '@kybernesis/cortex-provider-libsql';
+import { createSqliteVecVectorStore } from '@kybernesis/cortex-provider-sqlite-vec';
 import { createOpenAIEmbeddingProvider } from './providers/openai-embedding-provider.js';
 import { createClaudeLLMProvider } from './providers/claude-llm-provider.js';
-import { initArcana, disposeArcana } from './arcana-singleton.js';
+import { initCortex, disposeCortex } from './cortex-singleton.js';
 import { createLogger } from '../logger.js';
 import type { ServiceHandle } from '../types.js';
 
-const logger = createLogger('boot-arcana');
+const logger = createLogger('boot-cortex');
 
-export async function bootArcana(root: string): Promise<ServiceHandle> {
-  // Arcana requires an embedding provider. Today that means OpenAI — so a
-  // missing API key disables Arcana entirely rather than failing the whole
-  // service start. Existing dual-write code null-guards getArcanaInstance().
+export async function bootCortex(root: string): Promise<ServiceHandle> {
+  // Cortex requires an embedding provider. Today that means OpenAI — so a
+  // missing API key disables Cortex entirely rather than failing the whole
+  // service start. Existing dual-write code null-guards getCortexInstance().
   // `.trim()` catches the common .env-with-trailing-whitespace footgun where
   // `OPENAI_API_KEY= ` parses to ' ', passes a falsy check, then fails at first
   // embed call deep inside the sleep cycle.
   if (!process.env.OPENAI_API_KEY?.trim()) {
-    logger.warn('Arcana disabled — OPENAI_API_KEY not set (embedding provider unavailable)');
+    logger.warn('Cortex disabled — OPENAI_API_KEY not set (embedding provider unavailable)');
     return {
       stop: async () => {},
       status: () => 'disabled' as const,
@@ -55,22 +55,22 @@ export async function bootArcana(root: string): Promise<ServiceHandle> {
       await v.connect();
       vector = v;
     } catch (err) {
-      logger.warn('Arcana vector store unavailable — continuing without semantic mirror', {
+      logger.warn('Cortex vector store unavailable — continuing without semantic mirror', {
         error: err instanceof Error ? err.message : String(err),
       });
     }
 
-    await initArcana({ structured, vector, embed, llm });
+    await initCortex({ structured, vector, embed, llm });
 
     return {
       stop: async () => {
-        await disposeArcana();
+        await disposeCortex();
       },
       status: () => 'running' as const,
     };
   } catch (err) {
     await structured.disconnect().catch(disconnectErr => {
-      logger.warn('Arcana structured store disconnect failed during boot rollback', {
+      logger.warn('Cortex structured store disconnect failed during boot rollback', {
         error: disconnectErr instanceof Error ? disconnectErr.message : String(disconnectErr),
       });
     });

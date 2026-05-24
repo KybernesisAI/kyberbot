@@ -20,9 +20,9 @@ import { openWithRecovery } from './db-recovery.js';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import { createLogger } from '../logger.js';
-import { getArcanaInstance } from './arcana-singleton.js';
-import { NotImplementedError } from '@kybernesis/arcana-core';
-import type { Memory } from '@kybernesis/arcana-contracts';
+import { getCortexInstance } from './cortex-singleton.js';
+import { NotImplementedError } from '@kybernesis/cortex-core';
+import type { Memory } from '@kybernesis/cortex-contracts';
 
 const logger = createLogger('timeline');
 
@@ -261,11 +261,11 @@ export async function initializeTimeline(root: string): Promise<void> {
  *   in place. Returns the same id. No orphan accumulation. (ADR 005)
  * - null     → `ingest.storeMemory(...)` — new canonical memory minted.
  */
-async function mirrorToArcana(
+async function mirrorToCortex(
   event: Omit<TimelineEvent, 'id'>,
   existingArcanaMemoryId: string | null,
 ): Promise<string | null> {
-  const arcana = getArcanaInstance();
+  const arcana = getCortexInstance();
   if (!arcana) return null;
 
   // Map KyberBot's typed-event vocabulary into Arcana's flat tag namespace.
@@ -343,7 +343,7 @@ export async function addToTimeline(
     const existingRow = database
       .prepare('SELECT arcana_memory_id FROM timeline_events WHERE source_path = ?')
       .get(event.source_path) as { arcana_memory_id: string | null } | undefined;
-    arcanaMemoryId = await mirrorToArcana(event, existingRow?.arcana_memory_id ?? null);
+    arcanaMemoryId = await mirrorToCortex(event, existingRow?.arcana_memory_id ?? null);
   }
 
   const entitiesJson = JSON.stringify(event.entities || []);
