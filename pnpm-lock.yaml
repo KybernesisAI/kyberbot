@@ -46,17 +46,17 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1
       '@kybernesis/cortex-contracts':
-        specifier: ^2.1.2
-        version: 2.1.2
+        specifier: ^2.1.3
+        version: 2.1.3
       '@kybernesis/cortex-core':
-        specifier: ^2.1.2
-        version: 2.1.2
+        specifier: ^2.1.3
+        version: 2.1.3
       '@kybernesis/cortex-provider-libsql':
-        specifier: ^2.1.2
-        version: 2.1.2
+        specifier: ^2.1.3
+        version: 2.1.3
       '@kybernesis/cortex-provider-sqlite-vec':
-        specifier: ^2.1.2
-        version: 2.1.2
+        specifier: ^2.1.3
+        version: 2.1.3
       '@sentry/node':
         specifier: ^10.43.0
         version: 10.43.0
@@ -101,8 +101,8 @@ importers:
         version: 10.0.0
     devDependencies:
       '@kybernesis/cortex-testkit':
-        specifier: ^2.1.2
-        version: 2.1.2
+        specifier: ^2.1.3
+        version: 2.1.3
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
@@ -762,20 +762,20 @@ packages:
   '@kybernesis/arp-spec@0.2.1':
     resolution: {integrity: sha512-1+zjfITmxEubnOEMJwWi3PusDnKOb68HgWXDd+t10glMgc8M2V/dT/VDjse9jaACdtSLyc+FlV11Z9FP0iMc2w==}
 
-  '@kybernesis/cortex-contracts@2.1.2':
-    resolution: {integrity: sha512-891unTuaFLCSkKFae9bbodYwQ5zngZ4v54S402JasGRdZvydsVhnvF01YN0zFL5WB73/7tYDuBw3p+qn+7Q40g==}
+  '@kybernesis/cortex-contracts@2.1.3':
+    resolution: {integrity: sha512-kak+KfbdBFF380Aw6WzDNGyF3dxiZX6/N3cWeXftuaZvN4baBirYlPE8bqR/S0XqtiK42fIcPSOH3I/USfv9Sw==}
 
-  '@kybernesis/cortex-core@2.1.2':
-    resolution: {integrity: sha512-CIbZLsxHXFTkHbKvys9raE9h6Nr16QXj6wdwONepeXQClsUUlzoAhL2CPh5DIGd7zreVawyDnaW6f00tyeyWhA==}
+  '@kybernesis/cortex-core@2.1.3':
+    resolution: {integrity: sha512-QQMsbv4Pya67MkO9EqRYWcbpc+nA3VPljgZAw+cW8Eg+GJtF+/yEYx/8BtiHRqTdiDVXigkORu42bejQLs7Ipw==}
 
-  '@kybernesis/cortex-provider-libsql@2.1.2':
-    resolution: {integrity: sha512-gvkg5EeoQ/P6BRyOzjCzwftIAwaPMCZ1Ltlwcghb9Y4Aa5Oj04bvnMoLFxt+vyf8IH6NZrmrF9Aw3VMh43SPHQ==}
+  '@kybernesis/cortex-provider-libsql@2.1.3':
+    resolution: {integrity: sha512-xdbOV/RgiPcffZ19DkAlWK3N1brOarr+5LZI0f1wiqVW1lfln4aQij6mbaAOWMclvJvoKl6CFI4Nept8vMfAnw==}
 
-  '@kybernesis/cortex-provider-sqlite-vec@2.1.2':
-    resolution: {integrity: sha512-1J4tK4bXbzc1Igxqo8bZ9qkehaeWJ+ooD7Fc5JkhoOC+7wPZQzCu62An7UEtKAS3Jl3fhm3rWXP9DfCyXKTrwQ==}
+  '@kybernesis/cortex-provider-sqlite-vec@2.1.3':
+    resolution: {integrity: sha512-6QQR3kMEhfdaaDqx3zDrqi3McaM1Iyq/2aSeRbE73aDfMSCKk5wMtyDGDTKGlBZq6sB3H+V8+rut62tjf4jLJQ==}
 
-  '@kybernesis/cortex-testkit@2.1.2':
-    resolution: {integrity: sha512-LDPJWG2uIZdAMuACT/cscoQR2pC3uaxYt5Zc/LIUoZoP2s2PTdkDgmQ3jfyOb3IeQfJEGfaykre3a3TBPvu2dw==}
+  '@kybernesis/cortex-testkit@2.1.3':
+    resolution: {integrity: sha512-gsnfuEG7efBUzN0XlxDLPIEzAX6Tpn08m7sHuV35kSbRmnwjVDHqo1apzzf32xA8kaz6pgomYEU7YVmaWm1FZA==}
 
   '@libsql/darwin-arm64@0.5.29':
     resolution: {integrity: sha512-K+2RIB1OGFPYQbfay48GakLhqf3ArcbHqPFu7EZiaUcRgFcdw8RoltsMyvbj5ix2fY0HV3Q3Ioa/ByvQdaSM0A==}
@@ -4026,29 +4026,29 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  '@kybernesis/cortex-contracts@2.1.2':
+  '@kybernesis/cortex-contracts@2.1.3':
     dependencies:
       zod: 3.25.76
 
-  '@kybernesis/cortex-core@2.1.2':
+  '@kybernesis/cortex-core@2.1.3':
     dependencies:
-      '@kybernesis/cortex-contracts': 2.1.2
+      '@kybernesis/cortex-contracts': 2.1.3
       zod: 3.25.76
 
-  '@kybernesis/cortex-provider-libsql@2.1.2':
+  '@kybernesis/cortex-provider-libsql@2.1.3':
     dependencies:
-      '@kybernesis/cortex-contracts': 2.1.2
+      '@kybernesis/cortex-contracts': 2.1.3
       libsql: 0.5.29
 
-  '@kybernesis/cortex-provider-sqlite-vec@2.1.2':
+  '@kybernesis/cortex-provider-sqlite-vec@2.1.3':
     dependencies:
-      '@kybernesis/cortex-contracts': 2.1.2
+      '@kybernesis/cortex-contracts': 2.1.3
       better-sqlite3: 12.10.0
       sqlite-vec: 0.1.9
 
-  '@kybernesis/cortex-testkit@2.1.2':
+  '@kybernesis/cortex-testkit@2.1.3':
     dependencies:
-      '@kybernesis/cortex-contracts': 2.1.2
+      '@kybernesis/cortex-contracts': 2.1.3
 
   '@libsql/darwin-arm64@0.5.29':
     optional: true
