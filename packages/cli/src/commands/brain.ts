@@ -397,6 +397,41 @@ export function createBrainCommand(): Command {
     });
 
   // ─────────────────────────────────────────────────────────────────────────
+  // kyberbot brain cortex-sleep-parity
+  // ─────────────────────────────────────────────────────────────────────────
+
+  cmd
+    .command('cortex-sleep-parity')
+    .description('Harness 3: run sleep on both KB + Cortex with shared Haiku, diff outcomes')
+    .option('--steps <group>', 'all | deterministic | llm', 'all')
+    .option('--report-path <path>', 'Output markdown report path')
+    .option('--json', 'Machine-readable output', false)
+    .action(async (options: { steps: 'all' | 'deterministic' | 'llm'; reportPath?: string; json: boolean }) => {
+      try {
+        const { runSleepParity, formatSleepParityReport } =
+          await import('../brain/sleep-parity.js');
+        const run = await runSleepParity({
+          stepGroup: options.steps,
+          ...(options.reportPath ? { reportPath: options.reportPath } : {}),
+        });
+        if (options.json) {
+          console.log(JSON.stringify(run, null, 2));
+        } else {
+          console.log(formatSleepParityReport(run));
+        }
+        if (!run.passes) {
+          process.exitCode = 2;
+        }
+      } catch (error) {
+        const stack = error instanceof Error ? error.stack : String(error);
+        logger.error('Cortex sleep-parity check failed', { error: String(error), stack });
+        console.error(chalk.red(`Error: ${error}`));
+        if (stack) console.error(chalk.gray(stack));
+        process.exit(1);
+      }
+    });
+
+  // ─────────────────────────────────────────────────────────────────────────
   // kyberbot brain cortex-read-parity
   // ─────────────────────────────────────────────────────────────────────────
 
