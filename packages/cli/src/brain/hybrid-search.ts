@@ -289,6 +289,15 @@ export async function hybridSearch(
     rerank = false,
   } = options;
 
+  // Flag-gated swap to cortex.retrieve.hybridSearch. Bypasses the local
+  // RRF pipeline entirely when KYBERBOT_USE_CORTEX_READS=1.
+  const { useCortexReads } = await import('./cortex-reads.js');
+  if (useCortexReads() && !factFirst) {
+    const { hybridSearchViaCortex } = await import('./cortex-read-adapters.js');
+    const result = await hybridSearchViaCortex(query, { limit, tier });
+    if (result) return result;
+  }
+
   // Fact-first retrieval: delegate to fact-retrieval engine
   if (factFirst) {
     const { factFirstSearch } = await import('./fact-retrieval.js');

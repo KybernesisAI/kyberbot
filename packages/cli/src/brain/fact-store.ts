@@ -456,6 +456,15 @@ export async function getFactsForEntity(
   options: GetFactsOptions = {}
 ): Promise<StoredFact[]> {
   const { latestOnly = true, limit = 20, category } = options;
+
+  // Flag-gated swap to cortex.providers.structured.getFactsForEntity.
+  const { useCortexReads } = await import('./cortex-reads.js');
+  if (useCortexReads()) {
+    const { getFactsForEntityViaCortex } = await import('./cortex-read-adapters.js');
+    const result = await getFactsForEntityViaCortex(entity, { latestOnly, limit, category });
+    if (result) return result;
+  }
+
   const db = await getTimelineDb(root);
 
   // SQLite JSON: search entities_json for the entity name (case-insensitive)

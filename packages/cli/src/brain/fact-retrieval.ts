@@ -783,6 +783,18 @@ export async function factFirstSearch(
     maxSupportingPerFact = 2,
   } = options;
 
+  // Flag-gated swap to cortex.retrieve.factRetrieval. When set, bypasses
+  // KyberBot's local 5-layer pipeline entirely and adapts the Cortex
+  // bundle to FactSearchResult. Parity validated at meanOverlap 0.877
+  // (2026-05-24 KBOT → CORTEX CLOSING comms entry).
+  const { useCortexReads } = await import('./cortex-reads.js');
+  if (useCortexReads()) {
+    const { factFirstSearchViaCortex } = await import('./cortex-read-adapters.js');
+    const result = await factFirstSearchViaCortex(query, { limit, tokenBudget });
+    if (result) return result;
+    // Cortex unavailable → fall through to local pipeline rather than error
+  }
+
   logger.debug('Fact-first search starting', { query, limit, tokenBudget });
 
   // Layer 1: Direct fact search (FTS5 + ChromaDB)
