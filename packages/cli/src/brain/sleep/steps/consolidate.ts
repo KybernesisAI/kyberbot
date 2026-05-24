@@ -9,7 +9,7 @@
  */
 
 import { createLogger } from '../../../logger.js';
-import { getTimelineDb } from '../../timeline.js';
+import { getTimelineDb, mirrorMemoryDeleteToCortex } from '../../timeline.js';
 import type { SleepConfig } from '../config.js';
 
 const logger = createLogger('sleep:consolidate');
@@ -89,10 +89,22 @@ export async function runConsolidateStep(
           WHERE id = ?
         `).run(totalAccess.total + removeIds.length, keepId);
 
+        // Capture Cortex FKs BEFORE the local DELETE so we can cascade.
+        const orphanedArcanaIds = (db.prepare(`
+          SELECT arcana_memory_id FROM timeline_events
+          WHERE id IN (${removePlaceholders}) AND arcana_memory_id IS NOT NULL
+        `).all(...removeIds) as Array<{ arcana_memory_id: string }>)
+          .map(r => r.arcana_memory_id);
+
         // Delete duplicates
         db.prepare(`
           DELETE FROM timeline_events WHERE id IN (${removePlaceholders})
         `).run(...removeIds);
+
+        // Mirror-delete is best-effort; local delete is the source of truth.
+        for (const arcanaId of orphanedArcanaIds) {
+          await mirrorMemoryDeleteToCortex(arcanaId);
+        }
 
         consolidated += removeIds.length;
 

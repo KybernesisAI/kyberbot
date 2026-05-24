@@ -436,6 +436,9 @@ export async function mergeEntities(
   });
 
   merge();
+
+  await mirrorEntityDeleteToCortex(removeEntity.arcana_entity_id ?? null);
+
   logger.info(`Merged entity "${removeEntity.name}" (${removeId}) into "${keepEntity.name}" (${keepId})`, {
     reason, mentionsMoved, relationsMoved,
   });

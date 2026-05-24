@@ -323,6 +323,29 @@ async function mirrorToCortex(
   }
 }
 
+/**
+ * Best-effort mirror of a memory-deletion to Cortex. Failures are logged but
+ * never block the local delete — the local row is the source of truth.
+ */
+export async function mirrorMemoryDeleteToCortex(arcanaMemoryId: string | null): Promise<void> {
+  if (!arcanaMemoryId) return;
+  const arcana = getCortexInstance();
+  if (!arcana) return;
+
+  try {
+    await arcana.command.deleteMemory(arcanaMemoryId);
+  } catch (err) {
+    if (err instanceof NotImplementedError) {
+      logger.debug('Cortex command.deleteMemory still a stub; skipping mirror', { id: arcanaMemoryId });
+      return;
+    }
+    logger.warn('Cortex deleteMemory mirror failed; local delete proceeds', {
+      error: String(err),
+      id: arcanaMemoryId,
+    });
+  }
+}
+
 export async function addToTimeline(
   root: string,
   event: Omit<TimelineEvent, 'id'>
