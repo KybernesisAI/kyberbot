@@ -17,7 +17,7 @@
     "test:run": "vitest run"
   },
   "engines": {
-    "node": ">=20 <25",
+    "node": ">=20",
     "pnpm": ">=9"
   },
   "license": "MIT",
@@ -37,7 +37,10 @@
       ]
     },
     "onlyBuiltDependencies": [
-      "electron"
+      "better-sqlite3",
+      "electron",
+      "esbuild",
+      "protobufjs"
     ]
   },
   "devDependencies": {
