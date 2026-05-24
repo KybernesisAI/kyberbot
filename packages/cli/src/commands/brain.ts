@@ -333,6 +333,37 @@ export function createBrainCommand(): Command {
     });
 
   // ─────────────────────────────────────────────────────────────────────────
+  // kyberbot brain cortex-write-parity
+  // ─────────────────────────────────────────────────────────────────────────
+
+  cmd
+    .command('cortex-write-parity')
+    .description('Per-row content diff of mirrored KB rows against their Cortex twins')
+    .option('--sample-limit <n>', 'Number of drift samples to surface per kind', '5')
+    .option('--json', 'Machine-readable output', false)
+    .action(async (options: { sampleLimit: string; json: boolean }) => {
+      try {
+        const root = getRoot();
+        const { inspectWriteParity, formatWriteParityReport } = await import('../brain/cortex-write-parity.js');
+        const report = inspectWriteParity(root, {
+          sampleLimit: parseInt(options.sampleLimit) || 5,
+        });
+        if (options.json) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          console.log(formatWriteParityReport(report));
+        }
+        const totalDrifted = report.facts.drifted + report.memories.drifted + report.entities.drifted;
+        const totalMissing = report.facts.cortexMissing + report.memories.cortexMissing + report.entities.cortexMissing;
+        if (totalDrifted > 0 || totalMissing > 0) process.exitCode = 2;
+      } catch (error) {
+        logger.error('Cortex write-parity check failed', { error: String(error) });
+        console.error(chalk.red(`Error: ${error}`));
+        process.exit(1);
+      }
+    });
+
+  // ─────────────────────────────────────────────────────────────────────────
   // kyberbot brain cortex-fact-parity
   // ─────────────────────────────────────────────────────────────────────────
 
