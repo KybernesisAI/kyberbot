@@ -16,6 +16,8 @@
 
 import type { FactCategory } from '@kybernesis/cortex-contracts';
 import { getCortexInstance } from './cortex-singleton.js';
+import { getEntityGraphDb } from './entity-graph.js';
+import type { Entity, EntityType, RelationshipType } from './entity-graph.js';
 import { createLogger } from '../logger.js';
 
 import type { FactSearchResult } from './fact-retrieval.js';
@@ -233,6 +235,102 @@ export async function getEntityProfileViaCortex(
     };
   } catch (err) {
     logger.warn('Cortex getEntityProfile failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/** Adapter for `getTypedRelationships`. Uses Cortex's `getEdgesFor` (v2.1.4+)
+ * to fetch full Edge objects with metadata, then reshapes to KB's
+ * { entity, relationship, direction, confidence, rationale } shape.
+ *
+ * Bridges KB integer entityId ↔ Cortex UUID via the entities table's
+ * `arcana_entity_id` column. Skips 'co-occurred' edges to match KB filter
+ * (entity-graph.ts:869).
+ *
+ * Returns null when:
+ *  - Cortex singleton not initialised (caller falls through to local)
+ *  - The KB entity has no `arcana_entity_id` (not mirrored — can't query Cortex)
+ */
+export async function getTypedRelationshipsViaCortex(
+  root: string,
+  entityId: number,
+): Promise<Array<{
+  entity: Entity;
+  relationship: RelationshipType;
+  direction: 'outgoing' | 'incoming';
+  confidence: number;
+  rationale?: string;
+}> | null> {
+  const cortex = getCortexInstance();
+  if (!cortex) return null;
+
+  try {
+    const db = await getEntityGraphDb(root);
+    const srcRow = db
+      .prepare('SELECT arcana_entity_id FROM entities WHERE id = ?')
+      .get(entityId) as { arcana_entity_id: string | null } | undefined;
+    const srcCortexId = srcRow?.arcana_entity_id ?? null;
+    if (!srcCortexId) return null;
+
+    const edges = await cortex.providers.structured.getEdgesFor({
+      type: 'entity',
+      id: srcCortexId,
+    });
+
+    const results: Array<{
+      entity: Entity;
+      relationship: RelationshipType;
+      direction: 'outgoing' | 'incoming';
+      confidence: number;
+      rationale?: string;
+    }> = [];
+
+    for (const edge of edges) {
+      if (edge.relation === 'co-occurred') continue;
+
+      const isOutgoing = edge.from.id === srcCortexId;
+      const otherCortexId = isOutgoing ? edge.to.id : edge.from.id;
+      const otherType = isOutgoing ? edge.to.type : edge.from.type;
+      if (otherType !== 'entity') continue;
+
+      const otherRow = db
+        .prepare(
+          'SELECT id, name, normalized_name, type, aliases, first_seen, last_seen, mention_count, arcana_entity_id FROM entities WHERE arcana_entity_id = ?'
+        )
+        .get(otherCortexId) as
+        | {
+            id: number;
+            name: string;
+            normalized_name: string;
+            type: EntityType;
+            aliases: string;
+            first_seen: string;
+            last_seen: string;
+            mention_count: number;
+            arcana_entity_id: string;
+          }
+        | undefined;
+      if (!otherRow) continue;
+
+      results.push({
+        entity: {
+          ...otherRow,
+          aliases: JSON.parse(otherRow.aliases),
+        },
+        relationship: edge.relation as RelationshipType,
+        direction: isOutgoing ? 'outgoing' : 'incoming',
+        confidence: edge.confidence,
+        ...(edge.rationale ? { rationale: edge.rationale } : {}),
+      });
+    }
+
+    // Match KB's ordering: confidence DESC
+    results.sort((a, b) => b.confidence - a.confidence);
+    return results;
+  } catch (err) {
+    logger.warn('Cortex getEdgesFor failed; caller will fall back to local', {
       error: err instanceof Error ? err.message : String(err),
     });
     return null;

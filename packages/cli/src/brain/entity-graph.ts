@@ -853,6 +853,15 @@ export async function getTypedRelationships(
   confidence: number;
   rationale?: string;
 }>> {
+  // Flag-gated swap to cortex.providers.structured.getEdgesFor (v2.1.4+).
+  // Returns edges with full metadata (confidence, method, rationale, lastVerifiedAt).
+  const { useCortexReads } = await import('./cortex-reads.js');
+  if (useCortexReads()) {
+    const { getTypedRelationshipsViaCortex } = await import('./cortex-read-adapters.js');
+    const result = await getTypedRelationshipsViaCortex(root, entityId);
+    if (result) return result;
+  }
+
   const database = await ensureDatabase(root);
 
   const results = database
