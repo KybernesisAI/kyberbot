@@ -41,7 +41,9 @@ export async function runDecayStep(
   let processed = 0;
   const errors: string[] = [];
 
-  // Sweep expired temporal facts before running decay logic
+  // Sweep expired temporal facts before running decay logic.
+  // Failures are logged (NOT silently swallowed) — a SQL error here means
+  // temporal facts won't expire, which is a real production correctness issue.
   try {
     await ensureFactsTable(root);
     const timeline = await getTimelineDb(root);
@@ -54,8 +56,8 @@ export async function runDecayStep(
     if (expired.changes > 0) {
       logger.debug(`Expired ${expired.changes} time-bound facts`);
     }
-  } catch {
-    // Non-fatal: facts table may not exist yet
+  } catch (err) {
+    logger.warn('fact-expiration sweep failed', { error: String(err) });
   }
 
   try {

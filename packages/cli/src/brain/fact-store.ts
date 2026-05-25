@@ -207,26 +207,37 @@ export async function ensureFactsTable(root: string): Promise<void> {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_arcana_fact ON facts(arcana_fact_id)`);
   }
 
-  // Create standalone FTS5 table for fact search (no content= mapping to avoid column issues)
+  // Create standalone FTS5 table for fact search (no content= mapping to avoid column issues).
+  //
+  // Trigger note: this is a non-contentless FTS5 table. The SQLite docs are clear that
+  // the special `('delete', rowid, ...)` command is *only* valid for contentless or
+  // contentless-delete tables. For a regular FTS5 table the trigger must use plain
+  // `DELETE FROM facts_fts WHERE rowid = ?`. The earlier `('delete', ...)` form here
+  // threw `SqliteError: SQL logic error` on every UPDATE — silently caught by callers
+  // and rendering fact-expiration (decay.ts) inert in production until 2026-05-25.
   try {
     db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(content, entities);
 
-      CREATE TRIGGER IF NOT EXISTS facts_fts_ai AFTER INSERT ON facts BEGIN
+      DROP TRIGGER IF EXISTS facts_fts_ai;
+      DROP TRIGGER IF EXISTS facts_fts_ad;
+      DROP TRIGGER IF EXISTS facts_fts_au;
+
+      CREATE TRIGGER facts_fts_ai AFTER INSERT ON facts BEGIN
         INSERT INTO facts_fts(rowid, content, entities) VALUES (new.id, new.content, new.entities_json);
       END;
 
-      CREATE TRIGGER IF NOT EXISTS facts_fts_ad AFTER DELETE ON facts BEGIN
-        INSERT INTO facts_fts(facts_fts, rowid, content, entities) VALUES ('delete', old.id, old.content, old.entities_json);
+      CREATE TRIGGER facts_fts_ad AFTER DELETE ON facts BEGIN
+        DELETE FROM facts_fts WHERE rowid = old.id;
       END;
 
-      CREATE TRIGGER IF NOT EXISTS facts_fts_au AFTER UPDATE ON facts BEGIN
-        INSERT INTO facts_fts(facts_fts, rowid, content, entities) VALUES ('delete', old.id, old.content, old.entities_json);
+      CREATE TRIGGER facts_fts_au AFTER UPDATE ON facts BEGIN
+        DELETE FROM facts_fts WHERE rowid = old.id;
         INSERT INTO facts_fts(rowid, content, entities) VALUES (new.id, new.content, new.entities_json);
       END;
     `);
-  } catch {
-    // FTS table or triggers may already exist with different names
+  } catch (err) {
+    logger.warn('facts_fts table/trigger setup failed', { error: String(err) });
   }
 }
 

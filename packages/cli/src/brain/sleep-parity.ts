@@ -530,16 +530,8 @@ export async function runSleepParity(opts: SleepParityOptions = {}): Promise<Sle
       if (row?.arcana_fact_id) factCortexIdToFixture.set(row.arcana_fact_id, fid);
       else unmirroredFacts.push(fid);
     }
-    // Sync expires_at to Cortex side as well (storeFact's mirror doesn't carry it)
-    {
-      const db = new Database(cortexDbPath);
-      for (const f of PARITY_SLEEP_FACTS) {
-        if (!f.expiresAt) continue;
-        const cortexId = [...factCortexIdToFixture.entries()].find(([, fid]) => fid === f.id)?.[0];
-        if (cortexId) db.prepare('UPDATE facts SET expires_at = ? WHERE id = ?').run(f.expiresAt, cortexId);
-      }
-      db.close();
-    }
+    // Note: storeFact's mirror DOES carry expires_at through recordFact (verified
+    // 2026-05-24). v2.1.6 had no expire sweep so it didn't matter; v2.1.8 does.
 
     // Entities
     for (const e of PARITY_SLEEP_ENTITIES) {
